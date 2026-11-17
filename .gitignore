@@ -1,0 +1,15 @@
+# 依赖与构建产物
+node_modules/
+dist/
+*.local
+
+# Rust/WASM 构建缓存（src/wasm/pkg/ 不忽略：占位 stub 与未来 wasm-pack 产物均入库）
+src/wasm/target/
+
+# 系统杂项
+.DS_Store
+Thumbs.db
+
+# 流程工件目录（不属于项目源码）
+.mimosa/
+.zcode/
