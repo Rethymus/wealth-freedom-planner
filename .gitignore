@@ -13,3 +13,5 @@ Thumbs.db
 # 流程工件目录（不属于项目源码）
 .mimosa/
 .zcode/
+.tmp-research/
+out/
