@@ -403,35 +403,10 @@ body {
   outline: none;
 }
 
-/* ⑦ 高级面板折叠头两行标题（p4-spec §5.2 F5）：短标签主行 + 描述副行；
-   副行基态隐藏（移动优先），≥640 放行显示——全仓唯一新增媒体查询 */
-.wf-collapse-head {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.wf-collapse-head-desc {
-  font-size: var(--wf-text-xs);
-  color: var(--wf-text-secondary);
-  display: none;
-}
-
-@media (min-width: 640px) {
-  .wf-collapse-head-desc {
-    display: block;
-  }
-}
-
-/* ⑧ 高级面板分段控件 + 组内标签页导航（方案 B 重构，导航研究复审）：
-   分段行（Radio button 型）与内容标签间的节奏；Tabs 外层为键盘焦点停靠
-   （tabIndex=0，←/→ 漫游），停靠态套用全局焦点环令牌 */
+/* ⑦ 高级面板分段控件 + 组内标签页导航（方案 B 重构，导航研究复审）：
+   分段行（Radio button 型）与内容标签间的节奏 */
 .wf-adv-seg {
   margin-bottom: 12px;
-}
-
-.wf-adv-tabs-wrap {
-  border-radius: var(--wf-radius-sm);
 }
 
 .wf-adv-tabs-wrap:focus-visible {
@@ -439,9 +414,39 @@ body {
   box-shadow: var(--wf-focus-ring);
 }
 
-.wf-adv-tabs {
-  /* 标签行与内容区的间距收敛（组件库默认较大） */
-  margin-top: 4px;
+/* ⑦-b 面板内容表面容器：capsule 标签下方的内容不再是「裸贴白卡」，而是
+   页面底色的凹面区 + 发丝线描边 + 圆角——两级表面层次（双主题令牌切换） */
+.wf-adv-tabs .arco-tabs-content {
+  margin: 12px 0 0;
+  padding: 16px;
+  background: var(--wf-bg-page);
+  border: 1px solid var(--wf-hairline-card);
+  border-radius: var(--wf-radius-m);
+}
+
+/* ⑨ 双栏工作台（≥1200 桌面，工效裁定：终结单列长滚动）：
+   左栏「我的数字」（输出卡 + 基础参数）sticky 常驻 + 视口内自滚动；
+   右栏工作区（高级导航 + 面板）随滚动。<1200 维持单列（移动优先形态）。 */
+@media (min-width: 1200px) {
+  .wf-workbench {
+    display: grid;
+    grid-template-columns: 400px minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  .wf-workbench-primary {
+    position: sticky;
+    top: calc(var(--wf-topbar-h, 56px) + 16px);
+    max-height: calc(100vh - var(--wf-topbar-h, 56px) - 32px);
+    overflow-y: auto;
+  }
+
+  /* 左栏自身已 sticky 常驻，输出卡的内部吸附在此形态下冗余（双重吸附会
+     互相打架），桌面双栏下退化为静态；<1200 单列保持吸附行为不变 */
+  .wf-workbench-primary .wf-output-sticky {
+    position: static;
+  }
 }
 
 /* A1（p4-spec §7）：跳过链接——首 Tab 停留点（Layout 首子元素），获焦前视觉隐藏、

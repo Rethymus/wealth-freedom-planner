@@ -138,6 +138,7 @@ export default function AdvancedPanel() {
         >
           <Tabs
             className="wf-adv-tabs"
+            type="capsule"
             activeTab={activeByGroup[g.id] ?? g.panels[0].key}
             lazyload
             onChange={(v: string) => setActiveByGroup((m) => ({ ...m, [g.id]: v }))}

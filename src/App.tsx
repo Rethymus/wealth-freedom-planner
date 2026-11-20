@@ -335,8 +335,17 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
         {displayCode !== "CNY" && !rateInfo.loading && rateInfo.rate === null ? (
           <Alert type="warning" style={{ marginBottom: 16 }} content={t("app.currencyFallback")} />
         ) : null}
-        <BasicCalculator />
-        <AdvancedPanel />
+        {/* 双栏工作台（≥1200，工效裁定：终结桌面单列长滚动——左栏「我的数字」
+            常驻（输出卡 + 基础参数，sticky + 视口内自滚动），右栏工作区（高级
+            导航 + 面板）；<1200 维持单列（移动优先形态）。见 global.css §工作台。 */}
+        <div className="wf-workbench">
+          <div className="wf-workbench-primary">
+            <BasicCalculator />
+          </div>
+          <div className="wf-workbench-secondary">
+            <AdvancedPanel />
+          </div>
+        </div>
       </Content>
 
       <Footer role="contentinfo" className="wf-footer" style={{ textAlign: "center", padding: "16px 24px" }}>
