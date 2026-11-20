@@ -10,8 +10,10 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 wasm-bindgen = "0.2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-rust_decimal = { version = "1", features = ["serde"] }
+# arbitrary_precision：JSON 数字按字面量字符串精确解析/序列化，配合
+# rust_decimal::serde::arbitrary_precision 实现金额的精确进出（无 f64 中转）
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+rust_decimal = { version = "1", features = ["serde", "serde-with-arbitrary-precision"] }
 rand = "0.8"
 rand_distr = "0.4"
 rust_finprim = { version = "0.5.1", features = ["rust_decimal"] }
@@ -19,3 +21,28 @@ rust_finprim = { version = "0.5.1", features = ["rust_decimal"] }
 # 已知前提：蒙特卡洛随机数（rand/getrandom）在 wasm32 目标上需要 "js" feature
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
+
+# 发布构建瘦身（尺寸门禁：dist 全量 ≤ 2,000,000 bytes）：
+# - opt-level = "z"：按体积优先优化（金融计算量级毫秒级，速度换体积划算）；
+# - lto + codegen-units = 1：跨 crate 消除死代码（依赖库未用到的金融原语等）；
+# - panic = "abort"：wasm32 无 unwind 机制，wasm-bindgen 官方推荐口径；
+# - strip = true：剥掉符号名与调试类自定义段（安全前提见下方 wasm-opt = false 注释）。
+# 仅影响发布产物，不影响 cargo test 的 dev/test 档。
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# 跳过 wasm-pack 自带的 wasm-opt 后处理步骤（文档支持的官方配置项）。
+# 原因：wasm-pack 0.13.1 附带的 wasm-opt（2024-02 构建）默认特性集不含
+# bulk-memory / 非陷阱浮点转整（trunc_sat），而当前 rustc 已默认按这些
+# 特性出码，wasm-opt 校验直接报 "all used features should be allowed"
+# 导致整个 wasm-pack 构建失败。关闭后产物为 rustc 全量 LTO + opt-level="z"
+# 的直接输出，实测比旧管线（默认优化 + wasm-opt -O）更小（约 372KB vs
+# 500KB）；浏览器侧 bulk-memory / trunc_sat 特性均已支持多年。
+# 也因此 strip = true 才安全——不再有依赖 target_features 自定义段的
+# 后处理校验步骤。
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

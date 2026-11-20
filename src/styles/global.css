@@ -1,0 +1,1008 @@
+/**
+ * 全局样式（材质方辖区）——按 docs/design-spec.md 施工，分区如下：
+ * - 令牌区：静态层默认值（:root，与 src/data/defaults.ts THEME 初始值一致防首帧闪变）
+ *   + 组件库变量对齐（body）+ 基础样式；
+ * - 材质区：三层表面材质（顶栏 / 悬浮输出卡 / 浮层）+ 实底回退 + 顶栏 sticky；
+ * - 深色覆盖区：:root[data-theme="dark"] 深色令牌组（与 THEME_DARK 逐键一致）+
+ *   组件库主色阶深色重声明 + 实底回退深色分支；
+ * - 动效区：按压/聚焦反馈、触控目标、主题切换全局过渡、组件库过渡覆盖、
+ *   prefers-reduced-motion 兜底；
+ * - 布局与既有修复区：既有窄屏与可读性修复规则，现状保留。
+ * 动态层经 src/App.tsx 按 resolveThemeTokens(theme, colorBlindFriendly) 注入 documentElement
+ * （弹层挂 body 下亦生效）；主题组键浅色 ≡ THEME、深色 ≡ THEME_DARK（三源对账纪律）；
+ * 旧约束「单一时长上限、无过冲」已由三档时长 + 三族曲线令牌体系取代（设计规范第 8 节）。
+ */
+
+/* ============================== 令牌区 ============================== */
+/* 静态层与主题组浅色默认值清单口径见设计规范 2.10；运行时由 App.tsx 将当前主题组值注入
+   documentElement 覆盖（组件库弹层挂在页面骨架之外，注入点在 documentElement 才对其生效）。
+   主题组键（文字分级 / 主色 / 语义色 / 页面底 / 着色底 / 图表 / 材质 / 发丝线三键 / 阴影 /
+   焦点环）随主题换值；间距 / 圆角 / 字阶 / 顶栏几何 / 动效时长与曲线为静态层，两主题共用 */
+:root {
+  /* —— 间距（8pt） —— */
+  --wf-space-1: 4px; /* 半档：密集表单标签与控件的行距 */
+  --wf-space-2: 8px;
+  --wf-space-3: 12px;
+  --wf-space-4: 16px;
+  --wf-space-5: 24px;
+  --wf-space-6: 32px;
+  --wf-space-7: 48px;
+
+  /* —— 圆角 —— */
+  --wf-radius-s: 6px;
+  --wf-radius-m: 10px;
+  --wf-radius-l: 14px;
+  --wf-radius-full: 9999px;
+
+  /* —— 字阶 —— */
+  --wf-text-xs: 12px;
+  --wf-text-sm: 13px;
+  --wf-text-md: 14px;
+  --wf-text-lg: 16px;
+  --wf-text-num: 32px; /* 临界值大数字：窄屏档 */
+
+  /* —— 文字分级色（主题组） —— */
+  --wf-text: #1D2129; /* 正文：禁用纯黑 */
+  --wf-text-secondary: #646E7A; /* 字段提示等（浅色 5.18:1；改值依据 design-research A1，登记于 design-spec 5.3） */
+  --wf-text-tertiary: #4E5969; /* 图表刻度等 */
+
+  /* —— 色彩（主题组） —— */
+  --wf-primary: #4A6FA5;
+  --wf-rise: #00B42A; /* 绿涨语义色（浅色现状值冻结，显式豁免 4.5 口径，见设计规范 5.3） */
+  --wf-fall: #F53F3F; /* 红跌语义色（同上） */
+
+  /* —— 页面底色 / 着色底（主题组；body 背景与实时区底色改挂令牌，解除硬编码） —— */
+  --wf-bg-page: #f7f8fa;
+  --wf-tint-bg: rgba(74,111,165,0.08);
+
+  /* —— 图表（主题组；蒙特卡洛网格线 / 刻度文字，组件内一律经解析函数取值） —— */
+  --wf-chart-grid: #E5E6EB;
+  --wf-chart-tick: #4E5969; /* 与三级文字同值但令牌解耦 */
+
+  /* —— 发丝线：主题组三键（经 ThemeTokens 注入随主题切换） —— */
+  --wf-hairline-card: rgba(29,33,41,0.08); /* 悬浮输出卡描边 */
+  --wf-hairline-overlay: rgba(29,33,41,0.10); /* 浮层描边 */
+  --wf-hairline-topbar: rgba(255,255,255,0.16); /* 顶栏底边（亮色发丝线） */
+  /* —— 发丝线：静态承载两键（不入主题对账，口径见设计规范 2.10 / 9 #8） —— */
+  --wf-hairline-dark: rgba(29,33,41,0.06); /* 预留令牌：全仓零使用；启用时须按主题组流程同步扩 ThemeTokens */
+  --wf-hairline-tooltip: rgba(255,255,255,0.12); /* 即时提示描边，两主题同值，静态承载 */
+
+  /* —— 材质（主题组，静态默认值 = THEME 浅色值；运行时经 documentElement 注入覆盖） —— */
+  --wf-surface-topbar-bg: rgba(74,111,165,0.95);
+  --wf-surface-topbar-blur: saturate(1.6) blur(16px);
+  --wf-surface-card-bg: rgba(255,255,255,0.72);
+  --wf-surface-card-blur: saturate(1.4) blur(20px);
+  --wf-surface-overlay-bg: rgba(255,255,255,0.86);
+  --wf-surface-overlay-blur: saturate(1.4) blur(24px);
+  --wf-surface-tooltip-bg: rgba(29,33,41,0.88);
+  --wf-surface-tooltip-blur: blur(8px);
+
+  /* —— 顶栏几何（md+ 顶栏最小高度；悬浮输出卡吸附偏移由它派生） —— */
+  --wf-topbar-h: 56px;
+
+  /* —— 阴影层级（主题组） —— */
+  --wf-shadow-1: 0 1px 2px rgba(29,33,41,0.06);
+  --wf-shadow-2: 0 2px 6px rgba(29,33,41,0.08), 0 8px 24px rgba(29,33,41,0.08);
+  --wf-shadow-3: 0 4px 12px rgba(29,33,41,0.10), 0 16px 40px rgba(29,33,41,0.12);
+
+  /* —— 焦点环（主题组；浅色表面默认 / 主色表面用深色外环变体，见设计规范 2.8） —— */
+  --wf-focus-ring: 0 0 0 2px rgba(255,255,255,0.9), 0 0 0 4px var(--wf-primary, #4A6FA5);
+  --wf-focus-ring-dark: 0 0 0 2px rgba(255,255,255,0.9), 0 0 0 4px rgba(29,33,41,0.9);
+
+  /* —— 动效（静态，两主题共用；时长三档 + 曲线三族，全站时长只能取这三档，曲线适用面见设计规范 2.9） —— */
+  --wf-dur-fast: 120ms;
+  --wf-dur-base: 240ms;
+  --wf-dur-slow: 360ms;
+  --wf-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --wf-ease-emphasis: cubic-bezier(0.34, 1.26, 0.44, 1);
+  --wf-ease-asymptotic: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (min-width: 768px) {
+  :root {
+    --wf-text-num: 40px; /* 临界值大数字：宽屏档 */
+  }
+}
+
+/* 组件库变量对齐（命名豁免：以下为覆写组件库所必需的既有变量名）：
+   1. 主色阶——组件库在 body 上以「R,G,B 三元组」定义调色板并经 rgb(var(--primary-N)) 取色，
+      此处以同结构覆盖为本应用主色（#4A6FA5 = rgb(74,111,165)）同系色阶，使主按钮、
+      Switch/Radio 选中态等主色控件与顶栏主色一致。必须定义在 body：写在 :root 会被
+      body 上更近的组件库定义遮蔽。global.css 在组件库样式之后引入，同特异性后者生效。 */
+body {
+  --primary-1: 240, 243, 248;
+  --primary-2: 224, 231, 241;
+  --primary-3: 194, 207, 226;
+  --primary-4: 159, 181, 209;
+  --primary-5: 100, 133, 180;
+  --primary-6: 74, 111, 165;
+  --primary-7: 62, 93, 139;
+  --primary-8: 51, 77, 114;
+  --primary-9: 40, 61, 92;
+  --primary-10: 29, 44, 68;
+
+  /* 控件圆角与 --wf-radius 尺度对齐（组件库控件经这三个变量取圆角） */
+  --border-radius-small: var(--wf-radius-s);
+  --border-radius-medium: var(--wf-radius-m);
+  --border-radius-large: var(--wf-radius-l);
+
+  /* 弹层底色指向浮层材质底色（组件库弹层经该变量取色，如 .arco-select-popup） */
+  --color-bg-popup: var(--wf-surface-overlay-bg);
+}
+
+/* 基础样式 */
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  color: var(--wf-text, #1d2129);
+  background: var(--wf-bg-page, #f7f8fa);
+  font-family:
+    system-ui, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+}
+
+/* ============================== 材质区 ============================== */
+/* 三层表面材质四要素：半透明底色 → 背景滤镜（模糊 + 轻微提饱和）→ 1px 发丝线 → 阴影令牌，
+   以「模糊半径、不透明度、阴影层级」三维度同时拉开层级（设计规范 2.6）。
+   底色透明度按对比度口径定值（设计规范 5.3），不是自由参数；普通内容卡片保持实底不参与材质。 */
+
+/* L1 顶栏：半透明主色底 + 模糊 + 底边亮色发丝线；不加阴影（顶部无投影，克制） */
+.wf-surface-topbar {
+  background: var(--wf-surface-topbar-bg);
+  -webkit-backdrop-filter: var(--wf-surface-topbar-blur);
+  backdrop-filter: var(--wf-surface-topbar-blur);
+  border-bottom: 1px solid var(--wf-hairline-topbar);
+}
+
+/* 顶栏 md+ sticky 化：背景滤镜需采样到滚动其下的页面内容，sticky 是材质可见性的前提；
+   悬浮输出卡的吸附偏移随之由顶栏高度派生。窄屏维持现状静态换行（见布局区） */
+@media (min-width: 768px) {
+  .wf-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    min-height: var(--wf-topbar-h);
+  }
+
+  .wf-output-sticky {
+    top: calc(var(--wf-topbar-h) + 8px);
+  }
+}
+
+/* 顶栏文字一律纯白：正文级白字在 L1 半透明合成底上须 ≥4.5:1（设计规范 5.3），
+   现状 0.85 透明度标签不达标，随本次修正 */
+.wf-header-label {
+  color: #ffffff;
+  font-size: var(--wf-text-sm);
+  white-space: nowrap;
+}
+
+/* 悬浮输出卡置顶吸附：偏移量按断点拆分——窄屏 top 8px（下方媒体查询承载）；md+ 的
+   顶栏高派生偏移在上方材质区媒体查询。基础规则不得声明 top：其源序位于 md+ 派生块
+   之后，同特异性会按源序覆盖派生偏移，导致桌面吸附卡被顶栏遮挡（历史缺陷） */
+.wf-output-sticky {
+  position: sticky;
+  z-index: 30;
+}
+
+@media (max-width: 767.9px) {
+  .wf-output-sticky {
+    top: 8px;
+  }
+}
+
+/* L2 悬浮输出卡：以既有类直接作选择器，JSX 零改动获得材质 */
+.wf-output-card {
+  background: var(--wf-surface-card-bg);
+  -webkit-backdrop-filter: var(--wf-surface-card-blur);
+  backdrop-filter: var(--wf-surface-card-blur);
+  border: 1px solid var(--wf-hairline-card);
+  border-radius: var(--wf-radius-l);
+  /* 静置第二档 ⇄ 吸附第三档（升档样式见下，状态类由动效方经锚点检测切换） */
+  box-shadow: var(--wf-shadow-2);
+  transition: box-shadow var(--wf-dur-base) var(--wf-ease-standard);
+}
+
+.wf-output-card.wf-is-stuck {
+  box-shadow: var(--wf-shadow-3);
+}
+
+/* 吸附态点击穿透：pinned 卡悬浮于滚动文档之上，卡面（含半透明卡底与内边距）参与
+   命中测试，会挡住从下方滚过的输入区——预设按钮行被遮时 elementsFromPoint 命中
+   卡体而非按钮，按钮幽灵可见却不可点（验收 Q3-1 回归断言：滚动后命中须直达按钮）。
+   三层分工：包裹层（纯布局盒、无自有交互）恒让出指针；非吸附卡面正常交互；
+   吸附卡面让出指针、卡内唯一可交互元素（敏感性展开开关）单独恢复（pointer-events
+   为继承属性，须逐层显式覆盖）。 */
+.wf-output-sticky {
+  pointer-events: none;
+}
+
+.wf-output-card {
+  pointer-events: auto;
+}
+
+.wf-output-card.wf-is-stuck {
+  pointer-events: none;
+}
+
+.wf-output-card.wf-is-stuck .wf-sens-toggle {
+  pointer-events: auto;
+}
+
+/* L3 浮层：下拉面板 */
+.arco-select-popup {
+  background: var(--wf-surface-overlay-bg);
+  -webkit-backdrop-filter: var(--wf-surface-overlay-blur);
+  backdrop-filter: var(--wf-surface-overlay-blur);
+  border: 1px solid var(--wf-hairline-overlay);
+  box-shadow: var(--wf-shadow-3);
+}
+
+/* 深色即时提示变体：可见底色画在内容元素上（组件库样式表实测），
+   材质须落到 .arco-tooltip-content 才实际生效 */
+.arco-tooltip-content {
+  background: var(--wf-surface-tooltip-bg);
+  -webkit-backdrop-filter: var(--wf-surface-tooltip-blur);
+  backdrop-filter: var(--wf-surface-tooltip-blur);
+  border: 1px solid var(--wf-hairline-tooltip);
+  box-shadow: var(--wf-shadow-1);
+}
+
+/* 实底回退：不支持背景滤镜的环境只失去通透感，层级语义（描边 + 阴影）仍在。
+   兼容仅支持带前缀写法的环境（若按无前缀特性检测会误判回退） */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .wf-surface-topbar {
+    background: var(--wf-primary, #4a6fa5);
+  }
+
+  .wf-output-card,
+  .arco-select-popup {
+    background: #ffffff;
+  }
+
+  .arco-tooltip-content {
+    background: #1d2129;
+  }
+
+  /* 实底回退深色分支（浅色分支现状值不变）：顶栏回页面底色、卡与浮层回组件库深色
+     二级底同值、即时提示比页面底提亮一档（反转层级）；否则顶栏会取注入后的提亮主色，
+     与深色页面脱离层级（设计规范 2.6 末条） */
+  [data-theme="dark"] .wf-surface-topbar {
+    background: #17171a;
+  }
+
+  [data-theme="dark"] .wf-output-card,
+  [data-theme="dark"] .arco-select-popup {
+    background: #232324;
+  }
+
+  [data-theme="dark"] .arco-tooltip-content {
+    background: #54565a;
+  }
+}
+
+/* ============================== 深色覆盖区 ============================== */
+/* 深色令牌组全量清单见设计规范 2.11：选择器 :root[data-theme="dark"]（特异性 0,2,0）压过
+   :root（0,1,0）；首帧时 data-theme 属性已由 index.html 守卫脚本置好，本组即生效（React
+   注水前），注水后由 App.tsx 经 resolveThemeTokens 把同键值写入 documentElement 内联样式，
+   前后值一致无二次闪变。深色材质透明度按「最不利透底」对比度口径锁定（设计规范 5.3），
+   禁止为通透感回调；深色块键集与 defaults.ts THEME_DARK 完全一致（验收三源对账） */
+:root[data-theme="dark"] {
+  /* —— 文字分级（常态合成卡底 / 最不利透底双口径实测，设计规范 5.3） —— */
+  --wf-text: #F2F3F5; /* 14.31:1 / 11.10:1，禁用纯白 */
+  --wf-text-secondary: #A9AEB8; /* 7.14:1 / 5.54:1 */
+  --wf-text-tertiary: #8F95A0; /* 卡底 5.28:1（刻度文字位于卡面，无透底场景） */
+
+  /* —— 色彩 —— */
+  --wf-primary: #7B9FD1; /* 提亮主色：卡底 5.84:1、最不利 4.53:1（大数字 / 焦点环 / 悬浮反馈用） */
+  --wf-rise: #27C346; /* 涨色：常态 6.79:1 / 最不利 5.27:1 */
+  --wf-fall: #F98D86; /* 跌色：常态 6.95:1 / 最不利 5.39:1 */
+
+  /* —— 页面底色 / 着色底 —— */
+  --wf-bg-page: #17171A; /* 与组件库深色一级底同值 */
+  --wf-tint-bg: rgba(123,159,209,0.12); /* 合成底：正文 11.77:1、涨色 5.59:1、跌色 5.71:1 */
+
+  /* —— 图表 —— */
+  --wf-chart-grid: #3D3F46; /* 对合成卡底 1.51:1（网格为装饰层，不设 4.5 口径；较浅色略提保证可感知） */
+  --wf-chart-tick: #8F95A0; /* 对卡底 5.28:1 */
+
+  /* —— 发丝线：主题组三键（hairline-dark 零使用预留、hairline-tooltip 两主题同值，
+        两键静态承载、不入深色块与对账，口径见设计规范 2.11 / 9 #8） —— */
+  --wf-hairline-card: rgba(255,255,255,0.10);
+  --wf-hairline-overlay: rgba(255,255,255,0.14);
+  --wf-hairline-topbar: rgba(255,255,255,0.12);
+
+  /* —— 材质（定值依据见设计规范 2.6：深色半透明材质按「最不利透底 = 纯白内容滚过卡下」锁定透明度） —— */
+  --wf-surface-topbar-bg: rgba(23,23,26,0.88);
+  --wf-surface-topbar-blur: saturate(1.6) blur(16px);
+  --wf-surface-card-bg: rgba(35,35,36,0.92);
+  --wf-surface-card-blur: saturate(1.4) blur(20px);
+  --wf-surface-overlay-bg: rgba(35,35,36,0.95);
+  --wf-surface-overlay-blur: saturate(1.4) blur(24px);
+  --wf-surface-tooltip-bg: rgba(84,86,90,0.92); /* 比页面底提亮一档：保持「提示浮于一切」的反转层级 */
+  --wf-surface-tooltip-blur: blur(8px);
+
+  /* —— 阴影：黑基阴影、档差比浅色加大（深色下阴影感知更弱，层级靠表面明度差 + 阴影加重辨认） —— */
+  --wf-shadow-1: 0 1px 2px rgba(0,0,0,0.40);
+  --wf-shadow-2: 0 2px 6px rgba(0,0,0,0.45), 0 8px 24px rgba(0,0,0,0.45);
+  --wf-shadow-3: 0 4px 12px rgba(0,0,0,0.50), 0 16px 40px rgba(0,0,0,0.60);
+
+  /* —— 焦点环：内圈改深色晕、外圈改提亮主色（页面底 6.58:1 ≥ 3:1 非文本指示器口径；
+        两变体同值，规则照写保持结构对偶，见设计规范 2.8） —— */
+  --wf-focus-ring: 0 0 0 2px rgba(23,23,26,0.9), 0 0 0 4px #7B9FD1;
+  --wf-focus-ring-dark: 0 0 0 2px rgba(23,23,26,0.9), 0 0 0 4px #7B9FD1;
+}
+
+/* 组件库联动专项（命名豁免：arco-theme 属性名与 --primary-N 为组件库样式表既有标识符）：
+   深色下重声明品牌主色阶，与浅色 body 块同值——组件库深色块把 --primary-* 重定义为
+   自有默认蓝（body[arco-theme='dark']，特异性 0,1,1），压过浅色覆盖块所在的普通
+   body（特异性 0,0,1）；本选择器同为 0,1,1 且 global.css 在组件库样式之后引入
+   （main.tsx 导入顺序现状），级联胜出——主按钮白字对比两主题恒定，主色控件不落组件库默认蓝 */
+[data-theme="dark"] body {
+  --primary-1: 240, 243, 248;
+  --primary-2: 224, 231, 241;
+  --primary-3: 194, 207, 226;
+  --primary-4: 159, 181, 209;
+  --primary-5: 100, 133, 180;
+  --primary-6: 74, 111, 165;
+  --primary-7: 62, 93, 139;
+  --primary-8: 51, 77, 114;
+  --primary-9: 40, 61, 92;
+  --primary-10: 29, 44, 68;
+}
+
+/* ============================== 动效区 ============================== */
+/* 统一反馈语义（设计规范第 4 节）：按压 = 缩放 + 透明度；聚焦 = 焦点环；悬浮 = 阴影升档。
+   时长与曲线一律引用令牌，禁止裸字面量；类名是材质方与动效方的共享契约，以规范为准。 */
+
+/* 按压缩放 + 透明度反馈（控件类，动效方在 JSX 挂 .wf-pressable） */
+.wf-pressable {
+  transition:
+    transform var(--wf-dur-fast) var(--wf-ease-standard),
+    opacity var(--wf-dur-fast) var(--wf-ease-standard);
+}
+
+.wf-pressable:active:not(:disabled) {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+/* 键盘焦点环（仅 :focus-visible，鼠标点击不出环） */
+.wf-pressable:focus-visible {
+  box-shadow: var(--wf-focus-ring);
+}
+
+.wf-field .arco-input-number:focus-within {
+  box-shadow: var(--wf-focus-ring);
+}
+
+/* 主色表面（顶栏）内控件改用深色外环，避免环与底同色（设计规范 2.8） */
+.wf-header .wf-pressable:focus-visible,
+.wf-header .arco-select-view:focus-within,
+.wf-header .arco-switch:focus-visible {
+  box-shadow: var(--wf-focus-ring-dark);
+}
+
+/* 折叠面板头部按压：全局选择器直达，无需 JSX 挂类
+   （基础模式与高级面板的折叠头同为组件库 header 类，天然一致） */
+.arco-collapse-item-header {
+  transition: opacity var(--wf-dur-fast) var(--wf-ease-standard);
+}
+
+.arco-collapse-item-header:active {
+  opacity: 0.85;
+}
+
+/* 触控目标 ≥44px：只在触屏或窄屏生效，桌面指针精度下维持现状紧凑尺寸 */
+@media (pointer: coarse), (max-width: 767.9px) {
+  .arco-btn {
+    min-height: 44px;
+  }
+
+  /* 圆形图标按钮本体几何保护（主题切换按钮，设计规范 3.7）：上方 min-height 会压过
+     组件库圆形按钮的 height:28px（min-height 优先于 height），触屏/窄屏上本体将呈
+     28×44 椭圆；本选择器特异性 0,2,0 压过 .arco-btn 的 0,1,0，本体两主题、两端保持
+     28×28 圆形，命中区由外包的触控区扩展层承担（28px 本体 + 20px = 48px ≥ 44px） */
+  .arco-btn-shape-circle.arco-btn-icon-only {
+    min-height: 0;
+  }
+
+  .wf-field .arco-input-inner-wrapper {
+    min-height: 44px;
+  }
+
+  .wf-header-tools .arco-select-view {
+    min-height: 44px;
+  }
+}
+
+/* 点击区扩展包装：padding 扩大命中区、负 margin 抵消布局位移，本体视觉尺寸不变；
+   命中区扩展对桌面无副作用，一律无条件包装 */
+.wf-touch-target {
+  position: relative;
+  display: inline-flex;
+  padding: 10px; /* 24px 本体 + 20px = 44px 命中区 */
+  margin: -10px;
+}
+
+.wf-touch-target-sm {
+  position: relative;
+  display: inline-flex;
+  padding: 14px; /* 16px 本体 + 28px = 44px 命中区（small 档） */
+  margin: -14px;
+}
+
+/* 下拉面板入场：透明度 0→1 + 位移缩放入场。强调曲线只允许作用于位移与缩放，
+   透明度必须走标准曲线（设计规范第 4 节禁止项）。transform 链整体替换：
+   起点类与激活类同步覆写，避免与组件库内置 scaleY 插值混合 */
+.slideDynamicOrigin-enter,
+.slideDynamicOrigin-appear {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+}
+
+.slideDynamicOrigin-enter-active,
+.slideDynamicOrigin-appear-active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity var(--wf-dur-base) var(--wf-ease-standard),
+    transform var(--wf-dur-base) var(--wf-ease-emphasis);
+}
+
+/* 下拉退场：透明度淡出 + transform 还原 */
+.slideDynamicOrigin-exit {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.slideDynamicOrigin-exit-active {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  transition:
+    opacity var(--wf-dur-fast) var(--wf-ease-standard),
+    transform var(--wf-dur-fast) var(--wf-ease-standard);
+}
+
+/* 折叠面板展开/收起 */
+.arco-collapse-item-content {
+  transition: height var(--wf-dur-base) var(--wf-ease-standard);
+}
+
+/* 组件库内置过冲缓动的既有覆盖点迁移到令牌值（类名为覆写组件库所必需的既有类，命名豁免）：
+   提示条进出场按设计规范第 4 节分档（进标准档 / 出快档），单选圆点走快档 */
+.zoomInTop-appear-active,
+.zoomInTop-enter-active {
+  transition-duration: var(--wf-dur-base);
+  transition-timing-function: var(--wf-ease-standard);
+}
+
+.zoomInTop-exit-active,
+.zoomInFadeOut-exit-active,
+.arco-radio-mask::after {
+  transition-duration: var(--wf-dur-fast);
+  transition-timing-function: var(--wf-ease-standard);
+}
+
+/* 主题切换全局颜色过渡（设计规范第 4 节 #15，App.tsx 在主题变更帧挂 .wf-theme-switching、
+   基础档时长后移除，首挂载不挂类）：只声明颜色类属性的过渡。行为边界（既定取舍）：
+   transition-property 是替换而非叠加——过渡窗口内 transform / opacity / box-shadow 等
+   其余属性会被临时替换为瞬时切换，窗口结束即恢复，不做属性并集。
+   本规则故意不写 !important：减弱动效偏好下由下方兜底块的
+   transition-duration: 0.01ms !important 依级联压过，主题切换瞬时完成（设计规范 5.1） */
+.wf-theme-switching,
+.wf-theme-switching *,
+.wf-theme-switching *::before,
+.wf-theme-switching *::after {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: var(--wf-dur-base);
+  transition-timing-function: var(--wf-ease-standard);
+}
+
+/* prefers-reduced-motion 兜底式全停：通配选择器覆盖未来新增的过渡与动画；
+   JS 驱动的动画（rAF 数值滚动、图表内建动画）CSS 管不住，由动效方经 hook 显式短路 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* 逐选择器清单（文档性冗余，不依赖其兜底） */
+@media (prefers-reduced-motion: reduce) {
+  .wf-output-card,
+  .wf-field-tip,
+  .wf-realtime,
+  .wf-pressable,
+  .arco-collapse-item-content,
+  .arco-collapse-item-header,
+  .slideDynamicOrigin-enter-active,
+  .slideDynamicOrigin-appear-active,
+  .slideDynamicOrigin-exit-active,
+  .zoomInTop-appear-active,
+  .zoomInTop-enter-active,
+  .zoomInTop-exit-active,
+  .zoomInFadeOut-exit-active,
+  .arco-radio-mask::after {
+    transition: none;
+  }
+}
+
+/* ============================== 布局与既有修复区（现状保留） ============================== */
+
+/* 顶栏：允许换行（窄屏工具组整体换到第二行），宽屏不换行时布局不变 */
+.wf-header {
+  flex-wrap: wrap;
+  row-gap: 8px;
+  padding-inline: 24px;
+}
+
+.wf-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 窄屏（< md，与顶栏 sticky 断点 768px 对齐）：工具组内部允许换行——标签 nowrap、
+   双 Select 固定宽与 48px 命中区合计超出 375px 级视口，单行收缩机制不敷使用，
+   换行后各单项宽均小于容器宽，无横向溢出、主题切换按钮可达；宽屏不换行，布局不变 */
+@media (max-width: 767.9px) {
+  .wf-header-tools {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+}
+
+/* 品牌区：CJK 文本 min-content 为单字宽，flex 收缩会把标题压成竖排一字一行；
+   nowrap 后整块作为不可拆分单元参与换行，标题保持单行 */
+.wf-header-brand {
+  min-width: 0;
+}
+
+.wf-header-brand .arco-typography {
+  white-space: nowrap;
+}
+
+/* 币种 Select 可收缩：超窄视口下工具组也不产生横向溢出 */
+.wf-header-tools .arco-select {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .wf-header {
+    padding-inline: 16px;
+  }
+}
+
+/* 卡片头部：省略号标题与 extra 之间保留最小间距（组件库默认紧贴）。
+   标题按内容宽度（flex-basis: auto）参与换行：窄视口下 extra 换到下一行、
+   标题完整可读不截断；宽视口一行放下时行为与原 flex:1 填满一致。
+   height 需放开为 auto（组件库固定 46px 会裁掉第二行），min-height 保住单行观感。 */
+.wf-output-card .arco-card-header {
+  gap: 12px;
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 46px;
+}
+
+.wf-output-card .arco-card-header-title {
+  flex-basis: auto;
+}
+
+/* 中英混排段落断行策略：覆盖组件库 Typography 默认的 word-break: break-all——
+   break-all 会在英文单词词中（如税率说明的 "band/s"）与数字中间（"48/0"）断裂。
+   改为 normal（CJK 仍逐字断行、英文与数字按 UAX#14 保持完整）+
+   overflow-wrap: anywhere（超长不可断 token 仍能断行防溢出）。
+   数值片段另由 .wf-nowrap 保证永不换行；表格单元格不受此规则影响。 */
+.arco-typography {
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+/* 数值片段禁止内部断行（在断行策略之外提供原子性保证，同时覆盖非 Typography 宿主） */
+.wf-nowrap {
+  white-space: nowrap;
+}
+
+.wf-big-number {
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 12px !important;
+}
+
+/* 设计研究采纳 A4（docs/design-research.md §2.2）：表格数值列与实时区数值挂等宽数字，
+   防止列对齐随内容位数变化抖动（继承到单元格；对不支持该特性的字体无害；
+   slashed-zero 等叠加特性按 design-research N10 不采纳） */
+.wf-amortize-table,
+.wf-realtime {
+  font-variant-numeric: tabular-nums;
+}
+
+.wf-output-line {
+  margin-bottom: 4px;
+}
+
+.wf-output-breakdown {
+  margin-top: 8px;
+}
+
+/* 数值字段 */
+.wf-field-row {
+  margin-bottom: 4px;
+}
+
+.wf-field {
+  margin-bottom: 10px;
+}
+
+.wf-field-label {
+  display: flex;
+  align-items: center;
+  /* 窄视口：右侧提示文案放不下时整体换行到标签下方，标签不再被压缩成竖排断词 */
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+/* 字段提示图标悬停：颜色过渡（设计规范第 4 节 #13） */
+.wf-field-tip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: var(--wf-text-secondary, #646e7a);
+  cursor: help;
+  transition: color var(--wf-dur-base) var(--wf-ease-standard);
+}
+
+.wf-field-tip:hover {
+  color: var(--wf-primary, #4a6fa5);
+}
+
+.wf-field-hint {
+  font-size: 12px;
+  line-height: 18px;
+  margin-top: 2px;
+}
+
+/* 核心参数实时区：底色过渡（设计规范第 4 节 #14）。底色挂 --wf-tint-bg 主题组令牌
+   （原 rgb(var(--primary-1)) 浅蓝在深色下保持浅底、与深色正文字冲突，已解除依赖） */
+.wf-realtime {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--wf-tint-bg, rgba(74,111,165,0.08));
+  border-radius: 4px;
+  transition: background-color var(--wf-dur-base) var(--wf-ease-standard);
+}
+
+.wf-core-params {
+  margin-top: 8px;
+}
+
+/* 高级面板 */
+.wf-panel-note {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.wf-amortize-table {
+  margin-top: 4px;
+}
+
+/* 摊销表窄视口：表格内容容器对内容 overflow:hidden 且内层不可滚，
+   375px 下表格被压缩（金额逐字符断行、剩余本金整列裁掉）。
+   放开内层横向滚动 + 表格 min-width 560px，列宽完整、可横向滑动查看；
+   桌面容器 ≥560px 时 width:100% 继续生效，布局不变。 */
+.wf-amortize-table .arco-table-content-inner {
+  overflow-x: auto;
+}
+
+.wf-amortize-table table {
+  min-width: 560px;
+}
+
+/* Descriptions 兜底（仅窄视口）：组件库默认 label width:1px + white-space:nowrap，
+   极窄容器下长 label 会把表格撑破 body（overflow hidden 裁掉数值列，375px 实测溢出
+   92px）。窄视口允许 label 换行防溢出；桌面必须恢复 nowrap——normal 会让 width:1px
+   的 label 列塌缩成 ~40px，行高被撑成多行。 */
+@media (max-width: 767.9px) {
+  .arco-descriptions-item-label {
+    white-space: normal;
+  }
+}
+
+/* 蒙特卡洛 */
+.wf-mc-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 12px;
+}
+
+.wf-mc-running {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-mc-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.wf-mc-chart {
+  margin-top: 16px;
+}
+
+/* 页脚 */
+.wf-footer {
+  background: transparent;
+}
+
+/* ===== P0 三件套：预设场景 / 自由刻度 / 打工积累模拟 ===== */
+.wf-preset-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.wf-preset-btn { /* 高亮态由 Button type="primary" 承载，此处仅保证触控目标 */ min-height: 32px; }
+.wf-preset-custom { /* 「自定义」态徽标：高亮由 Tag color 承载 */ margin-inline-start: auto; }
+.wf-preset-tags { margin-bottom: 8px; }
+.wf-preset-note { margin-bottom: 12px; }
+.wf-output-hero { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.wf-progress-ring { flex: none; }
+.wf-progress-caption { margin-top: 4px; }
+.wf-acc-actions { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
+.wf-acc-running { display: inline-flex; align-items: center; gap: 6px; }
+.wf-acc-progress { margin-top: 12px; }
+.wf-acc-chart { margin-top: 12px; }
+/* ===== P1 冲刺：社保养老金 / 历史自助抽样 / 欲望敏感性 / 场景分享（docs/p1-spec.md §10） ===== */
+.wf-mc-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.wf-sens-toggle { margin-top: 8px; }
+.wf-sens-block { margin-top: 8px; }
+.wf-sens-group { margin-top: 8px; }
+.wf-sens-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.wf-sens-row { display: flex; justify-content: space-between; gap: 8px; }
+.wf-sens-note { margin-top: 8px; }
+.wf-share-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+/* ===== P2 冲刺设计打磨（docs/p2-spec.md §6.1/§6.3，采纳清单 C1/C3 落地的两组） ===== */
+/* C1 龙卷风图（.wf-sens-chart 一组）：图表容器 + 方向图例两行（C1 ⑧，数据表替代见其下数值行） */
+.wf-sens-chart { margin-top: 8px; }
+.wf-sens-legend { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.wf-sens-legend-row { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.wf-sens-legend-dot { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+/* C3 瀑布图（.wf-waterfall-chart 一组）：图表容器（图注复用既有 .wf-panel-note） */
+.wf-waterfall-chart { margin-top: 16px; }
+
+/* ===== P3 面板⑨ 公式原理与数据依据（docs/p3-spec.md §3.3） ===== */
+.wf-insight-section-title { display: block; margin: 20px 0 4px; }
+.wf-insight-section-title:first-child { margin-top: 0; }
+.wf-insights-body { display: block; margin-bottom: 4px; }
+.wf-insight-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.wf-insight-row {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 12px;
+  background: var(--wf-tint-bg);
+  border-radius: var(--wf-radius-s);
+  font-variant-numeric: tabular-nums;
+}
+.wf-insight-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wf-insight-main .arco-tag { margin-left: auto; }
+.wf-insight-source { font-size: 12px; line-height: 18px; }
+.wf-insight-note { display: block; margin-top: 8px; font-size: 12px; }
+
+/* 反推面板演示算例按钮行（docs/p3-spec.md §4） */
+.wf-example-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 12px; }
+
+/* S3-3（验收）：算例按钮长标签在窄断点被组件库 .arco-btn 的 white-space:nowrap 裁切
+   （375 档算例 A 按钮 300px > 折叠内容盒 247px，尾部数值不可见）。<640 放开换行 +
+   高度自适应（组件库 small 档定高 28px → min-height 保底），按钮行既有 flex-wrap
+   承载堆叠；标签关键数值信息完整可读，桌面保持单行不变。 */
+@media (max-width: 639.9px) {
+  .wf-example-bar .arco-btn {
+    white-space: normal;
+    height: auto;
+    min-height: 28px;
+  }
+}
+
+/* ===== P3 响应式专项（docs/p3-spec.md §6；断点口径 375/640/768/1024/1440，768 唯一硬断点；
+       书写口径沿用本仓既有窄屏规则：max-width + 0.9px 尾数，登记 §12 偏差 #11） ===== */
+/* D2 顶栏三档收纳（docs/p3-spec.md §6.2；类名挂钩见 App.tsx 顶栏 JSX）。标签隐藏用
+   「视觉隐藏」而非 display:none——读屏与 DOM 语义保留（源 A：尺寸类变化时功能不变、
+   可变的是同屏可见功能数量）。 */
+.wf-select-currency { width: 150px; }
+.wf-select-lang { width: 130px; }
+
+/* 640–789.9：收纳态——色盲标签视觉隐藏，两 Select 缩至 110/96（宽度预算推导见响应研究 §2.2）。
+   上界 767.9 → 789.9 为验收 S2-3 实测补档：768 视口可用宽 705px < 品牌 188px + 工具组 526px，
+   「≥768 单行完整态」实测在 768–789px 不成立（品牌块实测 188px，高于研究按 156px 的推导），
+   768–789 走收纳态后单行成立；≥790 恢复完整态（验收实测 790–1000 全单行）。
+   登记 docs/p3-spec.md §12 #14。 */
+@media (max-width: 789.9px) {
+  .wf-header-label-cb {
+    position: absolute; width: 1px; height: 1px; margin: -1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 789.9px) {
+  .wf-select-currency { width: 110px; }
+  .wf-select-lang { width: 96px; }
+}
+
+/* S3-2（验收）：Select 当前值双形态切换（见 App.tsx 顶栏选项注释）——收纳档（≤789.9，
+   含 <640 与 640–789.9 两档）当前值以短形态渲染，避免 104/96/88px 窄档下 ellipsis
+   截断（「CNY（¥…」「简体…」）；桌面显示全称不变。下拉选项同形态切换，value 不变。 */
+.wf-select-label-short { display: none; }
+@media (max-width: 789.9px) {
+  .wf-select-label-full { display: none; }
+  .wf-select-label-short { display: inline; }
+}
+
+/* 卡片标题两行换行（<768；验收 S1-4）：en 长标题在 375/640 两档被组件库单行省略截断
+   （.arco-card-header-title 白名单样式 nowrap + ellipsis，且 .arco-card-size-default
+   .arco-card-header 定高 46px + overflow:hidden），zh 短标题不受影响。定高放开须以
+   同特异性（0-2-0）+.arco-card-size-default 前缀压过组件库规则，否则 height:auto
+   失效、两行内容仍被 46px 裁切；min-height 保单行卡片高度不变；≥768 保持单行省略现状。 */
+@media (max-width: 767.9px) {
+  .arco-card-size-default .arco-card-header { height: auto; min-height: 46px; }
+  .arco-card-header-title { white-space: normal; }
+}
+
+/* <640：两行堆叠——三个文字标签全部视觉隐藏（工具组经既有 flex-wrap 换到品牌行下方），
+   品牌标题降 14px，Select 窄档 104/88 */
+@media (max-width: 639.9px) {
+  .wf-header-label {
+    position: absolute; width: 1px; height: 1px; margin: -1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .wf-header-brand .arco-typography { font-size: 14px; }
+  .wf-select-currency { width: 104px; }
+  .wf-select-lang { width: 88px; }
+}
+
+/* D3 <640 关闭 FieldRow 水平 gutter（组件库经内联样式落 margin/padding，须 !important 压制；
+   两列切点维持 768 不变——<640 时全部字段 xs=24 单列，关闭 gutter 只影响列内边距） */
+@media (max-width: 639.9px) {
+  .wf-field-row { margin-left: 0 !important; margin-right: 0 !important; }
+  .wf-field-row > .arco-col { padding-left: 0 !important; padding-right: 0 !important; }
+}
+
+/* D4 <640 Descriptions（此时已因 767.9 切点呈 vertical）值右对齐 + 等宽数字：数值列形成视觉右边缘 */
+@media (max-width: 639.9px) {
+  .arco-descriptions-item-value { text-align: right; font-variant-numeric: tabular-nums; }
+}
+
+/* D6 触控目标缺口补齐（生效口径与既有触控块一致：触屏或窄屏） */
+@media (pointer: coarse), (max-width: 767.9px) {
+  /* 预设画像按钮 32 → 44 */
+  .wf-preset-btn { min-height: 44px; }
+  /* 折叠面板头补最小触控高（整行可点，天然超宽；只加 min-height，不改组件库布局） */
+  .arco-collapse-item-header { min-height: 44px; }
+}
+
+/* D7 滑动提示：基础档隐藏，媒体档放行——基础规则必须在源序上先于媒体查询块
+   （同特异性按源序胜出；基础规则置后会反向压掉媒体档，致提示恒隐藏，评审修正） */
+.wf-swipe-hint { display: none; }
+
+/* D7 对比表两层滚动结构的承载规则（与媒体档无同名属性竞争，位置无关，就近基础档置此） */
+.wf-scenario-table-outer { position: relative; }
+.wf-scenario-table-wrap { margin-top: 8px; overflow-x: auto; }
+
+/* 对比表列压缩防护（验收 S2-1 + S3-1 复测补层，D7 列宽纪律同摊销表口径）：table min-width 560
+   与摊销表同口径；指标列 150 / 场景列 120 下限 + 数值列 nowrap——空间不足走横滚而非压缩断数。
+   组件库表格有连续两层裁切容器，均须放开（单轴 visible 与另一轴 hidden 组合会被计算成 auto，
+   故双轴显式 visible）：① .arco-table-content-inner（overflow:hidden）② .arco-table-content-scroll
+   （width:100%;overflow:hidden，S3-1 实测复测发现的第二裁切层——漏放它则 560px 表在内层被裁、
+   外层 wrap 无从滚动）。滚动职责保持在 .wf-scenario-table-wrap（§6.6 两层结构设计）。
+   <688.9 断点下横滚恒成立（min-width 560 > 该档可用宽，689 为实测无横滚起点，见 §12 #9/#13），
+   sticky 首列 / 渐隐 / 滑动提示真实生效，虚示窗口随之收敛。 */
+.wf-scenario-table .arco-table-content-inner {
+  overflow: visible;
+}
+.wf-scenario-table .arco-table-content-scroll {
+  overflow: visible;
+}
+.wf-scenario-table table {
+  min-width: 560px;
+}
+.wf-scenario-table th:first-child,
+.wf-scenario-table td:first-child {
+  min-width: 150px;
+}
+.wf-scenario-table th:not(:first-child),
+.wf-scenario-table td:not(:first-child) {
+  min-width: 120px;
+  white-space: nowrap;
+}
+
+/* D7 表格 <768：首列 sticky（行标识恒可见；底色取组件库表面变量，深色随 arco-theme 联动） */
+@media (max-width: 767.9px) {
+  .wf-amortize-table th:first-child,
+  .wf-amortize-table td:first-child,
+  .wf-scenario-table th:first-child,
+  .wf-scenario-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--color-bg-2, #fff);
+  }
+}
+
+/* 右缘渐隐 + 提示放行的生效档：断点按 §6.6 六宽度实测校准（chrome 实测 128px，非推导的
+   111px——高级卡 body / 折叠内容内边距实际取值更大，实测明细见 docs/p3-spec.md §12 #9）：
+   摊销表 min-width 560 + chrome 128 = 688 → 视口 <688 必然横滚，断点初取 687.9px；
+   验收 S3-5 扩展实测发现 688px 处 sw=560 > cw=559 仍有 1px 横滚而提示/渐隐已关——
+   1px 死区，断点放宽至 688.9px（689 起实测无横滚）；该档同时覆盖断点矩阵的 375 / 640 两列
+   （640 − 128 = 512 < 560） */
+@media (max-width: 688.9px) {
+  .wf-swipe-hint { display: block; font-size: 12px; margin-bottom: 4px; }
+  .wf-amortize-table { position: relative; }
+  .wf-amortize-table::after,
+  .wf-scenario-table-outer::after {
+    content: "";
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 24px;
+    background: linear-gradient(to left, var(--color-bg-2, #fff), transparent);
+    pointer-events: none;
+  }
+}
+
+/* D8 吸附落位：<768 生效；底色实底防与滚动内容叠印；原分享行在窄屏隐藏避免双入口 */
+.wf-action-dock, .wf-mc-dock-run { display: none; }
+
+@media (max-width: 767.9px) {
+  .wf-share-row { display: none; }
+  .wf-action-dock {
+    position: sticky;
+    bottom: 0;
+    z-index: 30;
+    display: flex;
+    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+    background: var(--wf-bg-page);
+  }
+  .wf-action-dock .arco-btn { flex: 1; }
+  .wf-mc-dock-run {
+    position: sticky;
+    bottom: 8px;
+    z-index: 20;
+    display: flex;
+    padding: 8px 0;
+    background: var(--wf-bg-page);
+  }
+  .wf-mc-dock-run .arco-btn { flex: 1; }
+  /* sticky 祖先裁切修正（验收 S2-2）：组件库 .arco-collapse / .arco-collapse-item-content
+     均 overflow:hidden（收合动画裁切用），使面板内 sticky 的最近滚动口退化为不可滚动的
+     折叠内容盒、吸附失效（375×667 实测 dock 在视口外 3.4k px）。hidden→clip：裁切视觉
+     与动画收合裁切完全不变，但 clip 不构成滚动容器，sticky 最近滚动口恢复为视口，
+     「面板在视口内时按钮恒在视口底」生效。限 <768（sticky 规则仅窄屏生效）。 */
+  .arco-collapse,
+  .arco-collapse-item-content {
+    overflow: clip;
+  }
+}
+
+/* D9 吸附态紧凑：<768 输出卡吸附时隐藏明细区（含已展开态），pinned 仅留大数字 + 两条 summary 行 + 两个开关 */
+@media (max-width: 767.9px) {
+  .wf-output-card.wf-is-stuck .wf-output-breakdown { display: none; }
+  .wf-output-card.wf-is-stuck .wf-sens-block { display: none; }
+  /* 吸附态点击穿透的交互豁免同步扩一项（既有 .wf-sens-toggle 同口径） */
+  .wf-output-card.wf-is-stuck .wf-breakdown-toggle { pointer-events: auto; }
+}
+.wf-breakdown-toggle { margin-top: 8px; }
+
+/* D10 认知负荷：组块边界间距（组头与首字段 ≥12px、组间 ≥24px = --wf-space-5） */
+@media (max-width: 767.9px) {
+  .wf-preset-bar { margin-bottom: 12px; }
+  .wf-preset-tags { margin-bottom: 12px; }
+  .wf-core-params { margin-top: 24px; }
+  .wf-action-dock { margin-top: 16px; }
+}

@@ -1,0 +1,894 @@
+/**
+ * ④ 蒙特卡洛模拟：手动运行 → loading → 耗尽概率、分位数终值 + 折线图
+ * （50 条低透明度抽样路径 + 逐年中位数粗线；入场动画按设计规范
+ *   第 4 节 #11 与第 8 节启用：慢档时长令牌 + 渐近族最近预设，减弱动效时停用；
+ *   网格线/刻度/路径/语义色为 SVG 属性，经主题解析函数按当前主题组与
+ *   色盲友好开关取解析值，不传 CSS 变量字符串——规范第 8 节取色口径）。
+ * P2 新增（docs/p2-spec.md §2.4 / §3.4 / §6.5 / §6.6）：支取策略三选一与策略参数、
+ * 初始支取率与末年支取额三分位行、序列风险对照子区（确定性，组件本地状态不入 store）、
+ * 图表 role="img" + aria 汇总句、未运行空态改用 Empty 组件。
+ * 文案经 react-i18next 三语化；纵轴「万」刻度随语言切换（英文为 ×10k）。
+ */
+import { Alert, Button, Descriptions, Empty, Grid, Progress, Radio, Select, Spin, Switch, Tooltip, Typography } from "@arco-design/web-react";
+import { IconQuestionCircle } from "@arco-design/web-react/icon";
+import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  calcMonteCarlo,
+  calcMonteCarloBootstrap,
+  calcSequence,
+  runSequenceReorder,
+  runSequenceRolling,
+  selectFateWindows,
+} from "../../services/finance";
+import type { FateWindow } from "../../services/finance";
+import type { FinanceResult } from "../../services/finance";
+import { currencySymbol, formatMoney, formatNumber } from "../../services/format";
+import { LIMITS, MONTE_CARLO_STRATEGY_DEFAULTS, MOTION_DURATIONS, resolveThemeTokens } from "../../data/defaults";
+import { INDEX_ORDER, INDEX_SERIES } from "../../data/indexSeries";
+import type { IndexId, MonteCarloReturnMode } from "../../data/indexSeries";
+import type { MonteCarloOutput, SequenceDirection, SequenceSimOutput, WithdrawalStrategy } from "../../wasm/bridge";
+import { useCalculatorStore } from "../../store/useCalculatorStore";
+import { AmountField, FieldRow, IntField, NumberField, PathsField, PercentField } from "../fields";
+import { compactXInterval, useChartMetrics, useIsNarrowViewport, usePrefersReducedMotion } from "../hooks";
+
+const { Text } = Typography;
+const { Col } = Grid;
+
+/** 折线图最多展示的抽样路径条数（契约 samplePaths 为 50 条代表路径） */
+const MAX_CHART_PATHS = 50;
+/** 模拟年限 UI 限额（数据层 LIMITS 集中维护；同时控制图表规模） */
+const YEARS_LIMIT = LIMITS.simYears;
+/** 序列风险对照：年储蓄默认（= 研究口径「年投 12 万」，docs/p2-spec.md §3.4） */
+const SEQ_ANNUAL_SAVING_DEFAULT = 120000;
+/** 序列风险对照：初始支取率默认 4%（docs/p2-spec.md §3.4） */
+const SEQ_INITIAL_RATE_DEFAULT = 4;
+/** 序列风险对照：滚动窗长默认 10 年（docs/p2-spec.md §3.4） */
+const SEQ_WINDOW_YEARS_DEFAULT = 10;
+
+/** 指数 id → i18n 显示名键（禁用模板串拼键） */
+const INDEX_NAME_KEY: Record<IndexId, string> = {
+  csi300: "mc.indexCsi300",
+  sp500: "mc.indexSp500",
+};
+/** 序列口径说明键 */
+const INDEX_KIND_KEY: Record<IndexId, string> = {
+  csi300: "mc.seriesPriceOnly",
+  sp500: "mc.seriesTotalReturn",
+};
+
+/** 图表数据行：逐年各路径值 + 逐年中位数（命运曲线图为三条命运线） */
+type ChartRow = Record<string, number | string>;
+
+/** 序列风险对照结果（滚动 / 三序两形态，docs/p2-spec.md §3.4） */
+type SeqState =
+  | { kind: "rolling"; windows: FateWindow[]; bestIndex: number; medianIndex: number; worstIndex: number }
+  | { kind: "reorder"; original: SequenceSimOutput; ascending: SequenceSimOutput; descending: SequenceSimOutput };
+
+function median(sorted: number[]): number {
+  const n = sorted.length;
+  if (n === 0) return 0;
+  const mid = Math.floor(n / 2);
+  return n % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+export default function MonteCarloPanel() {
+  const { t } = useTranslation();
+  const inputs = useCalculatorStore((s) => s.monteCarloInputs);
+  const setInputs = useCalculatorStore((s) => s.setMonteCarloInputs);
+  const returnMode = useCalculatorStore((s) => s.monteCarloReturnMode);
+  const setReturnMode = useCalculatorStore((s) => s.setMonteCarloReturnMode);
+  const seriesId = useCalculatorStore((s) => s.monteCarloSeriesId);
+  const setSeriesId = useCalculatorStore((s) => s.setMonteCarloSeriesId);
+  const displayCode = useCalculatorStore((s) => s.currency.display);
+  const colorBlindFriendly = useCalculatorStore((s) => s.colorBlindFriendly);
+  const theme = useCalculatorStore((s) => s.theme);
+  const symbol = currencySymbol(displayCode);
+  /** 窄视口下统计 Descriptions 切纵向堆叠（标签上/值下），避免长 label 挤压数值列 */
+  const isNarrow = useIsNarrowViewport();
+  /** 图表响应式三档（docs/p3-spec.md §6.4 D5）：高度 240/280/320、YAxis 宽 56/72、紧凑档 X 刻度 ≤5 */
+  const { chartHeight, yAxisWidth, isCompact } = useChartMetrics();
+
+  const [result, setResult] = useState<FinanceResult<MonteCarloOutput> | null>(null);
+  const [running, setRunning] = useState(false);
+
+  // 图表 SVG 属性经主题解析函数取解析值（规范第 8 节）：组件不感知主题，
+  // 深浅选组与色盲友好替换均在函数内完成；主题切换即重渲染换色，
+  // 入场动画由数据变化驱动，颜色 prop 变化不重放
+  const themeTokens = resolveThemeTokens(theme, colorBlindFriendly);
+  const pathColor = themeTokens.primary;
+  const medianColor = themeTokens.rise;
+  const fallColor = themeTokens.fall;
+
+  /** 系统「减弱动态效果」偏好：命中时图表入场动画停用（与历史关闭行为等价） */
+  const reducedMotion = usePrefersReducedMotion();
+  /** 折线入场动画（规范第 8 节）：慢档时长令牌数值 + 渐近族最近预设 easing */
+  const lineAnimationProps = {
+    isAnimationActive: !reducedMotion,
+    animationDuration: MOTION_DURATIONS.slow,
+    animationEasing: "ease-out",
+  } as const;
+
+  // ---------------------------------------------------------------------------
+  // P2-F1 支取策略（docs/p2-spec.md §2.4 ①）：切换即按需物化嵌套参数对象，
+  // 避免 undefined 传给核心；已存在（如分享链接恢复 / 此前编辑过）则保留用户值
+  // ---------------------------------------------------------------------------
+  const handleStrategyChange = (value: string) => {
+    const strategy = value as WithdrawalStrategy;
+    if (strategy === "threshold" && !inputs.threshold) {
+      setInputs({ strategy, threshold: { ...MONTE_CARLO_STRATEGY_DEFAULTS.threshold } });
+    } else if (strategy === "percent" && !inputs.percent) {
+      setInputs({ strategy, percent: { ...MONTE_CARLO_STRATEGY_DEFAULTS.percent } });
+    } else {
+      setInputs({ strategy });
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // P2-F2 序列风险对照（docs/p2-spec.md §3.4）：分析控件为组件本地 state，
+  // 不入 store、不随分享链接携带（口径注 seq.note 明示口径）
+  // ---------------------------------------------------------------------------
+  const [seqMode, setSeqMode] = useState<"rolling" | "reorder">("rolling");
+  const [seqDirection, setSeqDirection] = useState<SequenceDirection>("withdrawal");
+  const [seqWindowYears, setSeqWindowYears] = useState(SEQ_WINDOW_YEARS_DEFAULT);
+  const [seqRate, setSeqRate] = useState(SEQ_INITIAL_RATE_DEFAULT);
+  const [seqSaving, setSeqSaving] = useState(SEQ_ANNUAL_SAVING_DEFAULT);
+  const [seqRunning, setSeqRunning] = useState(false);
+  const [seqState, setSeqState] = useState<SeqState | null>(null);
+  const [seqError, setSeqError] = useState<string | null>(null);
+
+  const seqSeriesMeta = INDEX_SERIES[seriesId];
+  const seqSeries = seqSeriesMeta.annualReturnsPct;
+
+  /** 序列年储蓄口径的滚动（runSequenceRolling 契约仅定义支取口径签名；验收 #7 要求
+   *  两模式 × 两方向，积累口径滚动在此按同一编排循环 calcSequence 后复用
+   *  selectFateWindows 选取——选取口径单一实现，不重复推导） */
+  const runSeqRolling = async (): Promise<FinanceResult<{
+    windows: FateWindow[];
+    bestIndex: number;
+    medianIndex: number;
+    worstIndex: number;
+  }>> => {
+    const annualSpend = inputs.currentAssets * (seqRate / 100);
+    const annualSaving = seqDirection === "withdrawal" ? 0 : seqSaving;
+    if (seqDirection === "withdrawal") {
+      return runSequenceRolling(seqSeries, seqSeriesMeta.firstYear, seqWindowYears, inputs.currentAssets, annualSpend);
+    }
+    const windows: FateWindow[] = [];
+    for (let start = 0; start + seqWindowYears <= seqSeries.length; start += 1) {
+      const r = await calcSequence({
+        series: seqSeries.slice(start, start + seqWindowYears),
+        years: seqWindowYears,
+        direction: "accumulation",
+        currentAssets: inputs.currentAssets,
+        annualSpend: 0,
+        annualSaving,
+      });
+      if (!r.ok) return r;
+      windows.push({
+        startYear: seqSeriesMeta.firstYear + start,
+        terminalMultiple: r.data.terminalMultiple,
+        depletedYear: r.data.depletedYear,
+        assetPath: r.data.assetPath,
+      });
+    }
+    return { ok: true, data: { windows, ...selectFateWindows(windows) } };
+  };
+
+  const runSeq = () => {
+    setSeqRunning(true);
+    setSeqError(null);
+    const settle = (r: FinanceResult<SeqState>) => {
+      if (r.ok) setSeqState(r.data);
+      else setSeqError(r.error);
+    };
+    if (seqMode === "rolling") {
+      runSeqRolling()
+        .then((r) =>
+          settle(r.ok ? { ok: true, data: { kind: "rolling", ...r.data } } : r),
+        )
+        .catch((e: unknown) => setSeqError(e instanceof Error ? e.message : String(e)))
+        .finally(() => setSeqRunning(false));
+    } else {
+      runSequenceReorder(
+        seqSeries,
+        seqDirection,
+        inputs.currentAssets,
+        inputs.currentAssets * (seqRate / 100),
+        seqSaving,
+      )
+        .then((r) =>
+          settle(r.ok ? { ok: true, data: { kind: "reorder", ...r.data } } : r),
+        )
+        .catch((e: unknown) => setSeqError(e instanceof Error ? e.message : String(e)))
+        .finally(() => setSeqRunning(false));
+    }
+  };
+
+  const run = () => {
+    setRunning(true);
+    // 收益模式分支：自助抽样仅改变收益样本来源（序列有放回重抽）；正态参数与现状一致
+    // （service 内部已捕获全部异常，此处仅兜底）
+    const call =
+      returnMode === "bootstrap"
+        ? calcMonteCarloBootstrap({
+            ...inputs,
+            series: INDEX_SERIES[seriesId].annualReturnsPct,
+          })
+        : calcMonteCarlo(inputs);
+    call
+      .then((r) => setResult(r))
+      .catch((e: unknown) =>
+        setResult({ ok: false, error: e instanceof Error ? e.message : String(e), notReady: false }),
+      )
+      .finally(() => setRunning(false));
+  };
+
+  /** 50 条抽样路径 + 逐年中位数 → 图表数据 */
+  const chartData: ChartRow[] = useMemo(() => {
+    if (!result?.ok) return [];
+    const paths = result.data.samplePaths.slice(0, MAX_CHART_PATHS);
+    const years = paths.reduce((acc, p) => Math.max(acc, p.length), 0);
+    const rows: ChartRow[] = [];
+    for (let y = 0; y < years; y += 1) {
+      const row: ChartRow = { year: y + 1 };
+      const column: number[] = [];
+      paths.forEach((p, i) => {
+        const v = p[y] ?? 0;
+        row[`p${i}`] = v;
+        column.push(v);
+      });
+      column.sort((a, b) => a - b);
+      row.median = median(column);
+      rows.push(row);
+    }
+    return rows;
+  }, [result]);
+
+  /** 命运曲线图数据：最好 / 中位 / 最差三条逐年资产路径（滚动模式） */
+  const seqChartData: ChartRow[] = useMemo(() => {
+    if (!seqState || seqState.kind !== "rolling") return [];
+    const { windows, bestIndex, medianIndex, worstIndex } = seqState;
+    const best = windows[bestIndex];
+    const mid = windows[medianIndex];
+    const worst = windows[worstIndex];
+    if (!best || !mid || !worst) return [];
+    const years = Math.max(best.assetPath.length, mid.assetPath.length, worst.assetPath.length);
+    const rows: ChartRow[] = [];
+    for (let y = 0; y < years; y += 1) {
+      rows.push({
+        year: y + 1,
+        best: best.assetPath[y] ?? 0,
+        median: mid.assetPath[y] ?? 0,
+        worst: worst.assetPath[y] ?? 0,
+      });
+    }
+    return rows;
+  }, [seqState]);
+
+  const data = result?.ok === true ? result.data : null;
+  const error = result && !result.ok ? result.error : null;
+  const depletionPercent = data ? Math.round(data.depletionProb * 1000) / 10 : 0;
+  /** 图表实际绘制的路径条数（契约 50 条；按返回数据兜底） */
+  const chartPathCount = data ? Math.min(MAX_CHART_PATHS, data.samplePaths.length) : 0;
+  /** 初始支取率（输入侧实时）= 年支出（基期）÷ 当前资产；currentAssets = 0 显示「—」（除零防护） */
+  const initialRateText =
+    inputs.currentAssets > 0
+      ? `${formatNumber((inputs.annualSpend / inputs.currentAssets) * 100, 2)}%`
+      : "—";
+
+  /** 序列窗口数（seq.note 的 {{count}}：滚动窗起点数 = 序列长度 − 窗长 + 1） */
+  const seqWindowsCount = Math.max(0, seqSeries.length - seqWindowYears + 1);
+
+  /** 命运行数值：期末倍数 + 耗尽年标注 */
+  const fateValue = (w: FateWindow): string => {
+    const multiple = `${formatNumber(w.terminalMultiple, 2)}×`;
+    return w.depletedYear >= 1
+      ? `${multiple} · ${t("seq.depletedYear", { year: w.depletedYear })}`
+      : multiple;
+  };
+  /** 三序行数值：期末倍数 + 耗尽年标注 */
+  const reorderValue = (o: SequenceSimOutput): string => {
+    const multiple = `${t("seq.terminalMultiple")} ${formatNumber(o.terminalMultiple, 2)}`;
+    return o.depletedYear >= 1
+      ? `${multiple} · ${t("seq.depletedYear", { year: o.depletedYear })}`
+      : multiple;
+  };
+
+  return (
+    <div>
+      {/* 收益模式行（docs/p1-spec.md §4.6）：正态参数 / 历史自助抽样；自助抽样附加序列选择。
+          触控目标由样式层既有触屏媒体查询承担，不额外包命中区扩展层 */}
+      <div className="wf-mc-mode">
+        <Text>{t("mc.returnMode")}</Text>
+        <Tooltip content={t("mc.returnModeTooltip")}>
+          <span className="wf-field-tip">
+            <IconQuestionCircle />
+          </span>
+        </Tooltip>
+        <Radio.Group
+          value={returnMode}
+          onChange={(v) => setReturnMode(v as MonteCarloReturnMode)}
+          options={[
+            { label: t("mc.modeNormal"), value: "normal" },
+            { label: t("mc.modeBootstrap"), value: "bootstrap" },
+          ]}
+        />
+        {returnMode === "bootstrap" ? (
+          <>
+            <Text>{t("mc.seriesLabel")}</Text>
+            <Tooltip content={t("mc.seriesTooltip")}>
+              <span className="wf-field-tip">
+                <IconQuestionCircle />
+              </span>
+            </Tooltip>
+            <Select
+              size="small"
+              value={seriesId}
+              options={INDEX_ORDER.map((id) => ({ label: t(INDEX_NAME_KEY[id]), value: id }))}
+              onChange={(v: IndexId) => setSeriesId(v)}
+              style={{ width: 190 }}
+            />
+          </>
+        ) : null}
+      </div>
+      {/* P2-F1 支取策略行（docs/p2-spec.md §2.4 ①）：收益模式行下方；切换即按需物化参数 */}
+      <div className="wf-mc-mode">
+        <Text>{t("mc.strategy")}</Text>
+        <Radio.Group
+          value={inputs.strategy ?? "fixed"}
+          onChange={(v) => handleStrategyChange(v as string)}
+          options={[
+            { label: t("mc.strategyFixed"), value: "fixed" },
+            { label: t("mc.strategyThreshold"), value: "threshold" },
+            { label: t("mc.strategyPercent"), value: "percent" },
+          ]}
+        />
+      </div>
+      {returnMode === "bootstrap" ? (
+        <Text type="secondary">{t("mc.bootstrapModeNote")}</Text>
+      ) : null}
+
+      {/* P2-F1 阈值带参数（strategy = "threshold"；四个带参数共用 mc.thresholdBandTooltip） */}
+      {inputs.strategy === "threshold" && inputs.threshold ? (
+        <FieldRow>
+          <NumberField
+            md={12}
+            label={t("mc.thresholdExceedPct")}
+            tooltip={t("mc.thresholdBandTooltip")}
+            value={inputs.threshold.exceedPct}
+            onChange={(v) => setInputs({ threshold: { ...inputs.threshold!, exceedPct: v } })}
+            limit={LIMITS.strategyPct}
+            suffix="%"
+          />
+          <NumberField
+            md={12}
+            label={t("mc.thresholdCutPct")}
+            tooltip={t("mc.thresholdBandTooltip")}
+            value={inputs.threshold.cutPct}
+            onChange={(v) => setInputs({ threshold: { ...inputs.threshold!, cutPct: v } })}
+            limit={LIMITS.strategyPct}
+            suffix="%"
+          />
+          <NumberField
+            md={12}
+            label={t("mc.thresholdFallPct")}
+            tooltip={t("mc.thresholdBandTooltip")}
+            value={inputs.threshold.fallPct}
+            onChange={(v) => setInputs({ threshold: { ...inputs.threshold!, fallPct: v } })}
+            limit={LIMITS.strategyPct}
+            suffix="%"
+          />
+          <NumberField
+            md={12}
+            label={t("mc.thresholdRaisePct")}
+            tooltip={t("mc.thresholdBandTooltip")}
+            value={inputs.threshold.raisePct}
+            onChange={(v) => setInputs({ threshold: { ...inputs.threshold!, raisePct: v } })}
+            limit={LIMITS.strategyPct}
+            suffix="%"
+          />
+          <IntField
+            md={12}
+            label={t("mc.thresholdNoCutYears")}
+            tooltip={t("mc.thresholdBandTooltip")}
+            value={inputs.threshold.noCutLastYears}
+            onChange={(v) => setInputs({ threshold: { ...inputs.threshold!, noCutLastYears: v } })}
+            min={0}
+            max={200}
+            suffix={t("units.yearUnit")}
+          />
+          <Col className="wf-field" xs={24} md={12}>
+            <div className="wf-field-label">
+              <Text>{t("mc.thresholdFreeze")}</Text>
+              <Tooltip content={t("mc.thresholdFreezeTooltip")}>
+                <span className="wf-field-tip">
+                  <IconQuestionCircle />
+                </span>
+              </Tooltip>
+            </div>
+            <Switch
+              checked={inputs.threshold.freezeOnLoss}
+              onChange={(checked) => setInputs({ threshold: { ...inputs.threshold!, freezeOnLoss: checked } })}
+            />
+          </Col>
+        </FieldRow>
+      ) : null}
+
+      {/* P2-F1 余额比例参数（strategy = "percent"；地板 / 上限 0 = 关闭） */}
+      {inputs.strategy === "percent" && inputs.percent ? (
+        <FieldRow>
+          <NumberField
+            md={12}
+            label={t("mc.percentRealReturn")}
+            tooltip={t("mc.percentRealReturnTooltip", {
+              value: formatNumber(MONTE_CARLO_STRATEGY_DEFAULTS.percent.realReturnAssumpPct, 1),
+            })}
+            value={inputs.percent.realReturnAssumpPct}
+            onChange={(v) => setInputs({ percent: { ...inputs.percent!, realReturnAssumpPct: v } })}
+            limit={LIMITS.strategyRealReturnPct}
+            suffix="%"
+          />
+          <IntField
+            md={12}
+            label={t("mc.percentFloor")}
+            tooltip={t("mc.percentBoundTooltip")}
+            value={inputs.percent.floorPctOfLastYear}
+            onChange={(v) => setInputs({ percent: { ...inputs.percent!, floorPctOfLastYear: v } })}
+            min={LIMITS.strategyPct.min}
+            max={LIMITS.strategyPct.max}
+            suffix="%"
+          />
+          <IntField
+            md={12}
+            label={t("mc.percentCap")}
+            tooltip={t("mc.percentBoundTooltip")}
+            value={inputs.percent.capPctOfInitialReal}
+            onChange={(v) => setInputs({ percent: { ...inputs.percent!, capPctOfInitialReal: v } })}
+            min={LIMITS.strategyCapPct.min}
+            max={LIMITS.strategyCapPct.max}
+            suffix="%"
+          />
+        </FieldRow>
+      ) : null}
+
+      <FieldRow>
+        <AmountField
+          label={t("mc.currentAssets")}
+          tooltip={t("mc.currentAssetsTooltip")}
+          value={inputs.currentAssets}
+          onChange={(v) => setInputs({ currentAssets: v })}
+          prefix={symbol}
+          suffix={t("units.yuan")}
+        />
+        <AmountField
+          label={t("mc.annualSpend")}
+          tooltip={t("mc.annualSpendTooltip")}
+          value={inputs.annualSpend}
+          onChange={(v) => setInputs({ annualSpend: v })}
+          prefix={symbol}
+          suffix={t("units.yuanPerYear")}
+        />
+        {/* 自助抽样模式下名义回报均值/标准差不参与计算（分布由所选序列决定），隐藏两个字段；
+            通胀均值/标准差保留（通胀仍按正态分布抽样） */}
+        {returnMode === "normal" ? (
+          <PercentField
+            md={12}
+            label={t("mc.returnMean")}
+            tooltip={t("mc.returnMeanTooltip")}
+            value={inputs.nominalReturnMeanPct}
+            onChange={(v) => setInputs({ nominalReturnMeanPct: v })}
+            suffix="%"
+          />
+        ) : null}
+        {returnMode === "normal" ? (
+          <PercentField
+            md={12}
+            label={t("mc.returnStd")}
+            tooltip={t("mc.returnStdTooltip")}
+            value={inputs.nominalReturnStdPct}
+            onChange={(v) => setInputs({ nominalReturnStdPct: v })}
+            suffix="%"
+          />
+        ) : null}
+        <PercentField
+          md={12}
+          label={t("mc.inflationMean")}
+          tooltip={t("mc.inflationMeanTooltip")}
+          value={inputs.inflationMeanPct}
+          onChange={(v) => setInputs({ inflationMeanPct: v })}
+          suffix="%"
+        />
+        <PercentField
+          md={12}
+          label={t("mc.inflationStd")}
+          tooltip={t("mc.inflationStdTooltip")}
+          value={inputs.inflationStdPct}
+          onChange={(v) => setInputs({ inflationStdPct: v })}
+          suffix="%"
+        />
+        <IntField
+          md={12}
+          label={t("mc.years")}
+          tooltip={t("mc.yearsTooltip")}
+          value={inputs.years}
+          onChange={(v) => setInputs({ years: v })}
+          min={YEARS_LIMIT.min}
+          max={YEARS_LIMIT.max}
+          suffix={t("units.yearUnit")}
+          hint={t("mc.yearsHint", { max: YEARS_LIMIT.max })}
+        />
+        <PathsField
+          md={12}
+          label={t("mc.paths")}
+          tooltip={t("mc.pathsTooltip")}
+          value={inputs.paths}
+          onChange={(v) => setInputs({ paths: v })}
+          hint={t("mc.pathsHint")}
+        />
+        <IntField
+          md={12}
+          label={t("mc.seed")}
+          tooltip={t("mc.seedTooltip")}
+          value={inputs.seed}
+          onChange={(v) => setInputs({ seed: v })}
+          suffix="#"
+        />
+      </FieldRow>
+
+      {/* 序列口径注（bootstrap 模式）：名称 + 年份区间 + 样本数 + 价格/总回报口径 + 来源
+          （source 为数据层简中原文；English 界面下「本地化模板 + 简中来源」混排属已声明取舍） */}
+      {returnMode === "bootstrap" ? (
+        <Text type="secondary" className="wf-panel-note">
+          {t("mc.seriesNote", {
+            name: t(INDEX_NAME_KEY[seriesId]),
+            firstYear: seqSeriesMeta.firstYear,
+            lastYear: seqSeriesMeta.firstYear + seqSeries.length - 1,
+            count: seqSeries.length,
+            kind: t(INDEX_KIND_KEY[seriesId]),
+            source: seqSeriesMeta.source,
+          })}
+        </Text>
+      ) : null}
+
+      {/* P2-F2 序列风险对照子区（docs/p2-spec.md §3.4）：策略参数区之后、运行按钮之前；
+          独立 seqRunning，不复用 running 状态 */}
+      <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--wf-hairline-card, rgba(29,33,41,0.08))" }}>
+        <Text bold>{t("seq.title")}</Text>
+        <div className="wf-mc-mode" style={{ marginTop: 8 }}>
+          {/* 对照模式选项自解释（起点滚动 / 三序对照），无独立标签键 */}
+          <Radio.Group
+            value={seqMode}
+            onChange={(v) => setSeqMode(v as "rolling" | "reorder")}
+            options={[
+              { label: t("seq.modeRolling"), value: "rolling" },
+              { label: t("seq.modeReorder"), value: "reorder" },
+            ]}
+          />
+          <Text>{t("seq.direction")}</Text>
+          <Radio.Group
+            value={seqDirection}
+            onChange={(v) => setSeqDirection(v as SequenceDirection)}
+            options={[
+              { label: t("seq.directionWithdrawal"), value: "withdrawal" },
+              { label: t("seq.directionAccumulation"), value: "accumulation" },
+            ]}
+          />
+          {/* 序列沿用面板既有 seriesId 选择器（同一 store 状态；面板顶层选择器仅在
+              bootstrap 模式可见，此处为序列风险子区的可见入口） */}
+          <Text>{t("mc.seriesLabel")}</Text>
+          <Select
+            size="small"
+            value={seriesId}
+            options={INDEX_ORDER.map((id) => ({ label: t(INDEX_NAME_KEY[id]), value: id }))}
+            onChange={(v: IndexId) => setSeriesId(v)}
+            style={{ width: 190 }}
+          />
+        </div>
+        {/* 序列口径沿用 mc.seriesNote 口径注（docs/p2-spec.md §3.4） */}
+        <Text type="secondary" className="wf-panel-note">
+          {t("mc.seriesNote", {
+            name: t(INDEX_NAME_KEY[seriesId]),
+            firstYear: seqSeriesMeta.firstYear,
+            lastYear: seqSeriesMeta.firstYear + seqSeries.length - 1,
+            count: seqSeries.length,
+            kind: t(INDEX_KIND_KEY[seriesId]),
+            source: seqSeriesMeta.source,
+          })}
+        </Text>
+        <FieldRow>
+          {seqMode === "rolling" ? (
+            <IntField
+              md={12}
+              label={t("seq.windowYears")}
+              value={seqWindowYears}
+              onChange={(v) => setSeqWindowYears(v)}
+              min={1}
+              max={seqSeries.length}
+              suffix={t("units.yearUnit")}
+            />
+          ) : null}
+          {seqDirection === "withdrawal" ? (
+            <PercentField
+              md={12}
+              label={t("seq.initialRate")}
+              value={seqRate}
+              onChange={(v) => setSeqRate(v)}
+              suffix="%"
+            />
+          ) : (
+            <AmountField
+              md={12}
+              label={t("seq.annualSaving")}
+              value={seqSaving}
+              onChange={(v) => setSeqSaving(v)}
+              prefix={symbol}
+              suffix={t("units.yuanPerYear")}
+            />
+          )}
+        </FieldRow>
+        <div className="wf-mc-actions">
+          <Button loading={seqRunning} disabled={seqRunning} onClick={runSeq} className="wf-pressable">
+            {t("seq.run")}
+          </Button>
+          {seqRunning ? (
+            <span className="wf-mc-running">
+              <Spin size={14} /> <Text type="secondary">{t("common.computing")}</Text>
+            </span>
+          ) : null}
+        </div>
+        {seqError ? <Alert type="error" style={{ marginBottom: 8 }} content={seqError} /> : null}
+        {seqState === null ? (
+          <Empty description={t("seq.placeholder")} />
+        ) : seqState.kind === "rolling" ? (
+          <>
+            {/* 命运曲线图：最好 / 中位 / 最差三线（C4 双主题令牌 + C5 aria 汇总句） */}
+            {seqChartData.length > 0 ? (
+              <div
+                className="wf-mc-chart"
+                role="img"
+                aria-label={t("seq.chartAria", {
+                  count: seqState.windows.length,
+                  years: seqWindowYears,
+                })}
+              >
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <LineChart data={seqChartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} />
+                    {/* 紧凑档（<640）X 刻度 ≤5：interval 按刻度总数（= 窗长）推导，非紧凑档不干预 */}
+                    <XAxis
+                      dataKey="year"
+                      allowDecimals={false}
+                      tick={{ fontSize: 12, fill: themeTokens.chartTick }}
+                      interval={isCompact ? compactXInterval(seqWindowYears) : undefined}
+                    />
+                    <YAxis
+                      width={yAxisWidth}
+                      tick={{ fontSize: 12, fill: themeTokens.chartTick }}
+                      tickFormatter={(v: number) => `${Math.round(v / 10000)}${t("units.wan")}`}
+                    />
+                    <Line
+                      dataKey="best"
+                      stroke={themeTokens.rise}
+                      strokeWidth={2}
+                      dot={false}
+                      {...lineAnimationProps}
+                      connectNulls
+                    />
+                    <Line
+                      dataKey="median"
+                      stroke={themeTokens.primary}
+                      strokeWidth={2.5}
+                      dot={false}
+                      {...lineAnimationProps}
+                      connectNulls
+                    />
+                    <Line
+                      dataKey="worst"
+                      stroke={themeTokens.fall}
+                      strokeWidth={2}
+                      dot={false}
+                      {...lineAnimationProps}
+                      connectNulls
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : null}
+            {/* 三联数行（数据表替代，C5 口径）+ 窗口数标注 */}
+            <Descriptions
+              border
+              size="small"
+              style={{ marginTop: 8 }}
+              layout={isNarrow ? "vertical" : "horizontal"}
+              column={{ xs: 1, md: 3 }}
+              data={[
+                {
+                  label: t("seq.fateBest", { year: seqState.windows[seqState.bestIndex]?.startYear ?? "—" }),
+                  value: seqState.windows[seqState.bestIndex] ? fateValue(seqState.windows[seqState.bestIndex]) : "—",
+                },
+                {
+                  label: t("seq.fateMedian"),
+                  value: seqState.windows[seqState.medianIndex] ? fateValue(seqState.windows[seqState.medianIndex]) : "—",
+                },
+                {
+                  label: t("seq.fateWorst", { year: seqState.windows[seqState.worstIndex]?.startYear ?? "—" }),
+                  value: seqState.windows[seqState.worstIndex] ? fateValue(seqState.windows[seqState.worstIndex]) : "—",
+                },
+              ]}
+            />
+            <Text type="secondary" className="wf-panel-note">
+              {t("seq.windowsCount", { count: seqState.windows.length, years: seqWindowYears })}
+            </Text>
+          </>
+        ) : (
+          <>
+            {/* 三序汇总表（顺序名 + 期末倍数 + 耗尽年；数据表替代，C5 口径） */}
+            <Descriptions
+              border
+              size="small"
+              style={{ marginTop: 8 }}
+              layout={isNarrow ? "vertical" : "horizontal"}
+              column={{ xs: 1, md: 3 }}
+              data={[
+                { label: t("seq.originalOrder"), value: reorderValue(seqState.original) },
+                { label: t("seq.worstFirst"), value: reorderValue(seqState.ascending) },
+                { label: t("seq.bestFirst"), value: reorderValue(seqState.descending) },
+              ]}
+            />
+          </>
+        )}
+        {/* 口径注恒显示（确定性口径 + 通胀置 0 + 窗口数演示性质声明） */}
+        <Text type="secondary" className="wf-panel-note">
+          {t("seq.note", { count: seqWindowsCount })}
+        </Text>
+      </div>
+
+      <div className="wf-mc-actions">
+        <Button type="primary" loading={running} onClick={run} disabled={running} className="wf-pressable">
+          {t("mc.run")}
+        </Button>
+        {running ? (
+          <span className="wf-mc-running">
+            <Spin size={14} /> <Text type="secondary">{t("mc.running")}</Text>
+          </span>
+        ) : null}
+      </div>
+
+      {error ? <Alert type="error" style={{ marginTop: 8 }} content={error} /> : null}
+
+      {data ? (
+        <>
+          <div className="wf-mc-progress">
+            <Text>{t("mc.depletionLabel")}</Text>
+            <Progress
+              percent={depletionPercent}
+              color={fallColor}
+              formatText={(p) => `${formatNumber(p, 1)}%`}
+              style={{ maxWidth: 420 }}
+            />
+          </div>
+          <Descriptions
+            border
+            size="small"
+            style={{ marginTop: 8 }}
+            layout={isNarrow ? "vertical" : "horizontal"}
+            column={{ xs: 1, md: 2 }}
+            data={[
+              { label: t("mc.medianTerminal"), value: <Text bold className="wf-nowrap">{formatMoney(data.medianTerminal, symbol)}</Text> },
+              { label: t("mc.p5"), value: formatMoney(data.p5, symbol) },
+              { label: t("mc.p25"), value: formatMoney(data.p25, symbol) },
+              { label: t("mc.p75"), value: formatMoney(data.p75, symbol) },
+              { label: t("mc.p95"), value: formatMoney(data.p95, symbol) },
+              {
+                label: `${t("mc.paths")} / ${t("mc.years")}`,
+                value: t("mc.pathsYears", { paths: formatNumber(inputs.paths, 0), years: inputs.years }),
+              },
+              /* P2-F1 §2.4 ④：初始支取率（输入侧实时；策略任意模式均显示；0 资产除零防护） */
+              {
+                label: (
+                  <span>
+                    {t("mc.initialWithdrawalRate")}
+                    <Tooltip content={t("mc.initialWithdrawalRateTooltip")}>
+                      <span className="wf-field-tip">
+                        <IconQuestionCircle />
+                      </span>
+                    </Tooltip>
+                  </span>
+                ),
+                value: initialRateText,
+              },
+              /* P2-F1 §2.4 ④：末年支取额三分位（键清单逐键成行） */
+              { label: t("mc.withdrawalP5"), value: formatMoney(data.withdrawalP5, symbol) },
+              { label: t("mc.withdrawalMedian"), value: formatMoney(data.withdrawalMedian, symbol) },
+              { label: t("mc.withdrawalP95"), value: formatMoney(data.withdrawalP95, symbol) },
+            ]}
+          />
+          {/* P2-F1 §2.4 ⑤：策略口径注（单一键承载阈值带 / 余额比例 / 算术锚三段声明） */}
+          <Text type="secondary" className="wf-panel-note">
+            {t("mc.strategyNote")}
+          </Text>
+          {chartData.length > 0 ? (
+            <div
+              className="wf-mc-chart"
+              role="img"
+              aria-label={t("mc.chartAria", {
+                paths: formatNumber(chartPathCount, 0),
+                years: inputs.years,
+                prob: formatNumber(depletionPercent, 1),
+                median: formatMoney(data.medianTerminal, symbol),
+              })}
+            >
+              <ResponsiveContainer width="100%" height={chartHeight}>
+                <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} />
+                  {/* 紧凑档（<640）X 刻度 ≤5：interval 按刻度总数（= 年数）推导，非紧凑档不干预 */}
+                  <XAxis
+                    dataKey="year"
+                    allowDecimals={false}
+                    tick={{ fontSize: 12, fill: themeTokens.chartTick }}
+                    interval={isCompact ? compactXInterval(inputs.years) : undefined}
+                  />
+                  <YAxis
+                    width={yAxisWidth}
+                    tick={{ fontSize: 12, fill: themeTokens.chartTick }}
+                    tickFormatter={(v: number) => `${Math.round(v / 10000)}${t("units.wan")}`}
+                  />
+                  {Array.from({ length: chartPathCount }, (_, i) => (
+                    <Line
+                      key={`path-${i}`}
+                      dataKey={`p${i}`}
+                      stroke={pathColor}
+                      strokeWidth={1}
+                      strokeOpacity={0.12}
+                      dot={false}
+                      {...lineAnimationProps}
+                      connectNulls
+                    />
+                  ))}
+                  <Line
+                    dataKey="median"
+                    stroke={medianColor}
+                    strokeWidth={2.5}
+                    dot={false}
+                    {...lineAnimationProps}
+                    connectNulls
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <Text type="secondary" className="wf-panel-note">
+                {returnMode === "bootstrap"
+                  ? t("mc.chartNoteBootstrap", { count: chartPathCount })
+                  : t("mc.chartNote", { count: chartPathCount })}
+              </Text>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        /* C6 空态组件化：未运行空态从 Alert 改为 Empty（错误仍用 Alert type="error"） */
+        <Empty
+          style={{ marginTop: 8 }}
+          description={
+            returnMode === "bootstrap" ? t("mc.placeholderBootstrap") : t("mc.placeholder")
+          }
+        />
+      )}
+
+      {/* D8 面板尾部 sticky-bottom 复用按钮（docs/p3-spec.md §6.7）：与既有运行按钮同 run 处理
+          函数、同 loading/disabled 口径；<768 生效（样式层断点控制显隐），常驻拇指自然可达区 */}
+      <div className="wf-mc-dock-run">
+        <Button type="primary" loading={running} onClick={run} disabled={running} className="wf-pressable">
+          {t("mc.run")}
+        </Button>
+      </div>
+    </div>
+  );
+}
