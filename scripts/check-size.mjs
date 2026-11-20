@@ -22,6 +22,10 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 const DIST_DIR = "dist";
+// P5 回收落地后按既定回滚条件回调（p5-spec §13：组件库按需样式表 denylist purge
+// 实测回收 73,380 字节（873 条规则；dry-run 报告与产物差值一致，收口勘误，见 p5-spec §14），
+// dist 总量降至 2,000,000 以内）——P4 特批 2,010,000 归档。
+// 红线语义不变——2,000,000 仍是显式硬限，超标即 exit 1；wasm 单项 800,000 不动。
 const TOTAL_LIMIT_BYTES = 2_000_000;
 const WASM_LIMIT_BYTES = 800_000;
 
@@ -31,6 +35,7 @@ function walk(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, entry.name);
     if (entry.isDirectory()) {
+      if (entry.name === ".git") continue; // 部署快照仓内部对象不属交付产物（p4-spec §11.1）
       out.push(...walk(p));
     } else if (entry.isFile()) {
       out.push(p);
