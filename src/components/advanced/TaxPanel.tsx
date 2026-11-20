@@ -22,6 +22,18 @@ const { Col } = Grid;
 
 const OTHER = "OTHER";
 
+/** 国家/地区码 → i18n 键的静态映射（禁用模板串拼键；键集与 COUNTRY_CODES / 三语资源 countries.* 一致，未知码回退原码展示） */
+const COUNTRY_NAME_KEY: Record<string, string> = {
+  CN: "countries.CN",
+  US: "countries.US",
+  GB: "countries.GB",
+  DE: "countries.DE",
+  JP: "countries.JP",
+  SG: "countries.SG",
+  AU: "countries.AU",
+  CA: "countries.CA",
+};
+
 /** 国家/地区选项（税表按键匹配 TAX_TABLES.countryCode；名称随语言切换） */
 const COUNTRY_CODES: Array<{ code: string; other?: boolean }> = [
   { code: "CN" },
@@ -55,11 +67,11 @@ export default function TaxPanel() {
 
   /** 国家/地区选项（名称随语言切换） */
   const countryOptions = COUNTRY_CODES.map(({ code, other }) => ({
-    label: other ? t("tax.other") : t(`countries.${code}`),
+    label: other ? t("tax.other") : t(COUNTRY_NAME_KEY[code] ?? code),
     value: code,
   }));
   const countryLabel = (code: string): string =>
-    code === OTHER ? t("tax.other") : t(`countries.${code}`);
+    code === OTHER ? t("tax.other") : t(COUNTRY_NAME_KEY[code] ?? code);
 
   /** 该国家/地区的全部税表（可能多于一套，全部由 TAX_TABLES 提供） */
   const countryTables = useMemo(
@@ -214,7 +226,9 @@ export default function TaxPanel() {
       ) : null}
       {error ? <Alert type="error" style={{ marginTop: 8 }} content={error} /> : null}
 
-      <Divider style={{ margin: "16px 0 12px" }} />
+      {/* P5 T7 同族类：分节线挂 .wf-group-line（线色发丝线令牌、文字 caption 档——
+          与 S7 分组左标线同族；结构零改动，间距由该类的 margin 承载） */}
+      <Divider className="wf-group-line" />
       <Text bold>{t("tax.currencySectionTitle")}</Text>
       <CurrencySection />
     </div>

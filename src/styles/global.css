@@ -16,8 +16,10 @@
 /* ============================== 令牌区 ============================== */
 /* 静态层与主题组浅色默认值清单口径见设计规范 2.10；运行时由 App.tsx 将当前主题组值注入
    documentElement 覆盖（组件库弹层挂在页面骨架之外，注入点在 documentElement 才对其生效）。
-   主题组键（文字分级 / 主色 / 语义色 / 页面底 / 着色底 / 图表 / 材质 / 发丝线三键 / 阴影 /
-   焦点环）随主题换值；间距 / 圆角 / 字阶 / 顶栏几何 / 动效时长与曲线为静态层，两主题共用 */
+   主题组键（文字分级 / 主色 / 语义色 / 表面阶 sunken·inset·surface / 着色底 / 图表 /
+   环线描边 / 材质 / 发丝线三键 / 阴影 / 焦点环）随主题换值；
+   间距 / 圆角 / 字阶（display·title·body·caption 四级）/ 顶栏几何 / 动效时长与曲线为静态层，
+   两主题共用。字阶与表面阶命名迁移映射见 docs/p5-spec.md §2（旧名零残留由孤儿门禁保证） */
 :root {
   /* —— 间距（8pt） —— */
   --wf-space-1: 4px; /* 半档：密集表单标签与控件的行距 */
@@ -34,12 +36,11 @@
   --wf-radius-l: 14px;
   --wf-radius-full: 9999px;
 
-  /* —— 字阶 —— */
-  --wf-text-xs: 12px;
-  --wf-text-sm: 13px;
-  --wf-text-md: 14px;
-  --wf-text-lg: 16px;
-  --wf-text-num: 32px; /* 临界值大数字：窄屏档 */
+  /* —— 字阶（四级定案，docs/design-language.md §3.1；静态层两主题同值） —— */
+  --wf-text-display: 32px; /* 全站唯一读数窗（输出卡临界值）：窄屏档，每屏至多一处 */
+  --wf-text-title: 20px; /* 面板级主数与大节标题：与 display 保持 1:2 从属比 */
+  --wf-text-body: 14px; /* 正文、字段标签、Descriptions 值（默认档；金额下限由本档达标） */
+  --wf-text-caption: 12px; /* 口径注、图表刻度、hint、图例（说明性文字） */
 
   /* —— 文字分级色（主题组） —— */
   --wf-text: #1D2129; /* 正文：禁用纯黑 */
@@ -51,13 +52,20 @@
   --wf-rise: #00B42A; /* 绿涨语义色（浅色现状值冻结，显式豁免 4.5 口径，见设计规范 5.3） */
   --wf-fall: #F53F3F; /* 红跌语义色（同上） */
 
-  /* —— 页面底色 / 着色底（主题组；body 背景与实时区底色改挂令牌，解除硬编码） —— */
-  --wf-bg-page: #f7f8fa;
-  --wf-tint-bg: rgba(74,111,165,0.08);
+  /* —— 表面阶（主题组，docs/design-language.md §3.2）：分层背景四档 sunken（页面画布）
+     → inset（面板凹面区）→ surface（平面卡底）→ 材质层；着色底承载 hover / 着色表面半档 —— */
+  --wf-bg-sunken: #F7F8FA;
+  --wf-bg-inset: #F2F3F5;
+  --wf-bg-surface: #FFFFFF;
+  --wf-bg-tint: rgba(74,111,165,0.08);
 
   /* —— 图表（主题组；蒙特卡洛网格线 / 刻度文字，组件内一律经解析函数取值） —— */
   --wf-chart-grid: #E5E6EB;
   --wf-chart-tick: #4E5969; /* 与三级文字同值但令牌解耦 */
+
+  /* —— 进度环外沿提亮描边（主题组；S11 深色环线抬升，浅色为对偶占位不渲染——
+     显隐由 [data-theme] 分支 CSS 承载，TSX 恒渲染保证两主题结构对偶） —— */
+  --wf-ring-halo: #4A6FA5;
 
   /* —— 发丝线：主题组三键（经 ThemeTokens 注入随主题切换） —— */
   --wf-hairline-card: rgba(29,33,41,0.08); /* 悬浮输出卡描边 */
@@ -100,7 +108,7 @@
 
 @media (min-width: 768px) {
   :root {
-    --wf-text-num: 40px; /* 临界值大数字：宽屏档 */
+    --wf-text-display: 40px; /* 全站唯一读数窗：宽屏档（desktop 双栏下左栏 hero 是唯一 40px） */
   }
 }
 
@@ -139,7 +147,7 @@ body {
 
 body {
   color: var(--wf-text, #1d2129);
-  background: var(--wf-bg-page, #f7f8fa);
+  background: var(--wf-bg-sunken, #f7f8fa);
   font-family:
     system-ui, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
 }
@@ -176,7 +184,7 @@ body {
    现状 0.85 透明度标签不达标，随本次修正 */
 .wf-header-label {
   color: #ffffff;
-  font-size: var(--wf-text-sm);
+  font-size: var(--wf-text-body);
   white-space: nowrap;
 }
 
@@ -260,7 +268,7 @@ body {
 
   .wf-output-card,
   .arco-select-popup {
-    background: #ffffff;
+    background: var(--wf-bg-surface, #ffffff);
   }
 
   .arco-tooltip-content {
@@ -276,7 +284,7 @@ body {
 
   [data-theme="dark"] .wf-output-card,
   [data-theme="dark"] .arco-select-popup {
-    background: #232324;
+    background: var(--wf-bg-surface, #232324);
   }
 
   [data-theme="dark"] .arco-tooltip-content {
@@ -301,13 +309,19 @@ body {
   --wf-rise: #27C346; /* 涨色：常态 6.79:1 / 最不利 5.27:1 */
   --wf-fall: #F98D86; /* 跌色：常态 6.95:1 / 最不利 5.39:1 */
 
-  /* —— 页面底色 / 着色底 —— */
-  --wf-bg-page: #17171A; /* 与组件库深色一级底同值 */
-  --wf-tint-bg: rgba(123,159,209,0.12); /* 合成底：正文 11.77:1、涨色 5.59:1、跌色 5.71:1 */
+  /* —— 表面阶（深色「越高越亮」排布：sunken 最暗画布 < inset 凹面 < surface 平面卡底 < 材质浮层） —— */
+  --wf-bg-sunken: #17171A; /* 最暗底（画布），与组件库深色一级底同值 */
+  --wf-bg-inset: #1C1C1F; /* 比卡底暗、比画布亮（凹面） */
+  --wf-bg-surface: #232324; /* 平面卡底 */
+  --wf-bg-tint: rgba(123,159,209,0.12); /* 着色底：合成底正文 11.77:1、涨色 5.59:1、跌色 5.71:1 */
 
   /* —— 图表 —— */
   --wf-chart-grid: #3D3F46; /* 对合成卡底 1.51:1（网格为装饰层，不设 4.5 口径；较浅色略提保证可感知） */
   --wf-chart-tick: #8F95A0; /* 对卡底 5.28:1 */
+
+  /* —— 进度环外沿提亮描边（S11：深色环线抬升，环带外沿 1px 提亮——表面明度差替代阴影感知；
+     与网格同族装饰性描边，不设 4.5 口径；#A6C0E4 为 #7B9FD1 同族提亮） —— */
+  --wf-ring-halo: #A6C0E4;
 
   /* —— 发丝线：主题组三键（hairline-dark 零使用预留、hairline-tooltip 两主题同值，
         两键静态承载、不入深色块与对账，口径见设计规范 2.11 / 9 #8） —— */
@@ -415,13 +429,28 @@ body {
 }
 
 /* ⑦-b 面板内容表面容器：capsule 标签下方的内容不再是「裸贴白卡」，而是
-   页面底色的凹面区 + 发丝线描边 + 圆角——两级表面层次（双主题令牌切换） */
+   凹面区（--wf-bg-inset：比卡底暗、比画布亮）+ 发丝线描边 + 圆角——
+   表面语义归位（原误用页面底令牌当表面，与页面底无层次差，p5-spec §1.3） */
 .wf-adv-tabs .arco-tabs-content {
   margin: 12px 0 0;
   padding: 16px;
-  background: var(--wf-bg-page);
+  background: var(--wf-bg-inset);
   border: 1px solid var(--wf-hairline-card);
   border-radius: var(--wf-radius-m);
+}
+
+/* V3（第 1 轮视觉验收 P1）：capsule 组内标签活动态接通。组件库 capsule 型活动标题
+   只换药丸底（--color-bg-2，浅色白药丸贴白卡、无字色/字重变化），实测 active 与
+   inactive 的 color/字重完全一致——三行灰字无法辨认当前面板。活动标题接
+   --wf-primary 涨色 + 500 字重（与组件库 line 型活动态同口径）：浅色 #4A6FA5 对
+   白药丸 5.10:1、深色提亮主色 #7B9FD1 对深色药丸合成底 ≥4.5，两主题均达标；
+   色值经主题令牌取值（取色统一走 resolveThemeTokens 注入链），颜色过渡沿用组件库
+   title 自带 transition。特异性 0,3,0 压过组件库 .arco-tabs-header-title(0,1,0)
+   与 :hover(0,2,0) 基线 */
+.wf-adv-tabs .arco-tabs-header-title-active,
+.wf-adv-tabs .arco-tabs-header-title-active:hover {
+  color: var(--wf-primary, #4A6FA5);
+  font-weight: 500;
 }
 
 /* ⑨ 双栏工作台（≥1200 桌面，工效裁定：终结单列长滚动）：
@@ -462,7 +491,7 @@ body {
   background: var(--wf-primary, #4a6fa5);
   color: #ffffff;
   border-radius: var(--wf-radius-s);
-  font-size: var(--wf-text-md);
+  font-size: var(--wf-text-body);
   text-decoration: none;
   box-shadow: var(--wf-shadow-2);
 }
@@ -622,12 +651,18 @@ textarea,
   }
 }
 
-/* 逐选择器清单（文档性冗余，不依赖其兜底） */
+/* 逐选择器清单（文档性冗余，不依赖其兜底；P5 新增动画类登记：S1 刻度点 / S2 脉冲组 /
+   S9 呼吸 / S14 段位涨色——四者均为 animation 承载，由上方兜底块的
+   animation-duration/iteration-count 全停，transition 清单按既有惯例列过渡承载类） */
 @media (prefers-reduced-motion: reduce) {
   .wf-output-card,
   .wf-field-tip,
   .wf-realtime,
   .wf-pressable,
+  .wf-sens-row,
+  .wf-insight-row,
+  .wf-ring-tick,
+  .wf-ring-pulse,
   .arco-collapse-item-content,
   .arco-collapse-item-header,
   .slideDynamicOrigin-enter-active,
@@ -772,12 +807,12 @@ textarea,
 }
 
 .wf-field-hint {
-  font-size: 12px;
+  font-size: var(--wf-text-caption);
   line-height: 18px;
   margin-top: 2px;
 }
 
-/* 核心参数实时区：底色过渡（设计规范第 4 节 #14）。底色挂 --wf-tint-bg 主题组令牌
+/* 核心参数实时区：底色过渡（设计规范第 4 节 #14）。底色挂 --wf-bg-tint 主题组令牌
    （原 rgb(var(--primary-1)) 浅蓝在深色下保持浅底、与深色正文字冲突，已解除依赖） */
 .wf-realtime {
   display: flex;
@@ -785,7 +820,7 @@ textarea,
   gap: 6px;
   margin-top: 12px;
   padding: 12px;
-  background: var(--wf-tint-bg, rgba(74,111,165,0.08));
+  background: var(--wf-bg-tint, rgba(74,111,165,0.08));
   border-radius: 4px;
   transition: background-color var(--wf-dur-base) var(--wf-ease-standard);
 }
@@ -798,7 +833,7 @@ textarea,
 .wf-panel-note {
   display: block;
   margin-top: 8px;
-  font-size: 12px;
+  font-size: var(--wf-text-caption);
 }
 
 .wf-amortize-table {
@@ -823,6 +858,16 @@ textarea,
    的 label 列塌缩成 ~40px，行高被撑成多行。 */
 @media (max-width: 767.9px) {
   .arco-descriptions-item-label {
+    white-space: normal;
+  }
+}
+
+/* V1（第 1 轮视觉验收 P0）配套：双栏左栏容器 ~351px 窄于桌面档 nowrap 假设，en 长
+   label（如 "Total (= financial freedom reference line)"）会把单列键值表撑出容器、
+   被 tabs 裁切层静默裁掉数值列。左栏内允许 label 换行防溢出——布局与 <768 档兜底
+   同口径（375 档 258px 纵排验收完好）；768–1199 单列形态容器宽不受本规则影响。 */
+@media (min-width: 1200px) {
+  .wf-workbench-primary .arco-descriptions-item-label {
     white-space: normal;
   }
 }
@@ -913,7 +958,7 @@ textarea,
 /* C1 龙卷风图（.wf-sens-chart 一组）：图表容器 + 方向图例两行（C1 ⑧，数据表替代见其下数值行） */
 .wf-sens-chart { margin-top: 8px; }
 .wf-sens-legend { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; font-variant-numeric: tabular-nums; }
-.wf-sens-legend-row { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.wf-sens-legend-row { display: inline-flex; align-items: center; gap: 6px; font-size: var(--wf-text-caption); }
 .wf-sens-legend-dot { width: 10px; height: 10px; border-radius: 2px; flex: none; }
 /* C3 瀑布图（.wf-waterfall-chart 一组）：图表容器（图注复用既有 .wf-panel-note） */
 .wf-waterfall-chart { margin-top: 16px; }
@@ -926,7 +971,7 @@ textarea,
 .wf-insight-row {
   display: flex; flex-direction: column; gap: 2px;
   padding: 8px 12px;
-  background: var(--wf-tint-bg);
+  /* P5 S4：静止态不再常驻着色底，hover 才升至着色底半档（见下方 P5 区 T4 规则） */
   border-radius: var(--wf-radius-s);
   font-variant-numeric: tabular-nums;
 }
@@ -939,8 +984,8 @@ textarea,
 [data-theme="light"] .wf-insight-main .arco-tag-content {
   color: #1D2129;
 }
-.wf-insight-source { font-size: 12px; line-height: 18px; }
-.wf-insight-note { display: block; margin-top: 8px; font-size: 12px; }
+.wf-insight-source { font-size: var(--wf-text-caption); line-height: 18px; }
+.wf-insight-note { display: block; margin-top: 8px; font-size: var(--wf-text-caption); }
 
 /* 反推面板演示算例按钮行（docs/p3-spec.md §4） */
 .wf-example-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 12px; }
@@ -1008,7 +1053,7 @@ textarea,
     position: absolute; width: 1px; height: 1px; margin: -1px;
     overflow: hidden; clip-path: inset(50%); white-space: nowrap;
   }
-  .wf-header-brand .arco-typography { font-size: 14px; }
+  .wf-header-brand .arco-typography { font-size: var(--wf-text-body); }
   .wf-select-currency { width: 104px; }
   .wf-select-lang { width: 88px; }
 }
@@ -1018,11 +1063,6 @@ textarea,
 @media (max-width: 639.9px) {
   .wf-field-row { margin-left: 0 !important; margin-right: 0 !important; }
   .wf-field-row > .arco-col { padding-left: 0 !important; padding-right: 0 !important; }
-}
-
-/* D4 <640 Descriptions（此时已因 767.9 切点呈 vertical）值右对齐 + 等宽数字：数值列形成视觉右边缘 */
-@media (max-width: 639.9px) {
-  .arco-descriptions-item-value { text-align: right; font-variant-numeric: tabular-nums; }
 }
 
 /* D6 触控目标缺口补齐（生效口径与既有触控块一致：触屏或窄屏） */
@@ -1077,18 +1117,20 @@ textarea,
     position: sticky;
     left: 0;
     z-index: 1;
-    background: var(--color-bg-2, #fff);
+    background: var(--wf-bg-surface, #fff);
   }
 }
 
-/* 右缘渐隐 + 提示放行的生效档：断点按 §6.6 六宽度实测校准（chrome 实测 128px，非推导的
-   111px——高级卡 body / 折叠内容内边距实际取值更大，实测明细见 docs/p3-spec.md §12 #9）：
-   摊销表 min-width 560 + chrome 128 = 688 → 视口 <688 必然横滚，断点初取 687.9px；
-   验收 S3-5 扩展实测发现 688px 处 sw=560 > cw=559 仍有 1px 横滚而提示/渐隐已关——
-   1px 死区，断点放宽至 688.9px（689 起实测无横滚）；该档同时覆盖断点矩阵的 375 / 640 两列
-   （640 − 128 = 512 < 560） */
-@media (max-width: 688.9px) {
-  .wf-swipe-hint { display: block; font-size: 12px; margin-bottom: 4px; }
+/* 右缘渐隐 + 提示放行的生效档：断点按容器实测 chrome 重新校准（V4 第 1 轮视觉验收）。
+   双栏改版后面板从折叠内容容器迁入 tabs 内容容器（padding 16px），chrome 由旧值 128px
+   变为 116px：F 档 688×900 实测摊销表容器 clientWidth 572 = 688 − 116、无横滚而旧断点
+   688.9 仍放行提示（假提示）；660px 实测容器 544 < 560 真横滚。摊销表/对比表 min-width
+   560 + chrome 116 = 676 → 视口 <676 必然横滚，676 整数档容器恰 560 无溢出——断点取
+   max-width 675.9px（675 档有 1px 溢出、提示真实，无 1px 死区）。对比表与摊销表同在
+   tabs 内容容器、chrome 相同，共用本断点；该档同时覆盖断点矩阵的 375 / 640 两列
+   （640 − 116 = 524 < 560） */
+@media (max-width: 675.9px) {
+  .wf-swipe-hint { display: block; font-size: var(--wf-text-caption); margin-bottom: 4px; }
   .wf-amortize-table { position: relative; }
   .wf-amortize-table::after,
   .wf-scenario-table-outer::after {
@@ -1096,7 +1138,7 @@ textarea,
     position: absolute;
     top: 0; right: 0; bottom: 0;
     width: 24px;
-    background: linear-gradient(to left, var(--color-bg-2, #fff), transparent);
+    background: linear-gradient(to left, var(--wf-bg-surface, #fff), transparent);
     pointer-events: none;
   }
 }
@@ -1112,7 +1154,7 @@ textarea,
     z-index: 30;
     display: flex;
     padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
-    background: var(--wf-bg-page);
+    background: var(--wf-bg-sunken);
   }
   .wf-action-dock .arco-btn { flex: 1; }
   .wf-mc-dock-run {
@@ -1121,7 +1163,7 @@ textarea,
     z-index: 20;
     display: flex;
     padding: 8px 0;
-    background: var(--wf-bg-page);
+    background: var(--wf-bg-sunken);
   }
   .wf-mc-dock-run .arco-btn { flex: 1; }
   /* sticky 祖先裁切修正（验收 S2-2）：组件库 .arco-collapse / .arco-collapse-item-content
@@ -1150,4 +1192,119 @@ textarea,
   .wf-preset-tags { margin-bottom: 12px; }
   .wf-core-params { margin-top: 24px; }
   .wf-action-dock { margin-top: 16px; }
+}
+
+/* ===== P5 设计语言落地（docs/p5-spec.md §3；签名元素 S1–S15；全部动效一律走动效令牌） ===== */
+
+/* S3 度量字排：会变化的数字一律等宽字排 + 加粗（乘数/百分数行语义类；纯静态排印无降级） */
+.wf-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: bold;
+}
+
+/* S3 图表轴刻度等宽字排（SVG text 支持该特性；不支持的字体无害） */
+.wf-mc-chart .recharts-text,
+.wf-acc-chart .recharts-text,
+.wf-sens-chart .recharts-text,
+.wf-waterfall-chart .recharts-text {
+  font-variant-numeric: tabular-nums;
+}
+
+/* S3 Descriptions 值列右对齐 + 等宽：由 <640 档升为全宽度生效（p5-spec §1.2 缺口收编；
+   数值列右对齐形成视觉右边缘，同列量级一眼可比） */
+.arco-descriptions-item-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* S4 行级 hover 读数：hover 升半档着色底（表面色变化，不用阴影不用海拔动画，
+   体系 C 交互口径）；纯状态切换，fast 档过渡只作用于背景色 */
+.wf-sens-row,
+.wf-insight-row {
+  transition: background-color var(--wf-dur-fast) var(--wf-ease-standard);
+}
+
+.wf-sens-row:hover,
+.wf-insight-row:hover {
+  background: var(--wf-bg-tint);
+}
+
+/* S7 分组左标线：发丝线分组隐喻落到版面（组件库 Divider orientation=left 承载小节名；
+   线色挂发丝线卡线令牌、小节名走 caption 档三级文字，无动画） */
+.wf-group-line {
+  margin: 16px 0 8px;
+  border-bottom-color: var(--wf-hairline-card);
+}
+
+.wf-group-line .arco-divider-text {
+  color: var(--wf-text-tertiary);
+  font-size: var(--wf-text-caption);
+}
+
+/* S1 四档里程碑刻度环：跨档时刻度点单次放大回落（强调曲线只作用于缩放、iteration 1
+   硬约束）；变色保留为信息路径。transform-origin 40px 40px 匹配扩框后圆心（viewBox 80） */
+.wf-ring-tick {
+  transition: fill var(--wf-dur-base) var(--wf-ease-standard);
+  transform-box: view-box;
+  transform-origin: 40px 40px;
+}
+
+.wf-ring-tick.wf-ring-tick-pop {
+  animation: wf-ring-tick-pop var(--wf-dur-base) var(--wf-ease-emphasis) 1;
+}
+
+@keyframes wf-ring-tick-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.5); }
+  100% { transform: scale(1); }
+}
+
+/* S2 达成一次脉冲：全站唯一 expressive 时刻——环线单次 scale 1→1.04→1、不循环；
+   环心文字涨色由 TSX 按闩锁态换语义涨色（reduced-motion 下脉冲停用、涨色保留） */
+.wf-progress-ring .wf-ring-pulse {
+  transform-box: view-box;
+  transform-origin: 40px 40px;
+}
+
+.wf-progress-ring .wf-ring-pulse.wf-goal-pulse-on {
+  animation: wf-goal-pulse var(--wf-dur-base) var(--wf-ease-emphasis) 1;
+}
+
+@keyframes wf-goal-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+/* S11 深色环线抬升：TSX 恒渲染 halo 描边环（r=34 = 环带外沿 1px），CSS 按主题控显隐，
+   两主题结构对偶；提亮色为主题令牌 --wf-ring-halo（三源对账五点同步） */
+.wf-progress-ring .wf-ring-halo {
+  display: none;
+}
+
+[data-theme="dark"] .wf-progress-ring .wf-ring-halo {
+  display: block;
+}
+
+/* S9 输出卡计算徽标：防抖静默窗口期卡头 extra 区亮度呼吸（诚实反馈「算着呢」）；
+   循环周期 = 慢档二倍派生（单一事实来源不新增时长键）；循环动效仅允许出现在状态
+   窗口期（计算中）——pending 清位即移除类停循环，计算开始由既有 Spin 接管不并存 */
+.wf-output-card.wf-computing .arco-card-header-extra {
+  animation: wf-computing-breathe calc(var(--wf-dur-slow) * 2) var(--wf-ease-standard) infinite alternate;
+}
+
+@keyframes wf-computing-breathe {
+  from { opacity: 0.75; }
+  to { opacity: 1; }
+}
+
+/* S14 乘数段位徽标：跨段位瞬间单次涨色（Tag 以 key 重挂触发一次动画；涨色停用后
+   Tag 常驻，信息不丢） */
+.wf-mult-tag {
+  animation: wf-mult-tag-flash var(--wf-dur-base) var(--wf-ease-standard) 1;
+}
+
+@keyframes wf-mult-tag-flash {
+  0% { color: var(--wf-primary); }
+  100% { color: inherit; }
 }

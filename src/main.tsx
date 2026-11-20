@@ -37,6 +37,10 @@ import "@arco-design/web-react/es/Select/style/css.js";
 import "@arco-design/web-react/es/Spin/style/css.js";
 import "@arco-design/web-react/es/Switch/style/css.js";
 import "@arco-design/web-react/es/Table/style/css.js";
+/* 第 2 轮视觉验收 V1（P0）：高级区组内标签页（Tabs type="capsule"）样式自 P4 导航重构起
+   漏引——药丸/横排/hover/激活底全部未出货，9 个 tab 标题呈全宽竖排裸文本；
+   global.css 的活动标题涨色规则按药丸形态前提书写，须随本引入一并生效 */
+import "@arco-design/web-react/es/Tabs/style/css.js";
 import "@arco-design/web-react/es/Tag/style/css.js";
 import "@arco-design/web-react/es/Tooltip/style/css.js";
 import "@arco-design/web-react/es/Typography/style/css.js";

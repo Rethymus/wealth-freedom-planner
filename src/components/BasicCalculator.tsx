@@ -2,7 +2,7 @@
  * 基础模式（480 法则基线）：默认首屏，不含任何图表。
  * 输出区（临界值卡片）置顶且始终可见；输入区在其下方。文案经 react-i18next 三语化。
  */
-import { Alert, Button, Card, Collapse, Grid, Message, Spin, Switch, Tag, Typography } from "@arco-design/web-react";
+import { Alert, Button, Card, Collapse, Descriptions, Divider, Grid, Message, Spin, Switch, Tag, Typography } from "@arco-design/web-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
@@ -27,7 +27,8 @@ import type { PresetBreakdown, PresetId } from "../data/presets";
 import type { ThemeTokens } from "../data/types";
 import { useCalculatorStore } from "../store/useCalculatorStore";
 import { AmountField, FieldRow, IntField, PercentField } from "./fields";
-import { useAnimatedNumber, useFinanceCall, useIsCompactViewport, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "./hooks";
+import { EmptyRulerArt } from "./EmptyRuler";
+import { useAnimatedNumber, useFinanceCall, useIsCompactViewport, useIsNarrowViewport, useIsWorkbenchViewport, useMoney, usePrefersReducedMotion } from "./hooks";
 
 const { Text, Title } = Typography;
 const CollapseItem = Collapse.Item;
@@ -56,9 +57,21 @@ const PRESET_BREAKDOWN_ORDER: { key: keyof PresetBreakdown; i18nKey: string }[] 
   { key: "other", i18nKey: "presets.breakdown.other" },
 ];
 
-/** 自由刻度进度环几何常量（docs/p0-spec.md §3.2 逐字规格） */
+/** 自由刻度进度环几何常量（docs/p0-spec.md §3.2 逐字规格；P5 T1 修订：viewBox 扩为 80） */
 const RING_RADIUS = 30;
 const RING_C = 2 * Math.PI * RING_RADIUS; // ≈ 188.496
+/** S1 刻度环几何（p5-spec §3 T1 修订 #2：viewBox 0 0 80 80、圆心 40；刻度点显式 r=38，
+ *  38 + 1.2 = 39.2 < 40 出界安全余量 0.8px；环本体几何不变，带域 [26,34]、刻度点在带外沿） */
+const RING_CENTER = 40;
+const TICK_RADIUS = 38;
+const TICK_DOT_R = 1.2;
+/** S1 档位宽（百分比）：25/50/75/100 四档刻度 */
+const TICK_LEVEL_PCT = 25;
+/** S1 档位数（pct 为真实值不封顶，档位封顶 4 = 100% 刻度） */
+const TICK_LEVEL_MAX = 4;
+/** S2 闩锁滞回带：比率跌破 1 − 0.02 才清达成态——阈值附近来回（1→0.99→1）不重放，
+ *  真回落（< 0.98）清位后才可再次庆祝（p5-spec §3 T2 修订 #8） */
+const GOAL_LATCH_RELEASE = 0.98;
 
 /** 月开销敏感性档位（百分比振幅，正 = 调高月开销；展示顺序 +30 → −30） */
 const SENS_STEPS = [30, 20, 10, -10, -20, -30] as const;
@@ -198,15 +211,20 @@ function SensitivitySection(props: {
                   <ResponsiveContainer width="100%" height={240}>
                     {/* C1 ①：layout="vertical" + 类目 Y 轴（档位标签）+ 数值 X 轴；总高 240px */}
                     <BarChart data={tornadoRows} layout="vertical" margin={{ top: 16, right: 56, bottom: 0, left: 0 }} barSize={16}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={tokens.chartGrid} horizontal={false} />
+                      {/* §6 图表质感：1px 实线网格挂图表网格令牌；横向条形图保持 horizontal={false} */}
+                      <CartesianGrid stroke={tokens.chartGrid} horizontal={false} />
                       <YAxis
                         type="category"
                         dataKey="name"
                         width={56}
+                        tickLine={false}
+                        axisLine={false}
                         tick={{ fontSize: 12, fill: tokens.chartTick }}
                       />
                       <XAxis
                         type="number"
+                        tickLine={false}
+                        axisLine={false}
                         tick={{ fontSize: 12, fill: tokens.chartTick }}
                         tickFormatter={(v: number) => formatCompactAxis(v)}
                       />
@@ -253,7 +271,11 @@ function SensitivitySection(props: {
                 {plusRows.map((row) => (
                   <div key={row.pct} className="wf-sens-row">
                     <Text type="secondary">{t("sensitivity.plusRow", { pct: Math.abs(row.pct) })}</Text>
-                    <Text bold>{row.critical === null ? "—" : money(row.critical)}</Text>
+                    <Text bold>
+                      {/* T10 方向冗余编码：调高档数值行前置 ▲ 字形（形状通道独立于颜色） */}
+                      <span style={{ fontSize: "var(--wf-text-caption)" }}>▲</span>{" "}
+                      {row.critical === null ? "—" : money(row.critical)}
+                    </Text>
                   </div>
                 ))}
               </div>
@@ -264,7 +286,11 @@ function SensitivitySection(props: {
                 {minusRows.map((row) => (
                   <div key={row.pct} className="wf-sens-row">
                     <Text type="secondary">{t("sensitivity.minusRow", { pct: Math.abs(row.pct) })}</Text>
-                    <Text bold>{row.critical === null ? "—" : money(row.critical)}</Text>
+                    <Text bold>
+                      {/* T10 方向冗余编码：调低档数值行前置 ▼ 字形 */}
+                      <span style={{ fontSize: "var(--wf-text-caption)" }}>▼</span>{" "}
+                      {row.critical === null ? "—" : money(row.critical)}
+                    </Text>
                   </div>
                 ))}
               </div>
@@ -290,46 +316,181 @@ interface FreedomGaugeProps {
   ariaLabel: string;
   /** 环直径（默认 72；紧凑档 56——viewBox 与内部几何不变，等比缩放，docs/p3-spec.md §6.8 D9） */
   size?: number;
+  /** 分享回落 / 参数重置序号：递增即清达成闩锁与刻度档位记录（回落 / 重置后才可再次庆祝） */
+  resetEpoch: number;
+  /** 系统「减弱动态效果」偏好：命中时不挂动画类（S1 放大 / S2 脉冲停用，变色保留——CSS 兜底块双闸） */
+  reducedMotion: boolean;
 }
 
-/** 自由刻度进度环（内联 SVG，无新依赖；环面文字属装饰重复，读屏以 aria-label 为准） */
-function FreedomGauge({ ratio, pct, tokens, ariaLabel, size = 72 }: FreedomGaugeProps) {
+/**
+ * 自由刻度进度环（内联 SVG，无新依赖；环面文字属装饰重复，读屏以 aria-label 为准）。
+ * P5 签名元素：S1 四档里程碑刻度环（25/50/75/100 四个刻度点，跨档单次放大回落、
+ * 每档一次）、S2 达成一次脉冲（全站唯一庆祝动效，闩锁 + 滞回一次性语义）、
+ * S11 深色环线抬升（halo 描边环恒渲染，显隐由 CSS [data-theme] 承载）。
+ */
+function FreedomGauge({ ratio, pct, tokens, ariaLabel, size = 72, resetEpoch, reducedMotion }: FreedomGaugeProps) {
   const clamped = Math.min(Math.max(ratio, 0), 1);
+  /** 当前档位（0–4；防抖落定帧纯展示层派生，无数据流改动） */
+  const tickLevel = Math.min(TICK_LEVEL_MAX, Math.max(0, Math.floor(pct / TICK_LEVEL_PCT)));
+  /** S1 单次放大：档位单调抬升时对当次跨入的刻度点播一次（每档一次；回落不降档、
+   *  阈值附近来回不重播） */
+  const [popTick, setPopTick] = useState<number | null>(null);
+  const maxTickRef = useRef(-1);
+  /** S2 达成态（环心文字涨色信息路径）+ 闩锁 ref（滞回：跌破 0.98 才清位） */
+  const [reached, setReached] = useState(false);
+  const reachedRef = useRef(false);
+  /** S2 单次脉冲类挂载态（播完即摘类） */
+  const [pulseOn, setPulseOn] = useState(false);
+
+  // resetEpoch 递增（分享回落 / 参数重置）：清刻度档位记录与达成闩锁
+  useEffect(() => {
+    maxTickRef.current = -1;
+    setPopTick(null);
+    reachedRef.current = false;
+    setReached(false);
+    setPulseOn(false);
+  }, [resetEpoch]);
+
+  // S1 跨档判定：档位抬升 → 对新档刻度点单次放大（reduced-motion 命中不挂动画类，变色保留）
+  useEffect(() => {
+    if (tickLevel > maxTickRef.current) {
+      maxTickRef.current = tickLevel;
+      if (!reducedMotion && tickLevel >= 1) setPopTick(tickLevel);
+    }
+  }, [tickLevel, reducedMotion]);
+
+  // S2 达成判定：ratio ≥ 1 且未闩锁 → 庆祝一次；跌破滞回带清闩锁（回落清位后可再次触发）
+  useEffect(() => {
+    if (ratio >= 1 && !reachedRef.current) {
+      reachedRef.current = true;
+      setReached(true);
+      if (!reducedMotion) setPulseOn(true);
+    } else if (ratio < GOAL_LATCH_RELEASE && reachedRef.current) {
+      reachedRef.current = false;
+      setReached(false);
+      setPulseOn(false);
+    }
+  }, [ratio, reducedMotion]);
+
+  // 单次动画播完即摘类（基础档计时）：类摘除后同档不重播（maxTickRef / 闩锁仍置位）
+  useEffect(() => {
+    if (popTick === null) return;
+    const timer = window.setTimeout(() => setPopTick(null), MOTION_DURATIONS.base);
+    return () => window.clearTimeout(timer);
+  }, [popTick]);
+
+  /** 刻度点位置：进度自顶部（−90°）顺时针，每档 90°——25%→3 点钟、50%→6 点、
+   *  75%→9 点、100%→12 点钟方向；r = 38 显式数值与 viewBox 80 联动 */
+  const ticks = [1, 2, 3, 4].map((i) => {
+    const angle = ((-90 + 90 * i) * Math.PI) / 180;
+    return {
+      level: i,
+      cx: RING_CENTER + TICK_RADIUS * Math.cos(angle),
+      cy: RING_CENTER + TICK_RADIUS * Math.sin(angle),
+      lit: tickLevel >= i,
+    };
+  });
+
   return (
     <svg
       className="wf-progress-ring"
       width={size}
       height={size}
-      viewBox="0 0 72 72"
+      viewBox="0 0 80 80"
       role="img"
       aria-label={ariaLabel}
     >
-      <circle cx={36} cy={36} r={RING_RADIUS} fill="none" stroke={tokens.chartGrid} strokeWidth={8} />
-      <circle
-        cx={36}
-        cy={36}
-        r={RING_RADIUS}
-        fill="none"
-        stroke={tokens.primary}
-        strokeWidth={8}
-        strokeLinecap="round"
-        strokeDasharray={RING_C}
-        strokeDashoffset={RING_C * (1 - clamped)}
-        transform="rotate(-90 36 36)"
-        style={{ transition: "stroke-dashoffset var(--wf-dur-base) var(--wf-ease-standard)" }}
-      />
+      {/* S2 脉冲作用域：环线三件（轨 + halo + 进度）整体 scale，环心文字不参与 */}
+      <g className={pulseOn ? "wf-ring-pulse wf-goal-pulse-on" : "wf-ring-pulse"}>
+        <circle cx={RING_CENTER} cy={RING_CENTER} r={RING_RADIUS} fill="none" stroke={tokens.chartGrid} strokeWidth={8} />
+        {/* S11 深色环线抬升：r = 34 = 环带外沿 1px 提亮描边；浅色由 CSS display:none 隐藏 */}
+        <circle className="wf-ring-halo" cx={RING_CENTER} cy={RING_CENTER} r={34} fill="none" stroke={tokens.ringHalo} strokeWidth={1} />
+        <circle
+          cx={RING_CENTER}
+          cy={RING_CENTER}
+          r={RING_RADIUS}
+          fill="none"
+          stroke={tokens.primary}
+          strokeWidth={8}
+          strokeLinecap="round"
+          strokeDasharray={RING_C}
+          strokeDashoffset={RING_C * (1 - clamped)}
+          transform={`rotate(-90 ${RING_CENTER} ${RING_CENTER})`}
+          style={{ transition: "stroke-dashoffset var(--wf-dur-base) var(--wf-ease-standard)" }}
+        />
+      </g>
+      {/* S1 四档刻度点：r = 1.2，跨档变色（主色）+ 单次放大回落 */}
+      {ticks.map((tick) => (
+        <circle
+          key={tick.level}
+          className={
+            ["wf-ring-tick", tick.lit ? "wf-ring-tick-on" : "", popTick === tick.level ? "wf-ring-tick-pop" : ""]
+              .filter(Boolean)
+              .join(" ")
+          }
+          cx={tick.cx}
+          cy={tick.cy}
+          r={TICK_DOT_R}
+          fill={tick.lit ? tokens.primary : tokens.chartGrid}
+        />
+      ))}
+      {/* 环心百分比文字：达成态涨色（S2 信息路径，reduced-motion 下保留） */}
       <text
-        x={36}
-        y={36}
+        x={RING_CENTER}
+        y={RING_CENTER}
         textAnchor="middle"
         dominantBaseline="central"
         fontSize={13}
         fontWeight="bold"
-        fill={tokens.primary}
+        fill={reached ? tokens.rise : tokens.primary}
       >
         {formatNumber(pct, 1)}%
       </text>
     </svg>
+  );
+}
+
+/**
+ * 输出卡构成明细（§4 结构化，p5-spec §4）：原插值长句（basic.breakdown）改 2 列键值表。
+ * 「合并的只是表格定义（单份 data 数组）」——<768 仍走既有 toggle（默认收起 +
+ * aria-expanded 切换按钮）+ 条件渲染、≥768 常驻，分支行为原样保留（修订 #6）；
+ * 外层 .wf-output-breakdown 类名不变（吸附态 D9 隐藏规则依赖它）。
+ */
+function BreakdownTable(props: {
+  expense: string;
+  multiplier: string;
+  children: number;
+  childTotal: string;
+  health: string;
+  major: string;
+  total: string;
+}) {
+  const { t } = useTranslation();
+  /** V1（第 1 轮视觉验收 P0）：双栏左栏容器仅 ~351px，viewport 级 md:2 双列内容宽
+   *  628px 会被 tabs 裁切层 overflow:hidden 静默裁掉数值列（数值在 DOM 中但不可达）。
+   *  ≥1200 双栏激活时切单列键值行（<768 纵排同款布局，375 档验收已验证可用）；
+   *  768–1199 单列形态容器宽（≥656px > 628px）维持 md:2 双列不变。
+   *  配套 tableLayout fixed：左栏 349px 下最宽 label（合计行 182px）+ 金额值列超过容器，
+   *  auto 布局会按组件库 label width:1px 的偏好把 label 列压塌成逐字竖排（白空间换行
+   *  规则放开了 min-content）；fixed 布局使 label/值两列均分容器，label 至多折两行、
+   *  数值列恒完整。<768 / 768–1199 维持 auto（既有验收基准布局不动）。 */
+  const isWorkbench = useIsWorkbenchViewport();
+  return (
+    <Descriptions
+      border
+      size="small"
+      column={isWorkbench ? 1 : { xs: 1, md: 2 }}
+      tableLayout={isWorkbench ? "fixed" : "auto"}
+      data={[
+        { label: t("basic.rowMultiplier"), value: `${props.expense} × ${props.multiplier}` },
+        ...(props.children > 0
+          ? [{ label: t("basic.rowChildren", { children: props.children }), value: props.childTotal }]
+          : []),
+        { label: t("basic.rowHealth"), value: props.health },
+        { label: t("basic.rowMajor"), value: props.major },
+        { label: t("basic.rowTotal"), value: props.total },
+      ]}
+    />
   );
 }
 
@@ -371,6 +532,40 @@ export default function BasicCalculator() {
 
   const { loading, result } = useFinanceCall(() => calcBaseline(baseline), [baseline], { debounceMs: DEBOUNCE_MS });
 
+  /** T9 = S9 输出卡计算徽标（p5-spec §3 T9 修订 #4 落点：输出卡卡头）：诚实反馈的真缺口是
+   *  防抖静默窗口——useFinanceCall 的 loading 在防抖计时后才置位（hooks.ts:45-46），窗口期
+   *  卡头 extra 仍显示「实时更新」。业务输入变更置位 pending、loading 翻转或结果落定清位；
+   *  pending 时卡挂 .wf-computing，CSS 对卡头 extra 文案呼吸（清位即移除类停循环），
+   *  计算开始由既有 Spin 接管、呼吸与 Spin 不并存；reduced-motion 命中 JS 侧直接不挂类。 */
+  const [computingPending, setComputingPending] = useState(false);
+  const prevResultRef = useRef<typeof result>(null);
+  useEffect(() => {
+    setComputingPending(true);
+  }, [baseline]);
+  useEffect(() => {
+    if (loading || result !== prevResultRef.current) {
+      setComputingPending(false);
+      prevResultRef.current = result;
+    }
+  }, [loading, result]);
+
+  /** T5 = S5 轻确认「已复制」：复制成功回调后按钮内文案换「已复制 ✓」、基础档计时后还原
+   *  （p5-spec §3 T5：restore 计时 = MOTION_DURATIONS.base）；既有 Message.success 保留为兜底 */
+  const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+    },
+    [],
+  );
+
+  /** T14 = S14 乘数段位徽标：段位判定 = 乘数 ≥ 2 时的整数位（×2 / ×3.33 …）；跨档瞬间
+   *  单次涨色——仅「从既有段位跨入新段位」时递增 flash 序号重挂 Tag 触发一次动画
+   *  （首挂载不涨色；reduced-motion 下由 CSS 兜底块停动画、Tag 常驻信息不丢） */
+  const [multFlashEpoch, setMultFlashEpoch] = useState(0);
+  const prevMultSegmentRef = useRef<number | null>(null);
+
   const data = result?.ok === true ? result.data : null;
   const serviceError = result && !result.ok ? result.error : null;
   // 大数字与语义色经主题解析函数取值（规范 6.2 #9）：组件不感知主题，
@@ -383,6 +578,20 @@ export default function BasicCalculator() {
   const animatedCritical = useAnimatedNumber(data?.criticalValue ?? 0);
   /** 系统「减弱动态效果」偏好：命中时龙卷风图入场动画停用（C1 ⑨，与既有折线图同口径） */
   const reducedMotion = usePrefersReducedMotion();
+
+  /** T14 段位判定：乘数取防抖结果（未就绪退回本地预览）；≥ 2 才有段位（整数位）
+   *  跨入新段位时递增 flash 序号重挂 Tag 触发单次涨色（首挂载不涨色） */
+  const multiplierValue = data ? data.multiplier : multiplierPreview;
+  const multSegment =
+    Number.isFinite(multiplierValue) && multiplierValue >= 2 ? Math.floor(multiplierValue) : null;
+  useEffect(() => {
+    if (multSegment !== null && prevMultSegmentRef.current !== multSegment) {
+      if (prevMultSegmentRef.current !== null) setMultFlashEpoch((e) => e + 1);
+      prevMultSegmentRef.current = multSegment;
+    } else if (multSegment === null) {
+      prevMultSegmentRef.current = null;
+    }
+  }, [multSegment]);
 
   /** 当前生效画像（"custom" 时为 null；Tag 行仅在有画像时渲染） */
   const activeProfile =
@@ -445,12 +654,19 @@ export default function BasicCalculator() {
   const sensDelta = money(baseline.monthlyExpense * 0.1 * (data ? data.multiplier : multiplierPreview));
 
   /** 复制分享（docs/p3-spec.md §6.7 D8）：原 wf-share-row 按钮逻辑提取为局部函数，
-   *  原按钮与 <768 底部吸附条按钮共用同一入口（DRY），逻辑零改动 */
+   *  原按钮与 <768 底部吸附条按钮共用同一入口（DRY）；P5 T5 轻确认：成功回调即换
+   *  「已复制 ✓」文案、基础档计时还原（Message.success 兜底链路不变） */
   const handleCopyShare = () => {
     const payload = encodeShareState(useCalculatorStore.getState().buildShareState());
     void copyShareUrl(buildShareUrl(payload)).then((ok) => {
-      if (ok) Message.success(t("share.copied"));
-      else Message.error(t("share.copyFailed"));
+      if (ok) {
+        setCopied(true);
+        if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = window.setTimeout(() => setCopied(false), MOTION_DURATIONS.base);
+        Message.success(t("share.copied"));
+      } else {
+        Message.error(t("share.copyFailed"));
+      }
     });
   };
   /** 不可用判定：实际回报率 ≤ 0（与主输出同因）或已计算的档位全部失败；
@@ -465,7 +681,17 @@ export default function BasicCalculator() {
       {/* 输出区：置顶恒可见 */}
       <div className="wf-output-sticky">
         <Card
-          className={isStuck ? "wf-output-card wf-is-stuck" : "wf-output-card"}
+          className={
+            [
+              "wf-output-card",
+              isStuck ? "wf-is-stuck" : "",
+              // T9 计算徽标：pending（防抖静默窗口）时呼吸；计算开始 Spin 接管不并存；
+              // reduced-motion 命中 JS 侧不挂类（CSS 兜底块双闸）
+              computingPending && !loading && !reducedMotion ? "wf-computing" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")
+          }
           title={t("basic.outputTitle")}
           extra={loading ? <Spin size={14} /> : <Text type="secondary">{t("basic.liveUpdate")}</Text>}
         >
@@ -493,7 +719,7 @@ export default function BasicCalculator() {
                 <Title
                   heading={3}
                   className="wf-big-number"
-                  style={{ color: themeTokens.primary, fontSize: "var(--wf-text-num)" }}
+                  style={{ color: themeTokens.primary, fontSize: "var(--wf-text-display)" }}
                 >
                   {data ? money(animatedCritical) : "—"}
                 </Title>
@@ -504,18 +730,30 @@ export default function BasicCalculator() {
                     tokens={themeTokens}
                     ariaLabel={t("progress.ariaLabel", { pct: gaugePctText })}
                     size={isCompact ? 56 : 72}
+                    resetEpoch={resetEpoch}
+                    reducedMotion={reducedMotion}
                   />
+                ) : progressInputs.currentAssets === 0 && data !== null ? (
+                  /* T6 = S6 进度环缺席位（修订 #5 扩围）：资产未填时渲染「未上弦的刻度尺」
+                      占位图形（装饰性 aria-hidden，信息由下方引导句承载） */
+                  <span className="wf-progress-ring" aria-hidden="true">
+                    <EmptyRulerArt size={isCompact ? 56 : 72} />
+                  </span>
                 ) : null}
               </div>
               {gaugeVisible ? (
                 <div className="wf-progress-caption">
                   <Text type="secondary">{t("progress.caption", { pct: gaugePctText })}</Text>
                 </div>
+              ) : progressInputs.currentAssets === 0 && data !== null ? (
+                <div className="wf-progress-caption">
+                  <Text type="secondary">{t("progress.emptyHint")}</Text>
+                </div>
               ) : null}
               <div className="wf-output-line">
                 <Text>
                   {t("basic.summaryPrefix")}{" "}
-                  <Text bold className="wf-nowrap">
+                  <Text bold className="wf-nowrap wf-num">
                     {data ? (
                       displayCode === "CNY" ? (
                         i18n.language.startsWith("en") ? (
@@ -536,17 +774,31 @@ export default function BasicCalculator() {
                   {t("basic.summarySuffix")}
                 </Text>
               </div>
+              {/* T14 = S14 段位徽标：乘数 ≥ 2 时行尾段位 Tag（key 含 flash 序号——仅真实跨档
+                  重挂触发一次涨色；无段位不渲染） */}
               <div className="wf-output-line">
                 <Text>
                   {t("basic.savePrefix")}{" "}
-                  <Text bold className="wf-nowrap">
-                    {formatMultiplier(data ? data.multiplier : multiplierPreview)}
+                  <Text bold className="wf-nowrap wf-num">
+                    {formatMultiplier(multiplierValue)}
                   </Text>{" "}
                   {t("basic.saveSuffix")}
+                  {multSegment !== null ? (
+                    <Tag
+                      size="small"
+                      className="wf-mult-tag"
+                      key={`${multSegment}-${multFlashEpoch}`}
+                      aria-label={t("basic.multTagAria", { mult: formatMultiplier(multiplierValue), n: multSegment })}
+                      style={{ marginLeft: 8 }}
+                    >
+                      {t("basic.multTag", { n: multSegment })}
+                    </Tag>
+                  ) : null}
                 </Text>
               </div>
               {/* D9 输出卡紧凑模式（docs/p3-spec.md §6.8）：<768 明细拆解默认收起、按钮切换；
-                  ≥768 现状全量。插值参数与原全量态完全一致 */}
+                  ≥768 现状全量。§4 结构化：插值长句改 2 列键值表（单份表格定义、分支行为
+                  原样保留——修订 #6）；≥768 分支补 T7 分组左标线小节头 */}
               {data ? (
                 isNarrow ? (
                   <>
@@ -561,31 +813,32 @@ export default function BasicCalculator() {
                     </Button>
                     {breakdownOpen ? (
                       <div className="wf-output-breakdown">
-                        <Text type="secondary">
-                          {t("basic.breakdown", {
-                            expense: money(baseline.monthlyExpense),
-                            multiplier: formatMultiplier(data.multiplier),
-                            children: baseline.childCount,
-                            childCost: money(baseline.costPerChild),
-                            health: money(baseline.healthReserve),
-                            major: money(baseline.majorInvestment),
-                          })}
-                        </Text>
+                        <BreakdownTable
+                          expense={money(baseline.monthlyExpense)}
+                          multiplier={formatMultiplier(data.multiplier)}
+                          children={baseline.childCount}
+                          childTotal={money(baseline.childCount * baseline.costPerChild)}
+                          health={money(baseline.healthReserve)}
+                          major={money(baseline.majorInvestment)}
+                          total={money(data.criticalValue)}
+                        />
                       </div>
                     ) : null}
                   </>
                 ) : (
                   <div className="wf-output-breakdown">
-                    <Text type="secondary">
-                      {t("basic.breakdown", {
-                        expense: money(baseline.monthlyExpense),
-                        multiplier: formatMultiplier(data.multiplier),
-                        children: baseline.childCount,
-                        childCost: money(baseline.costPerChild),
-                        health: money(baseline.healthReserve),
-                        major: money(baseline.majorInvestment),
-                      })}
-                    </Text>
+                    <Divider orientation="left" className="wf-group-line">
+                      {t("basic.breakdownTitle")}
+                    </Divider>
+                    <BreakdownTable
+                      expense={money(baseline.monthlyExpense)}
+                      multiplier={formatMultiplier(data.multiplier)}
+                      children={baseline.childCount}
+                      childTotal={money(baseline.childCount * baseline.costPerChild)}
+                      health={money(baseline.healthReserve)}
+                      major={money(baseline.majorInvestment)}
+                      total={money(data.criticalValue)}
+                    />
                   </div>
                 )
               ) : null}
@@ -773,13 +1026,16 @@ export default function BasicCalculator() {
             <div className="wf-realtime">
               <Text>
                 {t("basic.realReturn")}
+                {/* T10 = S10 方向冗余编码：▲/▼ 字形独立于颜色通道（WCAG 1.4.1），
+                    字形走 caption 档字号，语义色仍由涨跌令牌承载 */}
                 <Text bold style={{ color: realReturnPct > 0 ? semanticRise : semanticFall }}>
+                  <span style={{ fontSize: "var(--wf-text-caption)" }}>{realReturnPct > 0 ? "▲" : "▼"}</span>{" "}
                   {formatPercent(realReturnPct)}
                 </Text>
               </Text>
               <Text>
                 {t("basic.multiplierLine")}
-                <Text bold>{realReturnPct > 0 ? formatMultiplier(multiplierPreview) : "—"}</Text>
+                <Text bold className="wf-num">{realReturnPct > 0 ? formatMultiplier(multiplierPreview) : "—"}</Text>
               </Text>
               <Text type="secondary">
                 {t("basic.ruleOrigin", {
@@ -797,14 +1053,14 @@ export default function BasicCalculator() {
             切片装配已上移为 store.buildShareState（docs/p2-spec.md §4.3，场景库保存共用同一口径） */}
         <div className="wf-share-row">
           <Button size="small" className="wf-pressable" onClick={handleCopyShare}>
-            {t("share.copy")}
+            {copied ? `${t("share.copiedShort")} ✓` : t("share.copy")}
           </Button>
           <Text type="secondary">{t("share.copyTooltip")}</Text>
         </div>
         {/* D8 底部吸附操作条：<768 常驻自然可达区 [0.66H, 1.0H]（响应研究 §7.2；样式层断点控制显隐） */}
         <div className="wf-action-dock">
           <Button size="small" type="primary" className="wf-pressable" title={t("share.copyTooltip")} onClick={handleCopyShare}>
-            {t("share.copyShort")}
+            {copied ? `${t("share.copiedShort")} ✓` : t("share.copyShort")}
           </Button>
         </div>
       </Card>

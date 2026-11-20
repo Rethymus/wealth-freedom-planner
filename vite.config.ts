@@ -1,6 +1,11 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
+// P5 尺寸回收（docs/p5-spec.md §13）：组件库按需样式表的保守 denylist purge。
+// 注册顺序约束：必须先于 VitePWA（用户 normal 插件按注册顺序执行 generateBundle），
+// 保证 sw.js 预缓存清单与文件内容 hash 同源于 purge 后内容。denylist 与实施修订
+// （tag-checked / pagination 两条不入删类）见 scripts/plugins/purgeArcoCss.ts 头注释。
+import { purgeArcoCssPlugin } from "./scripts/plugins/purgeArcoCss";
 
 // base: "./" —— GitHub Pages 项目页（/repo-name/ 子路径）使用相对路径加载资源。
 // manualChunks（docs/p2-spec.md §10.3 辅助项）：vendor（组件库 / 图表库 / 状态与 i18n）
@@ -59,6 +64,7 @@ export default defineConfig({
     react(),
     arcoLayoutSiderStub,
     platformIconLink,
+    purgeArcoCssPlugin(),
     // P4 ① PWA（docs/p4-spec.md §6.1 / research-pwa 采纳清单 A2）：
     // injectManifest 手写 SW（src/sw.ts，零 workbox 运行时）+ script 注入注册
     // （省 5.7KB 注册运行时 chunk）+ autoUpdate 静默换版（无更新提示 UI，§6.4）。

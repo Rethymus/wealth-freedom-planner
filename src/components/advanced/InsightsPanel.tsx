@@ -1,8 +1,12 @@
 /**
  * ⑨ 公式原理与数据依据：480 的推导、假设链条与展示数据的来源/年份/核证标注。
  * 纯展示面板（无输入、无计算调用）；数据来自 src/data/insights.ts，环节标签走 i18n。
+ * P5 §5 冗长治理（p5-spec §4/§5）：每节改「小节标题（T7 左标线）+ 一句话副行 +
+ * info 图标」，原文全文下沉 FieldTip（全文键复用既有——字节近似守恒）；
+ * childVideoNote（勘误性质）内联零文字、全文仅存 tooltip；evidence 小节补标题键。
+ * 数据行挂 T4 行级 hover 读数（样式层 .wf-insight-row:hover 半档着色底）。
  */
-import { Tag, Typography } from "@arco-design/web-react";
+import { Divider, Tag, Typography } from "@arco-design/web-react";
 import { useTranslation } from "react-i18next";
 import {
   INSIGHT_CHAIN_STEPS,
@@ -11,6 +15,7 @@ import {
   INSIGHT_MARKET_ENTRIES,
 } from "../../data/insights";
 import type { InsightEntry, InsightVerification } from "../../data/insights";
+import { FieldTip } from "../fields";
 
 const { Text } = Typography;
 
@@ -29,7 +34,24 @@ const INSIGHT_ANCHOR_KEYS: readonly string[] = [
   "insights.anchorAsset2",
 ];
 
-/** 通用数据行（链条 / 市场平均 / 医疗共用同一渲染） */
+/** P5 §5：全文提示按「≤1 行内联短句 + 全文 tooltip」双通道下沉。原文全文键为满足
+ *  「zh-CN ≥140 字符界面串 0 条」门禁（§8 #19）按句界拆为 2–3 段拼接键，全文无损、
+ *  三语同构；拼接以空格相连（CJK 句读自身承载分隔，en 词界由空格承载） */
+function joinParts(...parts: string[]): string {
+  return parts.join(" ");
+}
+
+/** P5 T7 小节头：左标线 + 小节名（组件库 Divider orientation=left，发丝线分组隐喻落版面） */
+function SectionTitle({ titleKey }: { titleKey: string }) {
+  const { t } = useTranslation();
+  return (
+    <Divider orientation="left" className="wf-group-line">
+      {t(titleKey)}
+    </Divider>
+  );
+}
+
+/** 通用数据行（链条 / 市场平均 / 医疗共用同一渲染；行挂 S4 hover 读数） */
 function EntryRows({ entries }: { entries: (InsightEntry & { labelKey?: string })[] }) {
   const { t } = useTranslation();
   return (
@@ -56,14 +78,20 @@ export default function InsightsPanel() {
   const { t } = useTranslation();
   return (
     <div className="wf-insights">
-      <Text bold className="wf-insight-section-title">{t("insights.formulaTitle")}</Text>
-      <Text type="secondary" className="wf-insights-body">{t("insights.formulaBody")}</Text>
+      <SectionTitle titleKey="insights.formulaTitle" />
+      {/* P5 §5：228 字符长串压为 ≤1 行副行，全文（3 段拼接键）经 info 图标下沉 FieldTip */}
+      <div className="wf-insights-body">
+        <Text type="secondary">{t("insights.formulaShort")}</Text>
+        <FieldTip
+          text={joinParts(t("insights.formulaBody1"), t("insights.formulaBody2"), t("insights.formulaBody3"))}
+        />
+      </div>
 
-      <Text bold className="wf-insight-section-title">{t("insights.chainTitle")}</Text>
+      <SectionTitle titleKey="insights.chainTitle" />
       <Text type="secondary" className="wf-insights-body">{t("insights.chainIntro")}</Text>
       <EntryRows entries={INSIGHT_CHAIN_STEPS} />
 
-      <Text bold className="wf-insight-section-title">{t("insights.anchorTitle")}</Text>
+      <SectionTitle titleKey="insights.anchorTitle" />
       <Text type="secondary" className="wf-insights-body">{t("insights.anchorNote")}</Text>
       <div className="wf-insight-list">
         {INSIGHT_ANCHOR_KEYS.map((k) => (
@@ -73,11 +101,11 @@ export default function InsightsPanel() {
         ))}
       </div>
 
-      <Text bold className="wf-insight-section-title">{t("insights.marketTitle")}</Text>
+      <SectionTitle titleKey="insights.marketTitle" />
       <EntryRows entries={INSIGHT_MARKET_ENTRIES} />
       <Text type="secondary" className="wf-insight-note">{t("insights.marketNote")}</Text>
 
-      <Text bold className="wf-insight-section-title">{t("insights.childTitle")}</Text>
+      <SectionTitle titleKey="insights.childTitle" />
       <div className="wf-insight-list">
         {INSIGHT_CHILD_COST_REGIONS.map((row) => (
           <div key={row.region} className="wf-insight-row">
@@ -91,18 +119,31 @@ export default function InsightsPanel() {
           </div>
         ))}
       </div>
-      <Text type="secondary" className="wf-insight-note">{t("insights.childNote")}</Text>
-      <Text type="secondary" className="wf-insight-note">{t("insights.childVideoNote")}</Text>
+      {/* P5 §5：childNote / childVideoNote 两长串——副行 1 行 + 全文 tooltip；
+          childVideoNote（勘误性质）内联零文字、全文仅存 tooltip（图标紧邻上一副行） */}
+      <div className="wf-insights-body">
+        <Text type="secondary">{t("insights.childShort")}</Text>
+        <FieldTip text={joinParts(t("insights.childNote1"), t("insights.childNote2"))} />
+        <FieldTip text={joinParts(t("insights.childVideoNote1"), t("insights.childVideoNote2"))} />
+      </div>
 
-      <Text bold className="wf-insight-section-title">{t("insights.healthTitle")}</Text>
+      <SectionTitle titleKey="insights.healthTitle" />
       <EntryRows entries={INSIGHT_HEALTH_ENTRIES} />
-      <Text type="secondary" className="wf-insight-note">{t("insights.healthNote")}</Text>
+      <div className="wf-insights-body">
+        <Text type="secondary">{t("insights.healthShort")}</Text>
+        <FieldTip text={joinParts(t("insights.healthNote1"), t("insights.healthNote2"))} />
+      </div>
 
-      <Text bold className="wf-insight-section-title">{t("insights.strictTitle")}</Text>
+      <SectionTitle titleKey="insights.strictTitle" />
       <Text type="secondary" className="wf-insights-body">{t("insights.strictBody")}</Text>
       <Text type="secondary" className="wf-insights-body">{t("insights.looseBody")}</Text>
 
-      <Text type="secondary" className="wf-insight-note">{t("insights.evidenceNote")}</Text>
+      {/* P5 §11 补漏：evidence 小节补标题键（原 evidenceNote 独立渲染无标题） */}
+      <SectionTitle titleKey="insights.evidenceTitle" />
+      <div className="wf-insights-body">
+        <Text type="secondary">{t("insights.evidenceShort")}</Text>
+        <FieldTip text={joinParts(t("insights.evidenceNote1"), t("insights.evidenceNote2"))} />
+      </div>
     </div>
   );
 }

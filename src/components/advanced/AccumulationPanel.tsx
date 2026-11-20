@@ -16,6 +16,7 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   XAxis,
   YAxis,
@@ -28,6 +29,7 @@ import { LIMITS, MOTION_DURATIONS, resolveThemeTokens } from "../../data/default
 import type { AccumulationOutput, RequiredSavingOutput } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, IntField, PathsField, PercentField } from "../fields";
+import { EmptyRulerArt } from "../EmptyRuler";
 import { compactXInterval, useChartMetrics, useFinanceCall, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text, Title } = Typography;
@@ -86,6 +88,11 @@ export default function AccumulationPanel() {
 
   const [result, setResult] = useState<FinanceResult<AccumulationOutput> | null>(null);
   const [running, setRunning] = useState(false);
+  /** T15 = S15 目标线叙事标注（修订 #1 P0）：run() 提交帧同步快照的当刻 effectiveTarget——
+   *  与 calcAccumulation 入参同一值、同一帧（纯展示层快照，零数据流改动 / wasm 契约不动）。
+   *  联动默认态下改基础输入不重跑时，目标线与叙事行保持与图同一真值不漂移；
+   *  null = 尚未运行（无快照不渲染线与叙事行，渲染门槛与图表同闸） */
+  const [submittedTarget, setSubmittedTarget] = useState<number | null>(null);
   /**
    * 同步按钮点击序号：作为目标值字段的 key，点击同步即递增并强制该字段重挂载。
    * Arco InputNumber 在用户键入后（isUserTyping 锁定 raw 输入文本）不再跟随外部
@@ -134,6 +141,8 @@ export default function AccumulationPanel() {
 
   const run = () => {
     setRunning(true);
+    // T15：提交帧同步快照目标值（与下方 calcAccumulation 入参同一值、同一帧）
+    setSubmittedTarget(effectiveTarget);
     // 运行时取当刻联动目标值提交（不回写 store）；calcAccumulation 内部已捕获全部异常，此处仅兜底
     calcAccumulation({ ...inputs, targetValue: effectiveTarget })
       .then((r) => setResult(r))
@@ -406,7 +415,9 @@ export default function AccumulationPanel() {
               className="wf-big-number"
               style={{
                 color: revData && revData.requiredMonthlySaving >= 0 ? themeTokens.rise : themeTokens.textSecondary,
-                fontSize: "var(--wf-text-num)",
+                // P5 §1.1 双 hero 违例修正：右栏禁用 display 档（40px 与左栏读数窗竞争焦点），
+                // 反推大数降为 title 档 20px bold（视觉变更登记 docs/p5-spec.md §12.4）
+                fontSize: "var(--wf-text-title)",
                 margin: 0,
               }}
             >
@@ -519,19 +530,39 @@ export default function AccumulationPanel() {
             >
               <ResponsiveContainer width="100%" height={chartHeight}>
                 <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} />
+                  {/* §6 图表质感：仅水平 1px 实线网格，去轴框与刻度短线 */}
+                  <CartesianGrid stroke={themeTokens.chartGrid} vertical={false} />
                   {/* 紧凑档（<640）X 刻度 ≤5：interval 按刻度总数（= 年数）推导，非紧凑档不干预 */}
                   <XAxis
                     dataKey="year"
                     allowDecimals={false}
+                    tickLine={false}
+                    axisLine={false}
                     tick={{ fontSize: 12, fill: themeTokens.chartTick }}
                     interval={isCompact ? compactXInterval(inputs.years) : undefined}
                   />
                   <YAxis
                     width={yAxisWidth}
+                    tickLine={false}
+                    axisLine={false}
                     tick={{ fontSize: 12, fill: themeTokens.chartTick }}
                     tickFormatter={(v: number) => formatCompactAxis(v)}
                   />
+                  {/* T15 = S15 目标线叙事标注：基期目标水平参考线（run 提交帧快照 submittedTarget，
+                      与 calcAccumulation 同帧同值——联动默认态下改基础输入不重跑时线与图同一真值
+                      不漂移）；渲染与图表同闸，无快照不渲染；宿主容器 role="img" aria 不变 */}
+                  {submittedTarget !== null ? (
+                    <ReferenceLine
+                      y={convert(submittedTarget)}
+                      stroke={targetColor}
+                      label={{
+                        value: t("accumulation.targetLineLabel"),
+                        position: "insideTopRight",
+                        fontSize: 12,
+                        fill: themeTokens.chartTick,
+                      }}
+                    />
+                  ) : null}
                   {Array.from({ length: chartPathCount }, (_, i) => (
                     <Line
                       key={`path-${i}`}
@@ -564,6 +595,13 @@ export default function AccumulationPanel() {
                   />
                 </LineChart>
               </ResponsiveContainer>
+              {/* T15 叙事行：中位首达年（与 Descriptions 同源字段 data.yearsMedian，同一
+                  submittedTarget 快照下算出）；无目标快照不渲染整行 */}
+              {submittedTarget !== null && data.yearsMedian >= 0 ? (
+                <Text type="secondary" className="wf-panel-note">
+                  {t("accumulation.medianNarrative", { years: formatNumber(data.yearsMedian, 1) })}
+                </Text>
+              ) : null}
               <Text type="secondary" className="wf-panel-note">
                 {t("accumulation.chartNote", { count: chartPathCount })}
               </Text>
@@ -571,8 +609,9 @@ export default function AccumulationPanel() {
           ) : null}
         </>
       ) : mode === "forward" ? (
-        /* C6 空态组件化：未运行空态从 Alert 改为 Empty（复用现有键，零新增） */
-        <Empty style={{ marginTop: 8 }} description={t("accumulation.placeholder")} />
+        /* C6 空态组件化：未运行空态从 Alert 改为 Empty（复用现有键，改写句式）；
+           T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入 */
+        <Empty style={{ marginTop: 8 }} icon={<EmptyRulerArt size={56} />} description={t("accumulation.placeholder")} />
       ) : null}
     </div>
   );

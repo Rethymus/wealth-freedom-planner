@@ -30,6 +30,7 @@ import {
 } from "../../services/exportScenarios";
 import { resolveThemeTokens } from "../../data/defaults";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
+import { EmptyRulerArt } from "../EmptyRuler";
 import { useMoney } from "../hooks";
 
 const { Text } = Typography;
@@ -279,13 +280,16 @@ export default function ScenarioPanel() {
           {t("scenario.export")}
         </Button>
         {cols.filter((c) => c.valid).length === 0 ? (
+          /* T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入；
+             文案改写为「缺什么——下一步」句式（改值不增键） */
           <Empty
             style={{ marginTop: 8 }}
+            icon={<EmptyRulerArt size={56} />}
             description={t("scenario.listEmpty")}
           />
         ) : (
           <>
-            {/* D7 滑动提示：仅非空分支渲染（无表可滚不虚示）；<670.9 档由样式层放行 */}
+            {/* D7 滑动提示：仅非空分支渲染（无表可滚不虚示）；<675.9 档由样式层放行 */}
             <Text type="secondary" className="wf-swipe-hint">{t("common.swipeHint")}</Text>
             {/* D7 两层结构：渐隐 ::after 挂在不滚动的外层上（挂在内层滚动容器会随内容滚走） */}
             <div className="wf-scenario-table-outer">

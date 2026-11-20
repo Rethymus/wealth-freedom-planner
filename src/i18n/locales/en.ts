@@ -50,8 +50,13 @@ const en = {
       " (including children, health and major-investment reserves).",
     savePrefix: "Every additional ",
     saveSuffix: " saved buys 1 more of monthly spending.",
-    breakdown:
-      "Breakdown: monthly expense {{expense}} × multiplier {{multiplier}} + children {{children}} × {{childCost}} + health reserve {{health}} + major investment {{major}}",
+    rowMultiplier: "Monthly expense × multiplier",
+    rowChildren: "Children reserve ({{children}} children)",
+    rowHealth: "Health reserve",
+    rowMajor: "Major investment",
+    rowTotal: "Total (= financial freedom reference line)",
+    multTag: "covers {{n}} months of spending",
+    multTagAria: "Multiplier reached {{mult}}: about {{n}} months of monthly spending covered",
     breakdownTitle: "Detailed breakdown",
     expand: "Expand",
     collapse: "Collapse",
@@ -119,6 +124,7 @@ const en = {
       "The investable assets you have already saved up; once filled in, a progress ring relative to the reference line appears beside the big number.",
     caption: "Existing assets are about {{pct}}% of the reference line",
     ariaLabel: "Freedom gauge: existing assets are about {{pct}}% of the reference line",
+    emptyHint: "Enter your existing assets to light up the first gauge tick",
   },
   advanced: {
     cardTitle: "Advanced estimates and formula rationale",
@@ -147,8 +153,13 @@ const en = {
   },
   insights: {
     formulaTitle: "Formula derivation",
-    formulaBody:
-      "The principal needed for an annual expense X is X ÷ r (r being the real annual return rate) — each year's actual returns on that principal exactly cover the expense while the principal stays untouched. Substituting a monthly expense X as the annual expense 12X gives: assets = monthly expense × 12 ÷ r. When r = 2.5% (default nominal return 4.5% − inflation 2%), 12 ÷ 0.025 = 480: every 480 yuan of principal supports 1 yuan of monthly spending — hence the name “480 Rule”. The total critical value then stacks three one-off reserves on top: number of children × cost per child + health reserve + major investment.",
+    formulaShort: "Assets = monthly expense × 12 ÷ real return rate (480 under the default parameters); see the tip for the full derivation.",
+    formulaBody1:
+      "The principal needed for an annual expense X is X ÷ r (r being the real annual return rate) — each year's actual returns on that principal exactly cover the expense while the principal stays untouched.",
+    formulaBody2:
+      "Substituting a monthly expense X as the annual expense 12X gives: assets = monthly expense × 12 ÷ r. When r = 2.5% (default nominal return 4.5% − inflation 2%), 12 ÷ 0.025 = 480: every 480 yuan of principal supports 1 yuan of monthly spending — hence the name “480 Rule”.",
+    formulaBody3:
+      "The total critical value then stacks three one-off reserves on top: number of children × cost per child + health reserve + major investment.",
     chainTitle: "The assumption chain: from deposit rates to the 480 multiplier",
     chainIntro:
       "The derivation path of the return assumptions is as follows (values build up step by step from top to bottom); each entry carries its source, year, terms and verification level — entries tagged “video claim” do not feed this tool's calculations and serve only to explain where the assumptions come from.",
@@ -176,20 +187,32 @@ const en = {
     marketNote:
       "The basis is per-capita resident consumer spending, covering the three major categories of housing, health care, and education, culture and recreation; this tool's default monthly expense of 2,990 yuan/month is rounded from the urban figure.",
     childTitle: "Child-raising cost reference by city",
-    childNote:
-      "Original figures from the “China Fertility Cost Report (2024 edition)”: the national average for ages 0–17 is 538,000 yuan; raising a child through undergraduate graduation costs about 680,000 yuan; birth-order cost coefficients are 1 : 0.79 : 0.60 (about −21% for a second child and about −24% for a third); it equals 6.3 times GDP per capita — the second highest among the countries listed in the report (behind only South Korea at 7.79 times).",
-    childVideoNote:
-      "The original video claimed “580,000 nationally / 1 million in Beijing / 1.08 million in Shanghai / 430,000 in Guizhou as the lowest / about 15% lower for each additional child”, which does not match the report's original figures; the Guizhou number and the “2,543.84 yuan per month on average” could not be verified — this panel uses the report's original figures (the video claim is not adopted). The −15% in the “cost per child” hint is a conservative simplification of the video claim; for the report's basis, adjust it to −21% yourself.",
+    childShort: "The national average is 538,000 yuan for ages 0–17 and about 680,000 through undergraduate graduation (report's original figures; see the tip for sources and corrections).",
+    childNote1:
+      "Original figures from the “China Fertility Cost Report (2024 edition)”: the national average for ages 0–17 is 538,000 yuan; raising a child through undergraduate graduation costs about 680,000 yuan; birth-order cost coefficients are 1 : 0.79 : 0.60 (about −21% for a second child and about −24% for a third);",
+    childNote2:
+      " it equals 6.3 times GDP per capita — the second highest among the countries listed in the report (behind only South Korea at 7.79 times).",
+    childVideoNote1:
+      "The original video claimed “580,000 nationally / 1 million in Beijing / 1.08 million in Shanghai / 430,000 in Guizhou as the lowest / about 15% lower for each additional child”, which does not match the report's original figures; the Guizhou number and the “2,543.84 yuan per month on average” could not be verified — this panel uses the report's original figures (the video claim is not adopted).",
+    childVideoNote2:
+      " The −15% in the “cost per child” hint is a conservative simplification of the video claim; for the report's basis, adjust it to −21% yourself.",
     healthTitle: "Medical spending reference",
-    healthNote:
-      "“About 200,000 over a lifetime” and “150,000–300,000 in tier-2 cities / 300,000–600,000 in tier-1 cities” are estimates from the original video, not independently verified (conservative range 150,000–500,000, at 2024 price levels); as a no-discounting, equal-amount upper-bound reference: 6,454.4 yuan/year × 80 years ≈ 516,000 yuan — actual medical intensity shifts to later in life, so a young or middle-aged starting point can sit well below the cap.",
+    healthShort: "The video estimates were not independently verified; conservative range 150,000–500,000 (2024 price levels). See the tip for terms and conversions.",
+    healthNote1:
+      "“About 200,000 over a lifetime” and “150,000–300,000 in tier-2 cities / 300,000–600,000 in tier-1 cities” are estimates from the original video, not independently verified (conservative range 150,000–500,000, at 2024 price levels);",
+    healthNote2:
+      " as a no-discounting, equal-amount upper-bound reference: 6,454.4 yuan/year × 80 years ≈ 516,000 yuan — actual medical intensity shifts to later in life, so a young or middle-aged starting point can sit well below the cap.",
     strictTitle: "Strict vs. loose versions",
     strictBody:
       "Strict version: requires that assets never shrink (only actual returns are drawn on; principal stays untouched). It corresponds to the perpetual withdrawal basis of this tool's basic mode “financial freedom reference line” and of reverse estimation's “safe monthly spending”.",
     looseBody:
       "Loose version: allows assets to decline slowly in later years in exchange for higher spending today. It corresponds to the “threshold-band adjustment” and “percentage of balance” withdrawal strategies in the Monte Carlo panel — in the simulation you can watch the trade-off between depletion probability and end-of-period purchasing power.",
-    evidenceNote:
-      "Tag legend: “officially verified” = read directly from the official source page; “media-verified” = an officially published figure confirmed consistent by two or more independent media outlets; “video claim” = seen only in the original video or an analytical assumption, with no independent authoritative source found. For each entry, the year and terms follow the inline annotation; the verification log is in docs/research-video-data.md.",
+    evidenceTitle: "Data verification tag legend",
+    evidenceShort: "Officially verified = read from the source page; media-verified = confirmed by 2+ independent outlets; video claim = not independently verified.",
+    evidenceNote1:
+      "Tag legend: “officially verified” = read directly from the official source page; “media-verified” = an officially published figure confirmed consistent by two or more independent media outlets; “video claim” = seen only in the original video or an analytical assumption, with no independent authoritative source found.",
+    evidenceNote2:
+      " For each entry, the year and terms follow the inline annotation; the verification log is in docs/research-video-data.md.",
   },
   pension: {
     formulaNote:
@@ -213,14 +236,13 @@ const en = {
       "Your current estimate of the “pension insurance individual account balance”; look it up in the electronic social security card or your local social-insurance app and enter it here.",
     avgWage: "Average wage (benefit-computation basis)",
     avgWageTooltip:
-      "The “previous year's average wage” in the basic pension formula; it defaults to the National Bureau of Statistics' 2024 urban non-private-sector figure (see the source line below) — please replace it with the pension computation base of your own province/city.",
+      "The “previous year's average wage” in the basic pension formula; it defaults to the National Bureau of Statistics' 2024 urban non-private-sector figure — please replace it with the pension computation base of your own province/city.",
     monthsDivisor: "Months divisor",
     monthsDivisorTooltip:
       "The divisor of the individual account pension (lookup-table basis: age 60 = 139, age 55 = 170, age 50 = 195 months); linked to the retirement age by default, and editing it by hand breaks the link.",
     monthsSyncedHint:
       "The months divisor is currently linked to the retirement age through the data-layer lookup table; editing it by hand breaks the link.",
     monthsResync: "Re-link to retirement age",
-    wageSourceLine: "Average wage source: {{source}}",
     monthlyPension: "Estimated monthly pension",
     basicPart: "of which: basic pension",
     accountPart: "of which: individual account pension",
@@ -232,12 +254,10 @@ const en = {
     adjustedExpense: "Adjusted monthly expense",
     adjustedCritical: "Adjusted financial-freedom reference line",
     coverage: "Pension coverage ratio (monthly pension ÷ monthly expense)",
-    coverageHint:
-      "The portion of the monthly expense covered by the pension no longer needs principal support, so the reference line falls accordingly; a coverage ratio above 100% means the projected pension already covers all of your current monthly expense.",
+    coverageNote:
+      "This is a retirement-point estimate: no growth of the average wage or account appreciation is included; a coverage ratio above 100% means the pension covers all of your monthly expense.",
     coverageFull:
       "The projected pension already covers all of your current monthly expense",
-    resultNote:
-      "The above is a “retirement-point” estimate: no year-by-year growth is assumed for the average wage or the contribution index, and the individual account balance is divided by the months divisor at its current estimated value, with no assumption of future appreciation.",
     disclaimer:
       "A simplified estimate, not social-insurance advice; actual benefits are subject to the computation by the social insurance agency.",
   },
@@ -389,8 +409,11 @@ const en = {
     cnTier4: "Tier-4 cities",
     intlGlobal: "Intl · Global financial hubs",
     intlRegional: "Intl · Regional hubs",
-    gradingNote:
-      "Grading: Chinese cities are classified into Tier-1 to Tier-4 following the Yicai City Business Attractiveness Ranking conventions (strong tier-2 cities such as Chengdu and Wuhan are grouped as Tier-2); international cities differ from Chinese cities in living costs and tax systems, so they are NOT forced onto the Chinese four-tier scale — they are grouped by the GaWC 2024 classification: Alpha++ and Alpha+ (New York / London / Tokyo / Singapore / Dubai) form \"Global financial hubs\", while Alpha and below / unclassified (Kuala Lumpur / Chiang Mai) form \"Regional hubs\". Group defaults come from the representative city of each group and can be fine-tuned manually.",
+    gradingNoteShort: "Chinese cities are grouped Tier-1 to Tier-4, international cities by GaWC 2024; defaults come from representative cities and can be fine-tuned.",
+    gradingNote1:
+      "Grading: Chinese cities are classified into Tier-1 to Tier-4 following the Yicai City Business Attractiveness Ranking conventions (strong tier-2 cities such as Chengdu and Wuhan are grouped as Tier-2); international cities differ from Chinese cities in living costs and tax systems, so they are NOT forced onto the Chinese four-tier scale — they are grouped by the GaWC 2024 classification:",
+    gradingNote2:
+      " Alpha++ and Alpha+ (New York / London / Tokyo / Singapore / Dubai) form \"Global financial hubs\", while Alpha and below / unclassified (Kuala Lumpur / Chiang Mai) form \"Regional hubs\". Group defaults come from the representative city of each group and can be fine-tuned manually.",
     representativeNote:
       "Group defaults use the representative city ({{city}}); fine-tune the parameters below for other cities.",
     cityJoiner: " / ",
@@ -464,8 +487,7 @@ const en = {
     pathsYears: "{{paths}} paths × {{years}} years",
     chartNote:
       "The horizontal axis is years and the vertical axis is in 10k CNY units; the chart shows {{count}} representative sampled paths (thin light lines) and the year-by-year median (thick line, computed from the sampled paths). Same seed + same inputs → fully reproducible results (guaranteed by contract).",
-    placeholder:
-      "After you click “Run simulation”, the tool simulates the asset trajectory year by year with normally distributed random returns and reports the depletion probability and the end-of-period wealth distribution. Same seed + same inputs → fully reproducible results.",
+    placeholder: "No simulation results yet — click “Run simulation” to get the depletion probability and the end-of-period wealth distribution.",
     returnMode: "Return mode",
     returnModeTooltip:
       "Normal parameters: sampling from a normal distribution of “mean ± standard deviation” (the classic approach). Historical bootstrap: random resampling with replacement (i.i.d.) from the real annual return series of the selected index, preserving the fat tails and skewness of real history while ignoring year order (serial correlation such as volatility clustering is not covered).",
@@ -475,7 +497,7 @@ const en = {
       "In historical bootstrap mode, the “mean / std. dev. of nominal returns” take no part in the computation (the distribution is determined by the selected series); inflation is still sampled from a normal distribution.",
     seriesLabel: "Return series",
     seriesTooltip:
-      "The index's annual return series used for bootstrapping; values and sources are documented in the note below and in the README data-source table.",
+      "The index's annual return series used for bootstrapping (resampled with replacement, i.i.d.); see the tip details for the sample window, terms and source.",
     indexCsi300: "CSI 300 (China)",
     indexSp500: "S&P 500 (international)",
     seriesNote:
@@ -483,8 +505,7 @@ const en = {
     seriesPriceOnly:
       "Price index (dividends excluded; slightly understates total return)",
     seriesTotalReturn: "Total return (dividends reinvested)",
-    placeholderBootstrap:
-      "After you click “Run simulation”, return samples are resampled at random from the selected index's annual return series and the asset trajectory is simulated year by year, yielding the depletion probability and the end-of-period wealth distribution. Same seed + same inputs → fully reproducible results.",
+    placeholderBootstrap: "No simulation results yet — pick a return series and click “Run simulation” to get the depletion probability and the end-of-period wealth distribution.",
     chartNoteBootstrap:
       "The horizontal axis is years and the vertical axis is in 10k CNY units; the chart shows {{count}} representative sampled paths (thin light lines) and the year-by-year median (thick line). Return samples are drawn with replacement (i.i.d., ignoring year order) from the selected index's annual series. Same seed + same inputs → fully reproducible results (guaranteed by contract).",
     strategy: "Withdrawal strategy",
@@ -514,8 +535,11 @@ const en = {
     withdrawalP5: "Final-year withdrawal, 5th percentile (pessimistic)",
     withdrawalMedian: "Final-year withdrawal, median",
     withdrawalP95: "Final-year withdrawal, 95th percentile (optimistic)",
-    strategyNote:
-      "Threshold band: the literature's optimal parameters are ±20% / ±10% with no cuts in the final 15 years (tighter thresholds or larger cuts do not further improve success rates). Percentage of balance: the balance is amortized in real terms out to the planning horizon, so depletion is ruled out by construction — purchasing-power risk shows up in the final-year withdrawal percentiles. Arithmetic anchor: with assets down 25%, the same withdrawal amount pushes the withdrawal rate from 4.00% up to 5.33% — this rebound of the withdrawal rate after bad years is at the core of how sequence risk transmits.",
+    strategyNoteShort: "Threshold band uses the literature's optimal ±20% / ±10%; percentage of balance never depletes by construction — purchasing-power risk shows in final-year withdrawals (see the tip).",
+    strategyNote1:
+      "Threshold band: the literature's optimal parameters are ±20% / ±10% with no cuts in the final 15 years (tighter thresholds or larger cuts do not further improve success rates). Percentage of balance: the balance is amortized in real terms out to the planning horizon, so depletion is ruled out by construction — purchasing-power risk shows up in the final-year withdrawal percentiles.",
+    strategyNote2:
+      " Arithmetic anchor: with assets down 25%, the same withdrawal amount pushes the withdrawal rate from 4.00% up to 5.33% — this rebound of the withdrawal rate after bad years is at the core of how sequence risk transmits.",
     chartAria:
       "Monte Carlo simulation chart: {{paths}} paths simulated over {{years}} years, depletion probability {{prob}}%, median terminal value {{median}}",
     doneAria: "Simulation finished: depletion probability {{prob}}, median terminal value {{median}}",
@@ -543,9 +567,10 @@ const en = {
       "First-hit year distribution (integer years, reaching paths only; “—” means no path reaches the target)",
     finalTitle: "End-of-period asset distribution (all paths)",
     chartNote:
-      "The horizontal axis is years and the vertical axis is in 10k CNY units; thin light lines are {{count}} representative sampled paths, the thick line is the year-by-year median, and the dashed line is the year-by-year target drawn at the mean inflation rate (each path's actual judgement uses its own inflation sample). Same seed + same inputs → fully reproducible results (guaranteed by contract).",
-    placeholder:
-      "After you click “Run simulation”, the tool simulates “income − expense” accumulation paths year by year with normally distributed random market conditions, reporting the probability of reaching financial freedom, the first-hit-year percentiles and the end-of-period wealth distribution. Same seed + same inputs → fully reproducible results.",
+      "The horizontal axis is years and the vertical axis is in 10k CNY units; thin light lines are {{count}} representative sampled paths, the thick line is the year-by-year median, the dashed line is the year-by-year target drawn at the mean inflation rate (each path's actual judgement uses its own inflation sample), and the solid line marks the base-year target. Same seed + same inputs → fully reproducible results (guaranteed by contract).",
+    placeholder: "No simulation results yet — click “Run simulation” to get the probability of reaching the goal and the first-hit-year distribution.",
+    targetLineLabel: "Target",
+    medianNarrative: "Median path expected to reach the goal in year {{years}}",
     mode: "Simulation mode",
     modeForward: "Forward simulation",
     modeReverse: "Back-solve savings",
@@ -572,7 +597,6 @@ const en = {
     initialRate: "Initial withdrawal rate",
     annualSaving: "Annual saving (deposited at year-end)",
     run: "Run comparison",
-    windowsCount: "{{count}} start-year windows × {{years}} years (number of starts = series length − window + 1)",
     fateBest: "Best (start year {{year}})",
     fateMedian: "Median",
     fateWorst: "Worst (start year {{year}})",
@@ -581,12 +605,13 @@ const en = {
     originalOrder: "Original order",
     worstFirst: "Bad years first (ascending)",
     bestFirst: "Good years first (descending)",
-    note: "Deterministic simulation: returns are taken year by year from the selected series, inflation is set to 0 (nominal = real), and no random sampling is involved. Rolling-start mode: the sample contains only {{count}} rolling windows, so the conclusions are illustrative rather than statistically guaranteed; three-order mode: ascending / descending merely reorders the returns (the geometric mean is unchanged), and every terminal-value difference comes from the ordering itself. Series provenance follows the data-layer annotations.",
+    note1: "Deterministic simulation: returns are taken year by year from the selected series, inflation is set to 0 (nominal = real), and no random sampling is involved. Rolling-start mode: the sample contains only {{count}} rolling windows, so the conclusions are illustrative rather than statistically guaranteed;",
+    note2: " three-order mode: ascending / descending merely reorders the returns (the geometric mean is unchanged), and every terminal-value difference comes from the ordering itself. Series provenance follows the data-layer annotations.",
     chartAria:
       "Sequence-risk fate curves: the best, median and worst year-by-year asset paths, {{count}} start-year windows × {{years}} years",
     doneAria: "Sequence comparison finished: best {{best}}, median {{median}}, worst {{worst}}",
     placeholder:
-      "Pick a series and a basis, then click “Run comparison”: real historical annual returns are used in a deterministic simulation, showing how different starting points (or orderings) over the same stretch of history lead to different terminal fates.",
+      "No comparison run yet — pick a series and a basis, then click “Run comparison” to see how different starting points lead to different terminal fates.",
   },
   scenario: {
     namePlaceholder: "Scenario name, e.g. Frugal edition",
@@ -596,7 +621,7 @@ const en = {
     saveFailedFull: "The scenario library is full (limit {{max}}); please delete scenarios you no longer need first",
     saveFailedStorage: "Save failed: the browser's local storage is unavailable or full",
     listTitle: "Saved scenarios ({{count}})",
-    listEmpty: "No scenarios yet: name and save the full set of current panel parameters above first, then load different versions to compare them side by side",
+    listEmpty: "No scenarios to compare yet — name and save the current parameters above, then load them side by side",
     load: "Load",
     loaded: "Loaded scenario “{{name}}”",
     delete: "Delete",
@@ -702,6 +727,7 @@ const en = {
   share: {
     copy: "Copy share link",
     copyShort: "Copy link",
+    copiedShort: "Copied",
     copyTooltip:
       "Encodes all of your current business inputs (UI preferences such as theme / language / currency excluded) into the link; anyone who opens the pasted link gets the exact same parameter set.",
     copied: "Share link copied to the clipboard",

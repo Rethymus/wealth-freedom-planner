@@ -150,10 +150,29 @@ export type CityGroup =
   | "intl-global"
   | "intl-regional";
 
+/** 城市名全集（与 rentParams.CITY_RENT_PARAMS 的 city 字段、三语资源 city.* i18n 键一一对应；禁用模板串拼键，展示走 RentalPanel 的 CITY_NAME_KEY 静态映射） */
+export type CityName =
+  | "北京"
+  | "上海"
+  | "深圳"
+  | "广州"
+  | "成都"
+  | "武汉"
+  | "东京"
+  | "纽约"
+  | "伦敦"
+  | "新加坡"
+  | "迪拜"
+  | "珠海"
+  | "海口"
+  | "吉隆坡"
+  | "桂林"
+  | "清迈";
+
 /** 城市租售参数（买房收租面板的城市预设） */
 export interface CityRentParams {
-  /** 城市名，如 "北京" */
-  city: string;
+  /** 城市名（CityName 全集之一，如 "北京"） */
+  city: CityName;
   /** 国家/地区 */
   country: string;
   /** 国家/地区代码（ISO 3166-1 alpha-2，用于界面文案的多语言映射） */
@@ -226,14 +245,20 @@ export interface ThemeTokens {
   riseColorBlind: string;
   /** 色盲友好模式下的下跌替代色 */
   fallColorBlind: string;
-  /** 页面底色（body 背景与浏览器地址栏 theme-color 的浅色值挂此令牌；深色组与组件库深色一级底同值） */
+  /** 页面底色（body 背景与浏览器地址栏 theme-color 的浅色值挂此令牌；深色组与组件库深色一级底同值；CSS 名 --wf-bg-sunken） */
   bgPage: string;
-  /** 着色底（核心参数实时区底色；替代对组件库主色阶 --primary-1 的浅色依赖） */
+  /** 面板凹面区底色（比卡底暗、比画布亮；CSS 名 --wf-bg-inset，docs/design-language.md §3.2 表面阶） */
+  bgInset: string;
+  /** 平面卡底色（实底卡与表格承载底；CSS 名 --wf-bg-surface，深色按「越高越亮」排在 inset 之上） */
+  bgSurface: string;
+  /** 着色底（核心参数实时区底色；替代对组件库主色阶 --primary-1 的浅色依赖；CSS 名 --wf-bg-tint） */
   tintBg: string;
   /** 图表网格线色（蒙特卡洛图；装饰层，不设文本对比度口径） */
   chartGrid: string;
   /** 图表刻度文字色（与三级文字同值但令牌解耦，便于独立调校） */
   chartTick: string;
+  /** 进度环外沿提亮描边（S11 深色环线抬升：浅色为对偶占位不渲染，显隐由 CSS 承载；CSS 名 --wf-ring-halo） */
+  ringHalo: string;
   /** 顶栏材质底色（半透明；透明度按对比度口径定值，见设计规范 5.3） */
   surfaceTopbarBg: string;
   /** 顶栏材质背景滤镜值（模糊 + 提饱和） */

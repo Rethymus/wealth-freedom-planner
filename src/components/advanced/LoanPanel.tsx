@@ -13,7 +13,7 @@ import { LIMITS } from "../../data/defaults";
 import type { AmortizeRow } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, IntField, PercentField } from "../fields";
-import { useFinanceCall, useIsNarrowViewport, useMoney } from "../hooks";
+import { useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney } from "../hooks";
 
 const { Text } = Typography;
 const { Col } = Grid;
@@ -38,6 +38,10 @@ export default function LoanPanel() {
   const { loading, result } = useFinanceCall(() => calcAmortize(inputs), [inputs]);
   /** 窄视口下结果 Descriptions 切纵向堆叠（标签上/值下），避免长 label 挤压数值列 */
   const isNarrow = useIsNarrowViewport();
+  /** V2 同族延伸（第 1 轮视觉验收复验实测：双栏右栏容器 594px、md:3 内容宽 687px
+   *  溢出裁切「還款總額」数值列，与 ReversePanel V2 同因同款修复）：
+   *  ≥1200 双栏激活时切单列键值行；<768（layout vertical + xs:1）与 768–1199 行为不变 */
+  const isWorkbench = useIsWorkbenchViewport();
 
   const data = result?.ok === true ? result.data : null;
   const error = result && !result.ok ? result.error : null;
@@ -136,7 +140,7 @@ export default function LoanPanel() {
             size="small"
             style={{ marginTop: 8 }}
             layout={isNarrow ? "vertical" : "horizontal"}
-            column={{ xs: 1, md: 3 }}
+            column={isWorkbench ? 1 : { xs: 1, md: 3 }}
             data={[
               {
                 label: equalPrincipal ? t("loan.monthlyPaymentFirst") : t("loan.monthlyPaymentFixed"),
@@ -150,7 +154,7 @@ export default function LoanPanel() {
             ]}
           />
           <div style={{ marginTop: 12 }}>
-            {/* D7 滑动提示：置于表格上方（docs/p3-spec.md §6.6）；<670.9 档由样式层放行 */}
+            {/* D7 滑动提示：置于表格上方（docs/p3-spec.md §6.6）；<675.9 档由样式层放行 */}
             <Text type="secondary" className="wf-swipe-hint">{t("common.swipeHint")}</Text>
             <Table
               columns={columns}

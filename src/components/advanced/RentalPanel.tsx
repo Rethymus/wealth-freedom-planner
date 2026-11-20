@@ -23,11 +23,11 @@ import { formatNumber, formatCompactAxis } from "../../services/format";
 import { cnyToDisplay } from "../../services/currency";
 import { LIMITS, MOTION_DURATIONS, resolveThemeTokens } from "../../data/defaults";
 import { CITY_RENT_PARAMS } from "../../data/rentParams";
-import type { CityGroup, CityRentParams } from "../../data/types";
+import type { CityGroup, CityName, CityRentParams } from "../../data/types";
 import type { NumberInputLimit } from "../../data/types";
 import type { RentalBreakdown } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
-import { AmountField, FieldRow, IntField, NumberField, PercentField } from "../fields";
+import { AmountField, FieldRow, FieldTip, IntField, NumberField, PercentField } from "../fields";
 import { useFinanceCall, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text } = Typography;
@@ -210,6 +210,26 @@ const GROUP_LABEL_KEYS: Record<CityGroup, string> = {
   "intl-regional": "tiers.intlRegional",
 };
 
+/** 数据层城市名 → i18n 键的静态映射（禁用模板串拼键；键集与 CityName / 三语资源 city.* 一致，缺键在编译期报错） */
+const CITY_NAME_KEY: Record<CityName, string> = {
+  北京: "city.北京",
+  上海: "city.上海",
+  深圳: "city.深圳",
+  广州: "city.广州",
+  成都: "city.成都",
+  武汉: "city.武汉",
+  东京: "city.东京",
+  纽约: "city.纽约",
+  伦敦: "city.伦敦",
+  新加坡: "city.新加坡",
+  迪拜: "city.迪拜",
+  珠海: "city.珠海",
+  海口: "city.海口",
+  吉隆坡: "city.吉隆坡",
+  桂林: "city.桂林",
+  清迈: "city.清迈",
+};
+
 export default function RentalPanel() {
   const { t } = useTranslation();
   const inputs = useCalculatorStore((s) => s.rentalInputs);
@@ -346,7 +366,7 @@ export default function RentalPanel() {
     const cities = CITY_RENT_PARAMS.filter((c) => c.group === g);
     const examples = cities
       .filter((c) => c.example)
-      .map((c) => t(`city.${c.city}`))
+      .map((c) => t(CITY_NAME_KEY[c.city]))
       .join(t("tiers.exampleJoiner"));
     return { group: g, cities, examples };
   }).filter((g) => g.cities.length > 0);
@@ -358,7 +378,7 @@ export default function RentalPanel() {
     const hi = Math.max(...groupCities.map((c) => c.rentYieldRangePct[1]));
     return { lo: formatNumber(lo, 1), hi: formatNumber(hi, 1) };
   })();
-  const selectedCitiesText = groupCities.map((c) => t(`city.${c.city}`)).join(t("tiers.cityJoiner"));
+  const selectedCitiesText = groupCities.map((c) => t(CITY_NAME_KEY[c.city])).join(t("tiers.cityJoiner"));
   const selectedGroupLabel = group ? t(GROUP_LABEL_KEYS[group]) : null;
   const currencyNote =
     repParams && repParams.currency !== displayCode
@@ -464,11 +484,15 @@ export default function RentalPanel() {
               </div>
               <div className="wf-field-hint">
                 <Text type="secondary">
-                  {t("tiers.representativeNote", { city: t(`city.${repParams.city}`) })}
+                  {t("tiers.representativeNote", { city: t(CITY_NAME_KEY[repParams.city]) })}
                 </Text>
               </div>
+              {/* P5 §5 冗长治理：分级口径注压 ≤1 行 + 全文（2 段拼接键）进 FieldTip */}
               <div className="wf-field-hint">
-                <Text type="secondary">{t("tiers.gradingNote")}</Text>
+                <Text type="secondary">
+                  {t("tiers.gradingNoteShort")}
+                  <FieldTip text={`${t("tiers.gradingNote1")} ${t("tiers.gradingNote2")}`} />
+                </Text>
               </div>
             </>
           ) : null}
@@ -583,6 +607,9 @@ export default function RentalPanel() {
                 label: t("rental.annualNetCashFlow"),
                 value: (
                   <Text bold className="wf-nowrap" style={{ color: semanticPositive ? undefined : semanticFall }}>
+                    {/* T10 = S10 方向冗余编码：净现金流正负前置 ▲/▼ 字形（形状通道独立于颜色通道，
+                        WCAG 1.4.1），字形走 caption 档字号；语义色仍由涨跌令牌承载 */}
+                    <span style={{ fontSize: "var(--wf-text-caption)" }}>{semanticPositive ? "▲" : "▼"}</span>{" "}
                     {money(netCashFlow)}
                   </Text>
                 ),
@@ -618,14 +645,19 @@ export default function RentalPanel() {
                   margin={{ top: 24, right: 16, bottom: 0, left: 0 }}
                   barSize={28}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} vertical={false} />
+                  {/* §6 图表质感：仅水平 1px 实线网格（去虚线），去轴框与刻度短线 */}
+                  <CartesianGrid stroke={themeTokens.chartGrid} vertical={false} />
                   <XAxis
                     dataKey="name"
+                    tickLine={false}
+                    axisLine={false}
                     tick={{ fontSize: 12, fill: themeTokens.chartTick }}
                     interval={0}
                   />
                   <YAxis
                     width={72}
+                    tickLine={false}
+                    axisLine={false}
                     tick={{ fontSize: 12, fill: themeTokens.chartTick }}
                     tickFormatter={(v: number) => formatCompactAxis(v)}
                   />

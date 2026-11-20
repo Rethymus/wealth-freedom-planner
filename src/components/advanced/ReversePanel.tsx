@@ -8,8 +8,8 @@ import { calcReverse } from "../../services/finance";
 import { formatNumber } from "../../services/format";
 import type { ReverseEstimateInput } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
-import { AmountField, FieldRow, PercentField } from "../fields";
-import { useFinanceCall, useIsNarrowViewport, useMoney } from "../hooks";
+import { AmountField, FieldRow, FieldTip, PercentField } from "../fields";
+import { useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney } from "../hooks";
 
 const { Text } = Typography;
 
@@ -52,6 +52,11 @@ export default function ReversePanel() {
   const { loading, result } = useFinanceCall(() => calcReverse(inputs), [inputs]);
   /** 窄视口下结果 Descriptions 切纵向堆叠（标签上/值下），避免长 label 挤压数值列 */
   const isNarrow = useIsNarrowViewport();
+  /** V2（第 1 轮视觉验收 P0）：双栏右栏容器 ~596px，viewport 级 md:3 横排内容宽
+   *  748px 溢出被 tabs 裁切层静默裁掉（「回报杠杆年限 4.8 年」整列不可见）。
+   *  ≥1200 双栏激活时切单列键值行（label|value 逐行纵排，最长 label ~250px 容得下）；
+   *  <768 行为不变（layout vertical + xs:1），768–1199 单列形态容器宽维持 md:3。 */
+  const isWorkbench = useIsWorkbenchViewport();
 
   const data = result?.ok === true ? result.data : null;
   const error = result && !result.ok ? result.error : null;
@@ -125,7 +130,12 @@ export default function ReversePanel() {
       </FieldRow>
 
       <div className="wf-example-bar">
-        <Text type="secondary">{t("reverse.exampleLegend")}</Text>
+        {/* P5 §5 量化口径 ③（每面板 note ≤2）：算例两条口径注（exampleNote / exampleBNote）
+            全文下沉本提示——出处类信息经 tooltip 承载，键零增删 */}
+        <Text type="secondary">
+          {t("reverse.exampleLegend")}
+          <FieldTip text={`${t("reverse.exampleNote")} ${t("reverse.exampleBNote")}`} />
+        </Text>
         {REVERSE_EXAMPLES.map((example) => (
           <Button
             key={example.id}
@@ -151,7 +161,7 @@ export default function ReversePanel() {
           border
           size="small"
           layout={isNarrow ? "vertical" : "horizontal"}
-          column={{ xs: 1, md: 3 }}
+          column={isWorkbench ? 1 : { xs: 1, md: 3 }}
           data={[
             { label: t("reverse.investable"), value: money(data.investableAssets) },
             {
@@ -172,8 +182,7 @@ export default function ReversePanel() {
         />
       ) : null}
       {error ? <Alert type="error" style={{ marginTop: 8 }} content={error} /> : null}
-      <Text type="secondary" className="wf-panel-note">{t("reverse.exampleNote")}</Text>
-      <Text type="secondary" className="wf-panel-note">{t("reverse.exampleBNote")}</Text>
+      {/* P5 §5：口径注保留 1 行（其余两条算例注已下沉算例图例 FieldTip） */}
       <Text type="secondary" className="wf-panel-note">
         {t("reverse.note")}
       </Text>

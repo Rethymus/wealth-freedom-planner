@@ -14,7 +14,7 @@ import { formatNumber } from "../../services/format";
 import { LIMITS, resolveThemeTokens } from "../../data/defaults";
 import { effectiveMonthsDivisor, PENSION_WAGE_SOURCE_NOTE } from "../../data/pensionParams";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
-import { AmountField, FieldRow, IntField, NumberField } from "../fields";
+import { AmountField, FieldRow, FieldTip, IntField, NumberField } from "../fields";
 import { useFinanceCall, useIsNarrowViewport, useMoney } from "../hooks";
 
 const { Text } = Typography;
@@ -112,7 +112,9 @@ export default function PensionPanel() {
         />
         <AmountField
           label={t("pension.avgWage")}
-          tooltip={t("pension.avgWageTooltip")}
+          /* P5 §5 冗长治理：原「来源行」整段（wf-panel-note）删除——数据口径全文并入本字段
+             提示（一句话出处由 tooltip 值内联承载，L4 判据：出处 → 全文 tooltip） */
+          tooltip={`${t("pension.avgWageTooltip")}；${PENSION_WAGE_SOURCE_NOTE}`}
           value={pensionInputs.avgMonthlyWage}
           onChange={(v) => setPensionInputs({ avgMonthlyWage: v })}
           prefix={symbol}
@@ -148,10 +150,7 @@ export default function PensionPanel() {
         {t("pension.monthsResync")}
       </Button>
 
-      {/* 来源行：数据口径简中原样（数据口径不入 i18n 为仓库既有纪律） */}
-      <Text type="secondary" className="wf-panel-note">
-        {t("pension.wageSourceLine", { source: PENSION_WAGE_SOURCE_NOTE })}
-      </Text>
+      {/* P5 §5 冗长治理：来源行（wf-panel-note）删除——全文并入上方 avgWage 字段提示 */}
 
       {/* 运行区：无按钮；防抖计算中在结果区头部显示小型旋转器（模式同 BasicCalculator 输出卡头部） */}
       {loading ? <Spin size={14} /> : null}
@@ -223,11 +222,10 @@ export default function PensionPanel() {
               </Text>
             </div>
           ) : null}
+          {/* P5 §5 冗长治理：coverageHint + resultNote 两段合并 1 行（合并键
+              pension.coverageNote，旧两键删除；估算口径一句话内联） */}
           <Text type="secondary" className="wf-panel-note">
-            {t("pension.coverageHint")}
-          </Text>
-          <Text type="secondary" className="wf-panel-note">
-            {t("pension.resultNote")}
+            {t("pension.coverageNote")}
           </Text>
         </>
       ) : null}

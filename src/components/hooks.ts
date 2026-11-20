@@ -107,6 +107,27 @@ export function useIsCompactViewport(): boolean {
   return isCompact;
 }
 
+/**
+ * 双栏工作台判定（≥ 1200px，与 global.css 工作台网格断点一一对应；V1/V2 修复专用：
+ * 工作台两栏是 400px 定宽左栏与被 1112px 容器封顶的右栏，容器实际宽度小于组件库
+ * viewport 级 md 断点所假设的可用宽度，viewport 级多列 Descriptions 会在栏内溢出被
+ * tabs 裁切层静默裁掉——两栏内的 Descriptions 以本判定切单列键值行）。
+ * 与 useIsNarrowViewport 同构：惰性初始化直读 matchMedia，首帧即得正确值。
+ */
+const WORKBENCH_MEDIA_QUERY = "(min-width: 1200px)";
+
+export function useIsWorkbenchViewport(): boolean {
+  const [isWorkbench, setIsWorkbench] = useState(() => window.matchMedia(WORKBENCH_MEDIA_QUERY).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(WORKBENCH_MEDIA_QUERY);
+    const onChange = (e: MediaQueryListEvent) => setIsWorkbench(e.matches);
+    setIsWorkbench(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return isWorkbench;
+}
+
 /** 图表响应式三档（响应研究 D5）：高度 <640:240 / 640–767:280 / ≥768:320；
  *  YAxis 宽 <640:56（刻度字号 12 保持，跌破可读下限的不再缩）/ 其余 72 */
 export interface ChartMetrics {

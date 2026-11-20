@@ -38,6 +38,7 @@ import type { IndexId, MonteCarloReturnMode } from "../../data/indexSeries";
 import type { MonteCarloOutput, SequenceDirection, SequenceSimOutput, WithdrawalStrategy } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, FieldTip, IntField, NumberField, PathsField, PercentField } from "../fields";
+import { EmptyRulerArt } from "../EmptyRuler";
 import { compactXInterval, useChartMetrics, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text } = Typography;
@@ -138,7 +139,7 @@ export default function MonteCarloPanel() {
 
   // ---------------------------------------------------------------------------
   // P2-F2 序列风险对照（docs/p2-spec.md §3.4）：分析控件为组件本地 state，
-  // 不入 store、不随分享链接携带（口径注 seq.note 明示口径）
+  // 不入 store、不随分享链接携带（口径注 seq.note1/note2 明示口径）
   // ---------------------------------------------------------------------------
   const [seqMode, setSeqMode] = useState<"rolling" | "reorder">("rolling");
   const [seqDirection, setSeqDirection] = useState<SequenceDirection>("withdrawal");
@@ -290,8 +291,19 @@ export default function MonteCarloPanel() {
       ? `${formatNumber((inputs.annualSpend / inputs.currentAssets) * 100, 2)}%`
       : "—";
 
-  /** 序列窗口数（seq.note 的 {{count}}：滚动窗起点数 = 序列长度 − 窗长 + 1） */
+  /** 序列窗口数（seq.note1 的 {{count}}：滚动窗起点数 = 序列长度 − 窗长 + 1） */
   const seqWindowsCount = Math.max(0, seqSeries.length - seqWindowYears + 1);
+
+  /** 序列口径句（P5 冗长治理：两处独立 seriesNote 段落删并，全文下沉 FieldTip 通道——
+   *  出处类信息经「一句话出处 + 全文 tooltip」判据挂序列选择器标签，触发点紧邻目标） */
+  const seriesNoteText = t("mc.seriesNote", {
+    name: t(INDEX_NAME_KEY[seriesId]),
+    firstYear: seqSeriesMeta.firstYear,
+    lastYear: seqSeriesMeta.firstYear + seqSeries.length - 1,
+    count: seqSeries.length,
+    kind: t(INDEX_KIND_KEY[seriesId]),
+    source: seqSeriesMeta.source,
+  });
 
   /** 命运行数值：期末倍数 + 耗尽年标注 */
   const fateValue = (w: FateWindow): string => {
@@ -349,7 +361,8 @@ export default function MonteCarloPanel() {
         {returnMode === "bootstrap" ? (
           <>
             <Text>{t("mc.seriesLabel")}</Text>
-            <FieldTip text={t("mc.seriesTooltip")} />
+            {/* P5 冗长治理：seriesNote 段落全文并入本提示（一句话出处内联由标签与选项名承载） */}
+            <FieldTip text={`${t("mc.seriesTooltip")}；${seriesNoteText}`} />
             <Select
               size="small"
               value={seriesId}
@@ -565,25 +578,18 @@ export default function MonteCarloPanel() {
         />
       </FieldRow>
 
-      {/* 序列口径注（bootstrap 模式）：名称 + 年份区间 + 样本数 + 价格/总回报口径 + 来源
-          （source 为数据层简中原文；English 界面下「本地化模板 + 简中来源」混排属已声明取舍） */}
-      {returnMode === "bootstrap" ? (
-        <Text type="secondary" className="wf-panel-note">
-          {t("mc.seriesNote", {
-            name: t(INDEX_NAME_KEY[seriesId]),
-            firstYear: seqSeriesMeta.firstYear,
-            lastYear: seqSeriesMeta.firstYear + seqSeries.length - 1,
-            count: seqSeries.length,
-            kind: t(INDEX_KIND_KEY[seriesId]),
-            source: seqSeriesMeta.source,
-          })}
-        </Text>
-      ) : null}
+      {/* P5 冗长治理：bootstrap 模式的独立 seriesNote 段落删除——口径全文已并入上方
+          收益序列 FieldTip（出处类信息经 tooltip 承载，面板 note 收敛 ≤2） */}
 
       {/* P2-F2 序列风险对照子区（docs/p2-spec.md §3.4）：策略参数区之后、运行按钮之前；
           独立 seqRunning，不复用 running 状态 */}
       <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--wf-hairline-card, rgba(29,33,41,0.08))" }}>
-        <Text bold>{t("seq.title")}</Text>
+        <Text bold>
+          {t("seq.title")}
+          {/* P5 冗长治理：seq.note 段落全文（2 段拼接键）下沉本提示（确定性与「演示性质」
+              口径随触发点可达）；{{count}} 插值在首段键内承载 */}
+          <FieldTip text={`${t("seq.note1", { count: seqWindowsCount })} ${t("seq.note2")}`} />
+        </Text>
         {/* A8 序列完成播报：绑 seqState 落定帧（运行中内容为空） */}
         <span className="wf-sr-only" aria-live="polite" aria-atomic="true">{seqAria}</span>
         <div className="wf-mc-mode" style={{ marginTop: 8 }}>
@@ -608,8 +614,12 @@ export default function MonteCarloPanel() {
             ]}
           />
           {/* 序列沿用面板既有 seriesId 选择器（同一 store 状态；面板顶层选择器仅在
-              bootstrap 模式可见，此处为序列风险子区的可见入口） */}
-          <Text>{t("mc.seriesLabel")}</Text>
+              bootstrap 模式可见，此处为序列风险子区的可见入口）；P5 冗长治理：
+              seriesNote 全文经本标签 FieldTip 承载（原独立段落删除） */}
+          <Text>
+            {t("mc.seriesLabel")}
+            <FieldTip text={seriesNoteText} />
+          </Text>
           <Select
             size="small"
             value={seriesId}
@@ -618,17 +628,6 @@ export default function MonteCarloPanel() {
             style={{ width: 190 }}
           />
         </div>
-        {/* 序列口径沿用 mc.seriesNote 口径注（docs/p2-spec.md §3.4） */}
-        <Text type="secondary" className="wf-panel-note">
-          {t("mc.seriesNote", {
-            name: t(INDEX_NAME_KEY[seriesId]),
-            firstYear: seqSeriesMeta.firstYear,
-            lastYear: seqSeriesMeta.firstYear + seqSeries.length - 1,
-            count: seqSeries.length,
-            kind: t(INDEX_KIND_KEY[seriesId]),
-            source: seqSeriesMeta.source,
-          })}
-        </Text>
         <FieldRow>
           {seqMode === "rolling" ? (
             <IntField
@@ -673,7 +672,8 @@ export default function MonteCarloPanel() {
         </div>
         {seqError ? <Alert type="error" style={{ marginBottom: 8 }} content={seqError} /> : null}
         {seqState === null ? (
-          <Empty description={t("seq.placeholder")} />
+          /* T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入 */
+          <Empty icon={<EmptyRulerArt size={56} />} description={t("seq.placeholder")} />
         ) : seqState.kind === "rolling" ? (
           <>
             {/* 命运曲线图：最好 / 中位 / 最差三线（C4 双主题令牌 + C5 aria 汇总句） */}
@@ -688,16 +688,21 @@ export default function MonteCarloPanel() {
               >
                 <ResponsiveContainer width="100%" height={chartHeight}>
                   <LineChart data={seqChartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} />
+                    {/* §6 图表质感：仅水平 1px 实线网格，去轴框与刻度短线 */}
+                    <CartesianGrid stroke={themeTokens.chartGrid} vertical={false} />
                     {/* 紧凑档（<640）X 刻度 ≤5：interval 按刻度总数（= 窗长）推导，非紧凑档不干预 */}
                     <XAxis
                       dataKey="year"
                       allowDecimals={false}
+                      tickLine={false}
+                      axisLine={false}
                       tick={{ fontSize: 12, fill: themeTokens.chartTick }}
                       interval={isCompact ? compactXInterval(seqWindowYears) : undefined}
                     />
                     <YAxis
                       width={yAxisWidth}
+                      tickLine={false}
+                      axisLine={false}
                       tick={{ fontSize: 12, fill: themeTokens.chartTick }}
                       tickFormatter={(v: number) => formatCompactAxis(v)}
                     />
@@ -751,9 +756,8 @@ export default function MonteCarloPanel() {
                 },
               ]}
             />
-            <Text type="secondary" className="wf-panel-note">
-              {t("seq.windowsCount", { count: seqState.windows.length, years: seqWindowYears })}
-            </Text>
+            {/* P5 冗长治理：独立窗口数注删除——窗口数并入 seq.note（FieldTip）与
+                seq.chartAria（已有 {{count}} × {{years}} 信息），Descriptions 起点标签已有信息 */}
           </>
         ) : (
           <>
@@ -772,10 +776,8 @@ export default function MonteCarloPanel() {
             />
           </>
         )}
-        {/* 口径注恒显示（确定性口径 + 通胀置 0 + 窗口数演示性质声明） */}
-        <Text type="secondary" className="wf-panel-note">
-          {t("seq.note", { count: seqWindowsCount })}
-        </Text>
+        {/* P5 冗长治理：seq.note 独立段落删除（全文已在子区标题 FieldTip 承载，
+            面板 note 收敛 ≤2——见 §5 判据与 §8 #19） */}
       </div>
 
       <div className="wf-mc-actions">
@@ -840,9 +842,11 @@ export default function MonteCarloPanel() {
               { label: t("mc.withdrawalP95"), value: money(data.withdrawalP95) },
             ]}
           />
-          {/* P2-F1 §2.4 ⑤：策略口径注（单一键承载阈值带 / 余额比例 / 算术锚三段声明） */}
+          {/* P2-F1 §2.4 ⑤ / P5 §5 冗长治理：策略口径压 ≤1 行短句内联，全文（2 段拼接键）
+              进 FieldTip（阈值带 / 余额比例 / 算术锚三段声明全文保留） */}
           <Text type="secondary" className="wf-panel-note">
-            {t("mc.strategyNote")}
+            {t("mc.strategyNoteShort")}
+            <FieldTip text={`${t("mc.strategyNote1")} ${t("mc.strategyNote2")}`} />
           </Text>
           {chartData.length > 0 ? (
             <div
@@ -857,16 +861,21 @@ export default function MonteCarloPanel() {
             >
               <ResponsiveContainer width="100%" height={chartHeight}>
                 <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={themeTokens.chartGrid} />
+                  {/* §6 图表质感：仅水平 1px 实线网格，去轴框与刻度短线 */}
+                  <CartesianGrid stroke={themeTokens.chartGrid} vertical={false} />
                   {/* 紧凑档（<640）X 刻度 ≤5：interval 按刻度总数（= 年数）推导，非紧凑档不干预 */}
                   <XAxis
                     dataKey="year"
                     allowDecimals={false}
+                    tickLine={false}
+                    axisLine={false}
                     tick={{ fontSize: 12, fill: themeTokens.chartTick }}
                     interval={isCompact ? compactXInterval(inputs.years) : undefined}
                   />
                   <YAxis
                     width={yAxisWidth}
+                    tickLine={false}
+                    axisLine={false}
                     tick={{ fontSize: 12, fill: themeTokens.chartTick }}
                     tickFormatter={(v: number) => formatCompactAxis(v)}
                   />
@@ -901,9 +910,11 @@ export default function MonteCarloPanel() {
           ) : null}
         </>
       ) : (
-        /* C6 空态组件化：未运行空态从 Alert 改为 Empty（错误仍用 Alert type="error"） */
+        /* C6 空态组件化：未运行空态从 Alert 改为 Empty（错误仍用 Alert type="error"）；
+           T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入（两态共用） */
         <Empty
           style={{ marginTop: 8 }}
+          icon={<EmptyRulerArt size={56} />}
           description={
             returnMode === "bootstrap" ? t("mc.placeholderBootstrap") : t("mc.placeholder")
           }

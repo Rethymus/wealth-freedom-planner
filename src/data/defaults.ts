@@ -233,12 +233,17 @@ export const THEME: ThemeTokens = {
   // 色盲友好替代色板（蓝/橙）：开启「色盲友好模式」时替换涨跌语义色
   riseColorBlind: "#0072B2",
   fallColorBlind: "#E69F00",
-  // —— 页面底色 / 着色底（body 背景与实时区底色改挂令牌，解除硬编码与组件库色阶依赖） ——
+  // —— 表面阶（body 背景与实时区底色改挂令牌，解除硬编码与组件库色阶依赖；
+  //    CSS 名映射：bgPage→--wf-bg-sunken / bgInset→--wf-bg-inset / bgSurface→--wf-bg-surface / tintBg→--wf-bg-tint） ——
   bgPage: "#f7f8fa",
+  bgInset: "#F2F3F5",
+  bgSurface: "#FFFFFF",
   tintBg: "rgba(74,111,165,0.08)",
   // —— 图表（蒙特卡洛网格线 / 刻度文字，废除组件内硬编码浅色值） ——
   chartGrid: "#E5E6EB",
   chartTick: "#4E5969",
+  // 进度环外沿提亮描边（S11）：浅色对偶占位不渲染，显隐由 CSS [data-theme] 分支承载
+  ringHalo: "#4A6FA5",
   // —— 三层表面材质（半透明底色 + 背景滤镜；透明度按对比度口径定值，见设计规范 5.3，不是自由参数） ——
   surfaceTopbarBg: "rgba(74,111,165,0.95)",
   surfaceTopbarBlur: "saturate(1.6) blur(16px)",
@@ -283,12 +288,17 @@ export const THEME_DARK: ThemeTokens = {
   // 色盲友好替代色板深色值（涨实测 6.88:1 / 最不利 5.34:1；跌 7.05:1 / 5.47:1，与浅色同值）
   riseColorBlind: "#56B4E9",
   fallColorBlind: "#E69F00",
-  // —— 页面底色 / 着色底（页面底与组件库深色一级底同值，实底表面层叠口径一致） ——
+  // —— 表面阶（深色「越高越亮」：sunken 最暗画布 < inset 凹面 < surface 平面卡底 < 材质浮层；
+  //    页面底与组件库深色一级底同值，实底表面层叠口径一致） ——
   bgPage: "#17171A",
+  bgInset: "#1C1C1F",
+  bgSurface: "#232324",
   tintBg: "rgba(123,159,209,0.12)", // 合成底：正文 11.77:1、涨色 5.59:1、跌色 5.71:1
   // —— 图表（网格线为装饰层，不设 4.5 口径；刻度文字对合成卡底 5.28:1） ——
   chartGrid: "#3D3F46",
   chartTick: "#8F95A0",
+  // 进度环外沿提亮描边（S11 深色环线抬升）：#7B9FD1 同族提亮；装饰性描边与网格同族，不设 4.5 口径
+  ringHalo: "#A6C0E4",
   // —— 三层表面材质（模糊半径两主题一致；底色 / 发丝线按深色调校） ——
   surfaceTopbarBg: "rgba(23,23,26,0.88)",
   surfaceTopbarBlur: "saturate(1.6) blur(16px)",
