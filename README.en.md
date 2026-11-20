@@ -48,6 +48,18 @@ The advanced estimates section uses a **segmented-control + per-group tabs** nav
 
 <div align="center">
 
+### Desktop two-column workbench · Reading on the left, tools on the right
+
+![Desktop two-column workbench](docs/assets/en/demo-workbench.png)
+
+*Desktop two-column layout (active at ≥1200 px viewports; single column below the breakpoint): the left column keeps the "480 Rule" baseline output card — the large critical value, the detailed breakdown and the monthly-expense-sensitivity entry (the ruler art at the upper right is the empty state before assets are filled in; it becomes the progress ring afterwards); the right column hosts "Advanced estimates and formula rationale", navigated by a segmented control (Life planning / Housing & loans / Analysis tools) plus in-group tabs, currently on Reverse estimation with its worked examples and the ¥1,220,000 / ¥2,541.67 / 4.8 years result rows*
+
+### Workbench flow · Two-column linkage and state kept across panels
+
+![Workbench flow demo](docs/assets/en/demo-workbench-flow.gif)
+
+*Typing in the left column (monthly expense 4,200 → existing assets): the large critical value settles at ¥2,216,000 with an asymptotic roll of ~360 ms and the breakdown updates to ¥4,200 × 480 + ¥200,000; once assets are filled in, the progress ring lights up annotated "existing assets are about 112.8% of the reference line"; switching the right panel to Monte Carlo keeps the previously run result (depletion probability 94.4% with the 50-path chart) intact — the two columns scroll independently and no state is lost across panel switches*
+
 ### Basic calculation · Live recomputation while typing
 
 ![Basic calculation demo](docs/assets/en/demo-basic.gif)
@@ -137,6 +149,8 @@ The advanced estimates section uses a **segmented-control + per-group tabs** nav
 > The full screen-by-screen set — including the mobile Monte Carlo chart (`demo-mobile-montecarlo.png`) and the interface-language captures (`demo-lang-*.png`, Chinese UI) — lives in `docs/assets/`; this folder (`docs/assets/en/`) mirrors the application in English.
 
 ## ✨ Features
+
+The interface follows a written design language — “Quiet Ledger” (静水账房, [docs/design-language.md](docs/design-language.md)): numerals set in tabular figures, hierarchy carried by hairline rules, the progress ring doubling as a gauge scale, and exactly one celebratory motion — a single pulse when the 100% mark is reached.
 
 | Feature | Status | Notes |
 | --- | :-: | --- |
