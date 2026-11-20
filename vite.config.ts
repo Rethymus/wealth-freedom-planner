@@ -100,12 +100,39 @@ export default defineConfig({
       },
       injectManifest: {
         injectionPoint: "self.__WP_MANIFEST",
-        globPatterns: ["**/*.{js,css,html,wasm,png,webmanifest}"],
+        // png/webmanifest 不入 glob：插件对自产 manifest/icons 条目不去重（验收 T1-2 实证），
+        // glob 排除后由插件侧自动注入，预缓存清单 12 条目唯一、sw.js 更小
+        globPatterns: ["**/*.{js,css,html,wasm}"],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
     }),
   ],
   build: {
+    // Terser 压缩（尺寸门禁杠杆）：esbuild → terser 对本仓库 JS 产物实测再省
+    // 约 3–6%（toplevel + 谨慎的代码变换），覆盖高级区 Tabs 导航新增的体积；
+    // terser 为 devDependency，不进入运行时 bundle。
+    minify: "terser",
+    // lightningcss 压缩 CSS（尺寸门禁杠杆之二）：对组件库全量样式表
+    // （arco.css）实测比默认 esbuild 再省数个百分点；devDependency。
+    cssMinify: "lightningcss",
+    // 现代浏览器目标：lightningcss 据此决定特性降级与回退生成量（PWA 产物
+    // 本身要求现代浏览器，SW/manifest 即门槛），较默认目标再省少量字节
+    cssTarget: ["chrome100", "firefox100", "safari15", "edge100"],
+    terserOptions: {
+      compress: {
+        passes: 3,
+        toplevel: true,
+        // unsafe：标准 ES 产物（React/组件库无元编程）下的等价变换优化，
+        // 由构建后浏览器全功能验证兜底
+        unsafe: true,
+      },
+      mangle: {
+        toplevel: true,
+      },
+      format: {
+        comments: false,
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks: {

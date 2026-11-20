@@ -25,6 +25,9 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@vitejs/plugin-react": "^4.3.4",
+    "lightningcss": "^1.33.0",
+    "sharp": "^0.35.5",
+    "terser": "^5.51.3",
     "typescript": "^5",
     "vite": "^6",
     "vite-plugin-pwa": "^2.0.0"
