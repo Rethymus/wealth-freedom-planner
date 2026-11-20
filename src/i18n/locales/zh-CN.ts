@@ -104,7 +104,11 @@ const zhCN = {
     ariaLabel: "自由刻度进度环：已有资产约为参考线的 {{pct}}%",
   },
   advanced: {
-    cardTitle: "高级估算与公式原理（同一时间至多展开一项）",
+    cardTitle: "高级估算与公式原理",
+    groupPlan: "人生规划",
+    groupHousing: "购房金融",
+    groupAnalysis: "分析工具",
+    tabsKbdHint: "估算面板：左右方向键切换标签",
     reverseTitle: "反向估算",
     reverseDesc: "已有资产能支撑每月花多少",
     loanTitle: "贷款计算",

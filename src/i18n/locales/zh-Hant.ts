@@ -96,7 +96,11 @@ const zhHant = {
     "ariaLabel": "自由刻度進度環：已有資產約為參考線的 {{pct}}%"
   },
   "advanced": {
-    "cardTitle": "高級估算與公式原理（同一時間至多展開一項）",
+    "cardTitle": "高級估算與公式原理",
+    "groupPlan": "人生規劃",
+    "groupHousing": "購房金融",
+    "groupAnalysis": "分析工具",
+    "tabsKbdHint": "估算面板：左右方向鍵切換標籤",
     "reverseTitle": "反向估算",
     "reverseDesc": "已有資產能支撐每月花多少",
     "loanTitle": "貸款計算",

@@ -121,7 +121,11 @@ const en = {
     ariaLabel: "Freedom gauge: existing assets are about {{pct}}% of the reference line",
   },
   advanced: {
-    cardTitle: "Advanced estimates and formula rationale (at most one panel expanded at a time)",
+    cardTitle: "Advanced estimates and formula rationale",
+    groupPlan: "Life planning",
+    groupHousing: "Housing & loans",
+    groupAnalysis: "Analysis tools",
+    tabsKbdHint: "Estimate panels: use left/right arrow keys to switch tabs",
     reverseTitle: "Reverse estimation",
     reverseDesc: "How much your existing assets can support per month",
     loanTitle: "Loan calculator",

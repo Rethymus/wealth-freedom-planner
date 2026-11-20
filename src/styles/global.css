@@ -423,6 +423,27 @@ body {
   }
 }
 
+/* ⑧ 高级面板分段控件 + 组内标签页导航（方案 B 重构，导航研究复审）：
+   分段行（Radio button 型）与内容标签间的节奏；Tabs 外层为键盘焦点停靠
+   （tabIndex=0，←/→ 漫游），停靠态套用全局焦点环令牌 */
+.wf-adv-seg {
+  margin-bottom: 12px;
+}
+
+.wf-adv-tabs-wrap {
+  border-radius: var(--wf-radius-sm);
+}
+
+.wf-adv-tabs-wrap:focus-visible {
+  outline: none;
+  box-shadow: var(--wf-focus-ring);
+}
+
+.wf-adv-tabs {
+  /* 标签行与内容区的间距收敛（组件库默认较大） */
+  margin-top: 4px;
+}
+
 /* A1（p4-spec §7）：跳过链接——首 Tab 停留点（Layout 首子元素），获焦前视觉隐藏、
    获焦后固定位立即浮现（不做位移过渡：焦点态必须即时可测可见）；点击跳 #wf-main
    （焦点经 Content tabIndex={-1} 落主内容）。获焦时叠 --wf-focus-ring（WCAG 2.4.7
