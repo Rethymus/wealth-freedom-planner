@@ -78,7 +78,7 @@ export default defineConfig({
         short_name: "财自规划",
         // 清单单语 zh-CN；三语由应用内 i18next 承载（research-pwa §2.2）
         lang: "zh-CN",
-        description: "纯前端本地计算的财富自由个性化规划工具（480 法则基线 + 高级估算）",
+        description: "财富自由个性化规划工具（480 法则，本地计算）",
         // start_url / scope 由插件按 base 生成为 "./"（实测正确，不手写）
         display: "standalone",
         theme_color: "#4A6FA5",
