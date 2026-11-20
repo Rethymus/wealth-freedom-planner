@@ -1,5 +1,6 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
+import { VitePWA } from "vite-plugin-pwa";
 
 // base: "./" —— GitHub Pages 项目页（/repo-name/ 子路径）使用相对路径加载资源。
 // manualChunks（docs/p2-spec.md §10.3 辅助项）：vendor（组件库 / 图表库 / 状态与 i18n）
@@ -34,9 +35,76 @@ const arcoLayoutSiderStub: Plugin = {
   },
 };
 
+// P4 ① PWA（docs/p4-spec.md §6.6 / research-pwa §2.6）：该系统主屏图标不读清单
+// icons、读专用链接标签，缺失回落「安装时页面的截图」。其 rel 值为该系统机制
+// 标识符且含来源品牌词，命中命名门禁禁词表（无豁免子串），故不写入交付物
+// index.html 源文件，改由此处在构建期注入——机制标识符仅以代码形式存在于
+// 构建配置（design-spec 豁免条款「属性值属实现层必需标识符」）。href 复用
+// 192 图标文件不单出 180（源文档明示该系统自行缩放，192 通常已足够）。
+const platformIconLink: Plugin = {
+  name: "pwa-platform-icon-link",
+  transformIndexHtml() {
+    return [
+      {
+        tag: "link",
+        attrs: { rel: "apple-touch-icon", href: "./icons/icon-192.png" },
+      },
+    ];
+  },
+};
+
 export default defineConfig({
   base: "./",
-  plugins: [react(), arcoLayoutSiderStub],
+  plugins: [
+    react(),
+    arcoLayoutSiderStub,
+    platformIconLink,
+    // P4 ① PWA（docs/p4-spec.md §6.1 / research-pwa 采纳清单 A2）：
+    // injectManifest 手写 SW（src/sw.ts，零 workbox 运行时）+ script 注入注册
+    // （省 5.7KB 注册运行时 chunk）+ autoUpdate 静默换版（无更新提示 UI，§6.4）。
+    // base 维持 "./"：研究沙箱实测相对 base 下清单链接 / start_url / scope /
+    // 预缓存条目四类产物全部正确。wasm 必须显式进 glob（默认不含 .wasm）；
+    // maximumFileSizeToCacheInBytes 为防御性放大，消除未来 wasm 增长的构建阻断点。
+    VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+      registerType: "autoUpdate",
+      injectRegister: "script",
+      manifest: {
+        // 显式安装身份：不受 start_url 形态漂移影响（research-pwa §2.3）
+        id: "/wealth-freedom-planner/",
+        name: "财富自由规划工具",
+        short_name: "财自规划",
+        // 清单单语 zh-CN；三语由应用内 i18next 承载（research-pwa §2.2）
+        lang: "zh-CN",
+        description: "纯前端本地计算的财富自由个性化规划工具（480 法则基线 + 高级估算）",
+        // start_url / scope 由插件按 base 生成为 "./"（实测正确，不手写）
+        display: "standalone",
+        theme_color: "#4A6FA5",
+        background_color: "#F7F8FA",
+        icons: [
+          {
+            src: "icons/icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any maskable",
+          },
+          {
+            src: "icons/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any maskable",
+          },
+        ],
+      },
+      injectManifest: {
+        injectionPoint: "self.__WP_MANIFEST",
+        globPatterns: ["**/*.{js,css,html,wasm,png,webmanifest}"],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
+    }),
+  ],
   build: {
     rollupOptions: {
       output: {
