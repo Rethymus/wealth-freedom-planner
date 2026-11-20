@@ -470,7 +470,7 @@ function BreakdownTable(props: {
    *  628px 会被 tabs 裁切层 overflow:hidden 静默裁掉数值列（数值在 DOM 中但不可达）。
    *  ≥1200 双栏激活时切单列键值行（<768 纵排同款布局，375 档验收已验证可用）；
    *  768–1199 单列形态容器宽（≥656px > 628px）维持 md:2 双列不变。
-   *  配套 tableLayout fixed：左栏 349px 下最宽 label（合计行 182px）+ 金额值列超过容器，
+   *  配套 tableLayout fixed：左栏 349px 下最宽 label + 金额值列超过容器，
    *  auto 布局会按组件库 label width:1px 的偏好把 label 列压塌成逐字竖排（白空间换行
    *  规则放开了 min-content）；fixed 布局使 label/值两列均分容器，label 至多折两行、
    *  数值列恒完整。<768 / 768–1199 维持 auto（既有验收基准布局不动）。 */

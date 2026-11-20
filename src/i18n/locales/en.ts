@@ -54,7 +54,7 @@ const en = {
     rowChildren: "Children reserve ({{children}} children)",
     rowHealth: "Health reserve",
     rowMajor: "Major investment",
-    rowTotal: "Total (= financial freedom reference line)",
+    rowTotal: "Total (reference line)",
     multTag: "covers {{n}} months of spending",
     multTagAria: "Multiplier reached {{mult}}: about {{n}} months of monthly spending covered",
     breakdownTitle: "Detailed breakdown",
@@ -287,7 +287,7 @@ const en = {
     syncButton: "Sync reserves and return assumptions with basic mode",
     investable: "Investable assets",
     sustainableMonthly: "Safe monthly spending",
-    leverageYears: "Return leverage years (multiplier ÷ 100)",
+    leverageYears: "Return leverage years",
     leverageTooltip:
       "Definition: 12 ÷ real return rate (in percentage points) = 480 multiplier ÷ 100; it measures how strongly the return rate leverages asset longevity. It does not mean “the assets will only last N years” — if you withdraw at the critical-principal level (i.e. the “safe monthly spending” amount), actual returns exactly cover all spending and the assets never run out.",
     note: "“Safe monthly spending” = investable assets × real return rate ÷ 12 (perpetual withdrawal basis: only returns are spent, principal is untouched); “Return leverage years” = 12 ÷ real return rate (= 480 multiplier ÷ 100), not the years until the assets run out — at the withdrawal level above, the assets never run out.",

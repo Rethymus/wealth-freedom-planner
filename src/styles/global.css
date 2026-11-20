@@ -1177,12 +1177,17 @@ textarea,
   }
 }
 
-/* D9 吸附态紧凑：<768 输出卡吸附时隐藏明细区（含已展开态），pinned 仅留大数字 + 两条 summary 行 + 两个开关 */
+/* D9 吸附态紧凑 + P5.1 V1 内容减法：<768 输出卡吸附时收为纯读数卡——大数字 +
+   进度说明常驻；两行长解释句（.wf-output-line ×2，含乘数段位 Tag 行）与明细/
+   敏感性展开开关及其内容区一并隐藏（吸附中内容区本就被隐藏，开关是无反馈死控件，
+   随本修订收除，1185 穿透豁免随之失去对象）；回滚顶部未吸附态即恢复全量交互。
+   调参时表单有效区恢复近全屏（一屏一重点 / 反冗长原则的吸附态兑现，验收 V1） */
 @media (max-width: 767.9px) {
-  .wf-output-card.wf-is-stuck .wf-output-breakdown { display: none; }
+  .wf-output-card.wf-is-stuck .wf-output-line,
+  .wf-output-card.wf-is-stuck .wf-breakdown-toggle,
+  .wf-output-card.wf-is-stuck .wf-sens-toggle,
+  .wf-output-card.wf-is-stuck .wf-output-breakdown,
   .wf-output-card.wf-is-stuck .wf-sens-block { display: none; }
-  /* 吸附态点击穿透的交互豁免同步扩一项（既有 .wf-sens-toggle 同口径） */
-  .wf-output-card.wf-is-stuck .wf-breakdown-toggle { pointer-events: auto; }
 }
 .wf-breakdown-toggle { margin-top: 8px; }
 

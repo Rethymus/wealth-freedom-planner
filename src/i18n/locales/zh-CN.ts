@@ -49,7 +49,7 @@ const zhCN = {
     rowChildren: "育儿预留（{{children}} 孩）",
     rowHealth: "健康预留",
     rowMajor: "重大投入",
-    rowTotal: "合计（财富自由参考线）",
+    rowTotal: "合计（参考线）",
     multTag: "省下 {{n}} 个月的量",
     multTagAria: "乘数达到 {{mult}}：相当于省下 {{n}} 个月的月开销",
     breakdownTitle: "构成明细",
@@ -255,7 +255,7 @@ const zhCN = {
     syncButton: "与基础模式同步预留与回报假设",
     investable: "可投资资产",
     sustainableMonthly: "每月可放心花费",
-    leverageYears: "回报杠杆年限（乘数 ÷ 100）",
+    leverageYears: "回报杠杆年限",
     leverageTooltip:
       "契约口径：12 ÷ 实际回报率（百分点）= 480 乘数 ÷ 100，衡量回报率对资产寿命的杠杆；并非「资产只够花 N 年」——按临界值本金水平提取（即「每月可放心花费」），实际收益恰好覆盖全部支出，资产永不耗尽。",
     note: "「每月可放心花费」= 可投资资产 × 实际回报率 ÷ 12（永续提取口径：只动用收益、不动本金）；「回报杠杆年限」= 12 ÷ 实际回报率（= 480 乘数 ÷ 100），并非资产耗尽年限——在上述提取水平下资产永不耗尽。",

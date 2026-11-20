@@ -480,3 +480,15 @@ grep -rnE 'wf-text-(xs|sm|md|lg|num)|wf-bg-page|wf-tint-bg' src/ --include='*.cs
 5. **验收清单条数**：§8 标题 21→22 条（#22 二轮新增）。
 
 未执行项（如实声明）：§8 视觉目测类验收（#1/#4-#21 中需交互与双主题目测的条目）、迁移后孤儿 0 行判定、§13 purge 本体施工——本轮只修订两份文档不动 src/，均列为实施者收口时执行；本会话实跑的验证覆盖文档断言与静态核对（grep/awk/sed/git diff/node 扫描/完整 build+check-size），其中 build 与 check-size 为本轮实跑，非转抄。
+
+---
+
+## P5.1 残留收口（视觉验收第 3 轮残留 6 项 + 部署核验，主会话直接实施）
+
+1. **V1 · 移动端吸附卡内容减法（medium）** — D9 吸附态扩为纯读数卡：hero + 进度说明常驻，两行长解释句（.wf-output-line ×2，含乘数段位 Tag 行）与明细/敏感性展开开关及其内容区吸附中一并隐藏。附带消解既有缺陷：内容区被 1182/1183 隐藏后开关仍可点击（1185 穿透豁免），是无反馈死控件——随本修订收除开关、删除死豁免。改动：global.css D9 块改写（:1180 区）。证据：吸附态四规则实读（.wf-output-breakdown/.wf-sens-block 隐藏 + .wf-breakdown-toggle 豁免并存）。
+2. **V2 · 合计行折行（low）** — label 缩短「合计（财富自由参考线）」→「合计（参考线）」，÷100 等完整口径由卡头标题承载；三语同步（zh-Hant 逐词字形、en 对应缩短）。改动：zh-CN.ts:52 / zh-Hant.ts:46 / en.ts:57；BreakdownTable 注释的「合计行 182px」失效引用同步删除（BasicCalculator.tsx:472 区）。
+3. **V5 · 688 档表头折行（low）** — reverse.leverageYears 去括注「（乘数 ÷ 100）」，推导完整保留于 leverageTooltip（值悬停）与 note（面板注）双通道，信息零损失。改动：zh-CN.ts:258 / zh-Hant.ts:231 / en.ts:290；渲染点 ReversePanel.tsx:174 实证有 Tooltip 兜底。
+4. **V3 · 宪法层幽灵键（low）** — design-language.md §3.2「实底四档」更正为「三档 + 材质浮层」：--wf-bg-overlay 全仓 grep 零定义零消费（评审员实证 + 主会话复核），浮层由 --wf-surface-overlay-* 材质层承担；走 §5.1 修订记录 + §5.5 版本记录。
+5. **V4 · 行号引用（low）** — 当前 design-language.md §2 头注已写 hooks.ts:162，与 hooks.ts:162（usePrefersReducedMotion 定义行）一致——判定评审残留为中间态，已解决，无需改动。
+6. **V6 · 动作权重不对称（low）** — 移动端 dock 主按钮 / 桌面次按钮的断点差登记为有意例外（design-language §5 新增第 6 条「例外登记」条款），非缺陷。
+7. **部署核验** — workflow 内三连 curl 退出码 35 为 Pages 传播期瞬时 TLS 故障：主会话复核三资源 200 + gh-pages 182ac23（Pages 构建 2026-11-20 23:28:19 UTC）确认部署落地；哈希级比对因本机到 github.io 网络抖动暂缓，不阻塞。
