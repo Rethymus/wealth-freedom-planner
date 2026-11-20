@@ -118,6 +118,8 @@ interface CalculatorState {
   setBaselineInputs: (patch: Partial<BaselineInput>) => void;
   /** 应用画像预设：以 presets.ts 的 5 个基础字段整体覆盖 baselineInputs 对应键 */
   applyPreset: (id: PresetId) => void;
+  /** 取消画像：5 个画像覆盖字段整体回落 BASELINE_DEFAULTS，activePresetId 回 "custom"。 */
+  clearPreset: () => void;
   setProgressInputs: (patch: Partial<ProgressInputs>) => void;
   setReverseInputs: (patch: Partial<ReverseEstimateInput>) => void;
   setLoanInputs: (patch: Partial<AmortizeInput>) => void;
@@ -191,8 +193,33 @@ export const useCalculatorStore = create<CalculatorState>()((set, get) => ({
       return {
         baselineInputs: { ...state.baselineInputs, ...profile.baseline },
         activePresetId: id,
+        // 外部整体写入 bump resetEpoch：强制重挂载受 Arco InputNumber 受控回写缺陷
+        // 影响的字段（用户编辑后内部文本不再跟随受控值）——p4-spec §14.10 备案落实
+        // （验收 T2-1 复现：预设应用后字段显示冻结于末次键入值）
+        resetEpoch: state.resetEpoch + 1,
       };
     }),
+  /** 取消画像：5 个画像覆盖字段整体回落 BASELINE_DEFAULTS，activePresetId 回 "custom"。
+   *  nominalReturnPct / inflationPct 不在画像覆盖范围，保持当前值不动；progressInputs
+   *  等其他切片不动。与 applyPreset 同为整体写入语义：预设写入是覆盖，取消就是回退。
+   *  回落默认值（而非保留当前值）的理由：①「自定义」Tag 与数值真实一致（状态标签诚实）；
+   *  ② 与 resetAll 的基础字段终态、新访客默认态三者同值（终态可预期）；
+   *  ③ 画像写入 = 5 字段整体覆盖 → 取消 = 5 字段整体回退（语义对称）。
+   *  bump resetEpoch（p4-spec §14.10 备案一行，验收 T2-1 复现后落实）：外部整体写入
+   *  需重挂载字段以刷新组件库 InputNumber 编辑后不跟随受控值的内部态。 */
+  clearPreset: () =>
+    set((state) => ({
+      baselineInputs: {
+        ...state.baselineInputs,
+        monthlyExpense: BASELINE_DEFAULTS.monthlyExpense,
+        childCount: BASELINE_DEFAULTS.childCount,
+        costPerChild: BASELINE_DEFAULTS.costPerChild,
+        healthReserve: BASELINE_DEFAULTS.healthReserve,
+        majorInvestment: BASELINE_DEFAULTS.majorInvestment,
+      },
+      activePresetId: "custom" as const,
+      resetEpoch: state.resetEpoch + 1,
+    })),
   setProgressInputs: (patch) =>
     set((state) => ({ progressInputs: { ...state.progressInputs, ...patch } })),
   setReverseInputs: (patch) =>

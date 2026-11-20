@@ -18,7 +18,9 @@ const en = {
     wasmFailed:
       "Failed to load the calculation core: {{message}}. The page remains browsable, but all computed results are unavailable for now; please refresh the page and try again, or make sure the wasm static assets were deployed intact.",
     currencyNotice:
-      "Default parameters are given in CNY terms; after switching currencies, please adjust the values yourself. All formulas are currency-agnostic (multiplier × monthly expense holds in any currency).",
+      "Amounts are now shown converted at 1 CNY = {{rate}} {{code}} (rate as of: {{time}}); enter inputs in the display currency and they are written back to CNY automatically; all formulas are currency-agnostic.",
+    currencyFallback:
+      "Exchange rates are unavailable: only the currency symbol has switched and values remain in CNY terms; you can retry fetching later in the “Tax estimation and multi-currency check” panel.",
     footerDisclaimer:
       "This tool is based on public statistics and simplified assumptions and is for planning reference only; it does not constitute investment advice.",
     footerPrivacy:
@@ -95,6 +97,8 @@ const en = {
     tagTitle: "Spending mix ({{total}} yuan/month in total)",
     note: "Compiled for tier-1 city terms; edit freely",
     appliedHint: "Applied the “{{name}}” profile parameters",
+    cancelHint: "Click again to cancel this profile; basic parameters will fall back to their defaults",
+    cancelled: "Cancelled the “{{name}}” profile; basic parameters fell back to their defaults",
     names: {
       singleRenter: "Single renter",
       coupleNoKids: "Couple without kids",
@@ -117,24 +121,25 @@ const en = {
     ariaLabel: "Freedom gauge: existing assets are about {{pct}}% of the reference line",
   },
   advanced: {
-    cardTitle: "Advanced estimates and formula rationale (expand as needed; all collapsed by default)",
-    reverseHeader:
-      "① Reverse estimation — how much your existing assets can support per month",
-    loanHeader:
-      "② Loan calculator — monthly payment, total interest and amortization schedule",
-    rentalHeader:
-      "③ Buy and rent out — annual net cash flow and payback period",
-    mcHeader:
-      "④ Monte Carlo simulation — depletion probability and wealth distribution",
-    taxHeader: "⑤ Tax estimation and multi-currency check",
-    accumulationHeader:
-      "⑥ Work-years simulation — how many years to save up to your goal on a salary",
-    pensionHeader:
-      "⑦ Public pension — how much you can draw monthly after retirement, and how much it lowers the reference line",
-    scenarioHeader:
-      "⑧ Multi-scenario comparison — save the current parameters under a name and compare key metrics side by side",
-    insightsHeader:
-      "⑨ Formula rationale and data sources — where 480 comes from: derivation, the assumption chain and data provenance",
+    cardTitle: "Advanced estimates and formula rationale (at most one panel expanded at a time)",
+    reverseTitle: "Reverse estimation",
+    reverseDesc: "How much your existing assets can support per month",
+    loanTitle: "Loan calculator",
+    loanDesc: "Monthly payment, total interest and amortization schedule",
+    rentalTitle: "Buy and rent out",
+    rentalDesc: "Annual net cash flow and payback period",
+    mcTitle: "Monte Carlo simulation",
+    mcDesc: "Depletion probability and wealth distribution",
+    taxTitle: "Tax estimation",
+    taxDesc: "Multi-currency basis check",
+    accumulationTitle: "Work-years simulation",
+    accumulationDesc: "How many years to reach your goal on a salary",
+    pensionTitle: "Public pension",
+    pensionDesc: "How much you can draw monthly after retirement",
+    scenarioTitle: "Multi-scenario comparison",
+    scenarioDesc: "Save named parameters and compare side by side",
+    insightsTitle: "Formula rationale",
+    insightsDesc: "Where 480 comes from: derivation, assumptions and sources",
   },
   insights: {
     formulaTitle: "Formula derivation",
@@ -509,6 +514,7 @@ const en = {
       "Threshold band: the literature's optimal parameters are ±20% / ±10% with no cuts in the final 15 years (tighter thresholds or larger cuts do not further improve success rates). Percentage of balance: the balance is amortized in real terms out to the planning horizon, so depletion is ruled out by construction — purchasing-power risk shows up in the final-year withdrawal percentiles. Arithmetic anchor: with assets down 25%, the same withdrawal amount pushes the withdrawal rate from 4.00% up to 5.33% — this rebound of the withdrawal rate after bad years is at the core of how sequence risk transmits.",
     chartAria:
       "Monte Carlo simulation chart: {{paths}} paths simulated over {{years}} years, depletion probability {{prob}}%, median terminal value {{median}}",
+    doneAria: "Simulation finished: depletion probability {{prob}}, median terminal value {{median}}",
   },
   accumulation: {
     currentAssets: "Current assets",
@@ -574,11 +580,13 @@ const en = {
     note: "Deterministic simulation: returns are taken year by year from the selected series, inflation is set to 0 (nominal = real), and no random sampling is involved. Rolling-start mode: the sample contains only {{count}} rolling windows, so the conclusions are illustrative rather than statistically guaranteed; three-order mode: ascending / descending merely reorders the returns (the geometric mean is unchanged), and every terminal-value difference comes from the ordering itself. Series provenance follows the data-layer annotations.",
     chartAria:
       "Sequence-risk fate curves: the best, median and worst year-by-year asset paths, {{count}} start-year windows × {{years}} years",
+    doneAria: "Sequence comparison finished: best {{best}}, median {{median}}, worst {{worst}}",
     placeholder:
       "Pick a series and a basis, then click “Run comparison”: real historical annual returns are used in a deterministic simulation, showing how different starting points (or orderings) over the same stretch of history lead to different terminal fates.",
   },
   scenario: {
     namePlaceholder: "Scenario name, e.g. Frugal edition",
+    nameLabel: "Scenario name",
     save: "Save current parameters",
     saved: "Saved scenario “{{name}}”",
     saveFailedFull: "The scenario library is full (limit {{max}}); please delete scenarios you no longer need first",
@@ -600,6 +608,10 @@ const en = {
     metricNetIncome: "After-tax annual income",
     metricSustainable: "Sustainable monthly spending",
     metricSaving: "Monthly saving (salary basis)",
+    export: "Export image",
+    exportNote: "Computed locally · Not investment advice",
+    exportDone: "Comparison image exported",
+    exportFailed: "Failed to export the comparison image",
   },
   tax: {
     countryLabel: "Country / region",
@@ -690,10 +702,15 @@ const en = {
       "Encodes all of your current business inputs (UI preferences such as theme / language / currency excluded) into the link; anyone who opens the pasted link gets the exact same parameter set.",
     copied: "Share link copied to the clipboard",
     copyFailed:
-      "Copy failed: please copy the full link from the address bar manually (the part including #s=)",
+      "Copy failed: please update the app or browser and try again",
     restored: "All business inputs restored from the share link",
     restoreIgnored:
       "The share link content could not be recognized (ignored; default parameters are shown)",
+  },
+  a11y: {
+    skipToContent: "Skip to main content",
+    resultAnnouncement: "Reference line updated: {{value}}",
+    resultAnnouncementAssets: "Existing assets are about {{pct}}% of the reference line",
   },
 };
 

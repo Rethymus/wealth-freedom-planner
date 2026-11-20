@@ -49,6 +49,14 @@ export function formatWan(value: number, digits = 1): string {
   return `${formatNumber(toWan(value), digits)} 万`;
 }
 
+/** 图表轴紧凑数值（p4-spec §3.5）：按 UI 语言走 Intl compact（zh → 万进制「16万」；
+ *  en → 「160K」），与币种无关，替换既有 `${Math.round(v / 10000)}${t("units.wan")}`
+ *  写法——「万」是 CNY 量词，换算后失义；换算后的数值以紧凑口径成轴。 */
+export function formatCompactAxis(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  return new Intl.NumberFormat(uiLocale(), { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
 /**
  * 480 乘数展示：整数直接显示，非整数最多保留 2 位小数。
  * 与计算核心一致（baseline 以两位小数乘数计算临界值），保证「月开销 × 乘数」可复算临界值。

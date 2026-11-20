@@ -19,14 +19,15 @@ import {
 } from "recharts";
 import { calcBaseline } from "../services/finance";
 import { buildShareUrl, copyShareUrl, encodeShareState } from "../services/share";
-import { currencySymbol, formatMoney, formatMultiplier, formatNumber, formatPercent, toWan } from "../services/format";
+import { formatMultiplier, formatNumber, formatPercent, formatCompactAxis, toWan } from "../services/format";
+import { cnyToDisplay } from "../services/currency";
 import { BASELINE_DEFAULTS, MOTION_DURATIONS, resolveThemeTokens } from "../data/defaults";
 import { PRESET_PROFILES } from "../data/presets";
 import type { PresetBreakdown, PresetId } from "../data/presets";
 import type { ThemeTokens } from "../data/types";
 import { useCalculatorStore } from "../store/useCalculatorStore";
 import { AmountField, FieldRow, IntField, PercentField } from "./fields";
-import { useAnimatedNumber, useFinanceCall, useIsCompactViewport, useIsNarrowViewport, usePrefersReducedMotion } from "./hooks";
+import { useAnimatedNumber, useFinanceCall, useIsCompactViewport, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "./hooks";
 
 const { Text, Title } = Typography;
 const CollapseItem = Collapse.Item;
@@ -97,9 +98,12 @@ function SensitivitySection(props: {
   loading: boolean;
   rows: SensitivityRow[];
   unavailable: boolean;
-  /** 说明行用变动值：父组件按「月开销 × 10% × 乘数」算好经 props 传入（字符串） */
+  /** 说明行用变动值：父组件按「月开销 × 10% × 乘数」算好经 props 传入（字符串，展示币种口径） */
   delta: string;
-  symbol: string;
+  /** 金额展示绑定（展示币种符号 + 换算；p4-spec §3.4） */
+  money: (v: number) => string;
+  /** CNY → 展示币种数值换算（rate 不可用时为恒等；图表数据与轴同源换算） */
+  convert: (v: number) => number;
   /** 基准临界值（主输出 criticalValue；null = 主输出未就绪，不渲染龙卷风图） */
   baseline: number | null;
   /** 主题解析值（resolveThemeTokens 输出） */
@@ -107,26 +111,31 @@ function SensitivitySection(props: {
   reducedMotion: boolean;
 }) {
   const { t } = useTranslation();
-  const { open, onToggle, loading, rows, unavailable, delta, symbol, baseline, tokens, reducedMotion } = props;
+  const { open, onToggle, loading, rows, unavailable, delta, money, convert, baseline, tokens, reducedMotion } = props;
   const plusRows = rows.filter((r) => r.pct > 0);
   const minusRows = rows.filter((r) => r.pct < 0);
 
   /** C1 ②：按 |档位临界值 − 基准临界值| 降序（layout="vertical" 下数据首行渲染在顶部，
-   *  降序数组即「最大在顶」）；档位临界值 null（该档计算失败）不渲染该行 */
+   *  降序数组即「最大在顶」）；档位临界值 null（该档计算失败）不渲染该行。
+   *  图表数据换算到展示币种（rate > 0 为线性缩放，方向判定不变；p4-spec §3.5） */
   const tornadoRows: TornadoRow[] =
     baseline === null || !Number.isFinite(baseline)
       ? []
       : rows
           .filter((r): r is SensitivityRow & { critical: number } => r.critical !== null)
-          .map((r) => ({
-            name:
-              r.pct > 0
-                ? t("sensitivity.plusRow", { pct: Math.abs(r.pct) })
-                : t("sensitivity.minusRow", { pct: Math.abs(r.pct) }),
-            base: Math.min(r.critical, baseline),
-            delta: Math.abs(r.critical - baseline),
-            up: r.critical > baseline,
-          }))
+          .map((r) => {
+            const criticalDisp = convert(r.critical);
+            const baselineDisp = convert(baseline);
+            return {
+              name:
+                r.pct > 0
+                  ? t("sensitivity.plusRow", { pct: Math.abs(r.pct) })
+                  : t("sensitivity.minusRow", { pct: Math.abs(r.pct) }),
+              base: Math.min(criticalDisp, baselineDisp),
+              delta: Math.abs(criticalDisp - baselineDisp),
+              up: criticalDisp > baselineDisp,
+            };
+          })
           .sort((a, b) => b.delta - a.delta);
 
   /** C1 ⑨：入场动画三参数与两既有折线图同口径 */
@@ -151,7 +160,7 @@ function SensitivitySection(props: {
         fontSize={12}
         fill={tokens.chartTick}
       >
-        {`${row.up ? "+" : "−"}${formatMoney(row.delta, symbol)}`}
+        {`${row.up ? "+" : "−"}${money(row.delta)}`}
       </text>
     );
   };
@@ -199,15 +208,15 @@ function SensitivitySection(props: {
                       <XAxis
                         type="number"
                         tick={{ fontSize: 12, fill: tokens.chartTick }}
-                        tickFormatter={(v: number) => `${Math.round(v / 10000)}${t("units.wan")}`}
+                        tickFormatter={(v: number) => formatCompactAxis(v)}
                       />
                       {/* C1 ④：基准参考线（6 4 虚线同打工模拟目标虚线口径），线顶标注基准值 */}
                       <ReferenceLine
-                        x={baseline}
+                        x={convert(baseline)}
                         strokeDasharray="6 4"
                         stroke={tokens.textTertiary}
                         label={{
-                          value: `${t("sensitivity.baseRefLabel")} ${formatMoney(baseline, symbol)}`,
+                          value: `${t("sensitivity.baseRefLabel")} ${money(baseline)}`,
                           position: "top",
                           fontSize: 12,
                           fill: tokens.textTertiary,
@@ -244,7 +253,7 @@ function SensitivitySection(props: {
                 {plusRows.map((row) => (
                   <div key={row.pct} className="wf-sens-row">
                     <Text type="secondary">{t("sensitivity.plusRow", { pct: Math.abs(row.pct) })}</Text>
-                    <Text bold>{row.critical === null ? "—" : formatMoney(row.critical, symbol)}</Text>
+                    <Text bold>{row.critical === null ? "—" : money(row.critical)}</Text>
                   </div>
                 ))}
               </div>
@@ -255,7 +264,7 @@ function SensitivitySection(props: {
                 {minusRows.map((row) => (
                   <div key={row.pct} className="wf-sens-row">
                     <Text type="secondary">{t("sensitivity.minusRow", { pct: Math.abs(row.pct) })}</Text>
-                    <Text bold>{row.critical === null ? "—" : formatMoney(row.critical, symbol)}</Text>
+                    <Text bold>{row.critical === null ? "—" : money(row.critical)}</Text>
                   </div>
                 ))}
               </div>
@@ -330,6 +339,7 @@ export default function BasicCalculator() {
   const setBaseline = useCalculatorStore((s) => s.setBaselineInputs);
   const activePresetId = useCalculatorStore((s) => s.activePresetId);
   const applyPreset = useCalculatorStore((s) => s.applyPreset);
+  const clearPreset = useCalculatorStore((s) => s.clearPreset);
   const progressInputs = useCalculatorStore((s) => s.progressInputs);
   const setProgressInputs = useCalculatorStore((s) => s.setProgressInputs);
   const displayCode = useCalculatorStore((s) => s.currency.display);
@@ -346,7 +356,12 @@ export default function BasicCalculator() {
   /** 明细拆解窄屏折叠态（<768 默认收起、按钮切换；≥768 全量，状态不参与渲染） */
   const [breakdownOpen, setBreakdownOpen] = useState(false);
 
-  const symbol = currencySymbol(displayCode);
+  /** ⑤ 金额展示绑定（p4-spec §3.4）：展示币种符号 + 换算率；rate null = 换算不可用，
+   *  全部金额按 CNY 值直出（符号-only 模式），图表数据经 convert 同源换算 */
+  const { symbol, money, display } = useMoney(displayCode);
+  const rate = display.rate;
+  /** CNY 规范值 → 展示币种数值（图表数据换算；rate 不可用时恒等） */
+  const convert = (v: number): number => (rate !== null ? cnyToDisplay(v, rate) : v);
   const planChildren = baseline.childCount > 0;
 
   // 实时预览（与计算核心公式一致：12 ÷ 实际回报率）
@@ -427,10 +442,7 @@ export default function BasicCalculator() {
   }, [sensOpen, baseline, localInvalid]);
 
   /** 敏感性说明行变动值：月开销 × 10% × 乘数（乘数取核心回显值，未就绪时退回本地预览） */
-  const sensDelta = formatMoney(
-    baseline.monthlyExpense * 0.1 * (data ? data.multiplier : multiplierPreview),
-    symbol,
-  );
+  const sensDelta = money(baseline.monthlyExpense * 0.1 * (data ? data.multiplier : multiplierPreview));
 
   /** 复制分享（docs/p3-spec.md §6.7 D8）：原 wf-share-row 按钮逻辑提取为局部函数，
    *  原按钮与 <768 底部吸附条按钮共用同一入口（DRY），逻辑零改动 */
@@ -457,6 +469,17 @@ export default function BasicCalculator() {
           title={t("basic.outputTitle")}
           extra={loading ? <Spin size={14} /> : <Text type="secondary">{t("basic.liveUpdate")}</Text>}
         >
+          {/* A8 实时区域（p4-spec §7）：视觉隐藏 live 节点常驻 DOM、内容替换式更新——
+              只绑落定值（data / gaugePct 均为防抖落定结果；rAF 中间帧不进本节点），
+              polite + atomic 整句播报，防抖窗口与键入期间零逐键播报（防噪三规则成文）。
+              金额随 ⑤ 换算为展示币种口径。 */}
+          <span className="wf-sr-only" aria-live="polite" aria-atomic="true">
+            {data
+              ? gaugeVisible
+                ? `${t("a11y.resultAnnouncement", { value: money(data.criticalValue) })}；${t("a11y.resultAnnouncementAssets", { pct: gaugePctText })}`
+                : t("a11y.resultAnnouncement", { value: money(data.criticalValue) })
+              : ""}
+          </span>
           {localInvalid ? (
             <Alert
               type="error"
@@ -464,14 +487,15 @@ export default function BasicCalculator() {
             />
           ) : (
             <>
-              {/* 大字号 + 自由刻度进度环并排（环在右、大字号在左；环隐藏时 hero 退化为单元素不跳动） */}
+              {/* 大字号 + 自由刻度进度环并排（环在右、大字号在左；环隐藏时 hero 退化为单元素不跳动）。
+                  动画仍滚动 CNY 规范值，换算在格式化处逐帧做（rAF 中间帧不落 store 口径不变） */}
               <div className="wf-output-hero">
                 <Title
                   heading={3}
                   className="wf-big-number"
                   style={{ color: themeTokens.primary, fontSize: "var(--wf-text-num)" }}
                 >
-                  {data ? formatMoney(animatedCritical, symbol) : "—"}
+                  {data ? money(animatedCritical) : "—"}
                 </Title>
                 {gaugeVisible ? (
                   <FreedomGauge
@@ -492,12 +516,22 @@ export default function BasicCalculator() {
                 <Text>
                   {t("basic.summaryPrefix")}{" "}
                   <Text bold className="wf-nowrap">
-                    {data
-                      ? i18n.language.startsWith("en")
-                        ? // 英文语境用惯用百万读法（163.5 万 → 1.635 million），避免「×10k」被误读为算式
+                    {data ? (
+                      displayCode === "CNY" ? (
+                        i18n.language.startsWith("en") ? (
+                          // 英文语境用惯用百万读法（163.5 万 → 1.635 million），避免「×10k」被误读为算式
                           `${formatNumber(animatedCritical / 1_000_000, 3)} ${t("units.wanUnit")}`
-                        : `${formatNumber(toWan(animatedCritical), 1)} ${t("units.wanUnit")}`
-                      : "—"}
+                        ) : (
+                          `${formatNumber(toWan(animatedCritical), 1)} ${t("units.wanUnit")}`
+                        )
+                      ) : (
+                        // ⑤ 非 CNY 展示币种：与 money 同源换算但取数值路径（money 返回已格式化
+                        // 字符串不可作 compact 入参），走 Intl compact 统一口径（en 分支删除）
+                        formatCompactAxis(convert(animatedCritical))
+                      )
+                    ) : (
+                      "—"
+                    )}
                   </Text>{" "}
                   {t("basic.summarySuffix")}
                 </Text>
@@ -529,12 +563,12 @@ export default function BasicCalculator() {
                       <div className="wf-output-breakdown">
                         <Text type="secondary">
                           {t("basic.breakdown", {
-                            expense: formatMoney(baseline.monthlyExpense, symbol),
+                            expense: money(baseline.monthlyExpense),
                             multiplier: formatMultiplier(data.multiplier),
                             children: baseline.childCount,
-                            childCost: formatMoney(baseline.costPerChild, symbol),
-                            health: formatMoney(baseline.healthReserve, symbol),
-                            major: formatMoney(baseline.majorInvestment, symbol),
+                            childCost: money(baseline.costPerChild),
+                            health: money(baseline.healthReserve),
+                            major: money(baseline.majorInvestment),
                           })}
                         </Text>
                       </div>
@@ -544,12 +578,12 @@ export default function BasicCalculator() {
                   <div className="wf-output-breakdown">
                     <Text type="secondary">
                       {t("basic.breakdown", {
-                        expense: formatMoney(baseline.monthlyExpense, symbol),
+                        expense: money(baseline.monthlyExpense),
                         multiplier: formatMultiplier(data.multiplier),
                         children: baseline.childCount,
-                        childCost: formatMoney(baseline.costPerChild, symbol),
-                        health: formatMoney(baseline.healthReserve, symbol),
-                        major: formatMoney(baseline.majorInvestment, symbol),
+                        childCost: money(baseline.costPerChild),
+                        health: money(baseline.healthReserve),
+                        major: money(baseline.majorInvestment),
                       })}
                     </Text>
                   </div>
@@ -569,7 +603,8 @@ export default function BasicCalculator() {
             rows={sensState.rows}
             unavailable={sensUnavailable}
             delta={sensDelta}
-            symbol={symbol}
+            money={money}
+            convert={convert}
             baseline={data ? data.criticalValue : null}
             tokens={themeTokens}
             reducedMotion={reducedMotion}
@@ -588,9 +623,16 @@ export default function BasicCalculator() {
               className="wf-preset-btn wf-pressable"
               type={activePresetId === profile.id ? "primary" : "default"}
               aria-pressed={activePresetId === profile.id}
+              title={activePresetId === profile.id ? t("presets.cancelHint") : undefined}
               onClick={() => {
-                applyPreset(profile.id);
-                Message.success(t("presets.appliedHint", { name: t(PRESET_NAME_KEY[profile.id]) }));
+                if (activePresetId === profile.id) {
+                  // 再次点击已激活画像即取消（toggle 语义）：5 字段回落默认、Tag 回「自定义」
+                  clearPreset();
+                  Message.success(t("presets.cancelled", { name: t(PRESET_NAME_KEY[profile.id]) }));
+                } else {
+                  applyPreset(profile.id);
+                  Message.success(t("presets.appliedHint", { name: t(PRESET_NAME_KEY[profile.id]) }));
+                }
               }}
             >
               {t(PRESET_NAME_KEY[profile.id])}
@@ -606,13 +648,13 @@ export default function BasicCalculator() {
           <div className="wf-preset-tags">
             <Text>
               {t("presets.tagTitle", {
-                total: formatMoney(activeProfile.baseline.monthlyExpense, symbol),
+                total: money(activeProfile.baseline.monthlyExpense),
               })}
             </Text>
             <div>
               {PRESET_BREAKDOWN_ORDER.map(({ key, i18nKey }) => (
                 <Tag key={key}>
-                  {t(i18nKey)} {formatMoney(activeProfile.breakdown[key], symbol)}
+                  {t(i18nKey)} {money(activeProfile.breakdown[key])}
                 </Tag>
               ))}
             </div>
@@ -629,7 +671,8 @@ export default function BasicCalculator() {
             value={baseline.monthlyExpense}
             onChange={(v) => setBaseline({ monthlyExpense: v })}
             prefix={symbol}
-            suffix={t("units.yuanPerMonth")}
+            suffix={displayCode === "CNY" ? t("units.yuanPerMonth") : undefined}
+            convertRate={rate}
           />
           <Col className="wf-field" xs={24} md={24}>
             <div className="wf-field-label">
@@ -638,11 +681,13 @@ export default function BasicCalculator() {
                 {t("basic.planChildrenHint")}
               </Text>
             </div>
-            {/* 点击区扩展包装：本体视觉尺寸不变，命中区扩至触控目标档（样式由样式层定义） */}
+            {/* 点击区扩展包装：本体视觉尺寸不变，命中区扩至触控目标档（样式由样式层定义）；
+                A3：开关补可访问名称（复用标签文案） */}
             <span className="wf-touch-target">
               <Switch
                 className="wf-pressable"
                 checked={planChildren}
+                aria-label={t("basic.planChildren")}
                 onChange={(checked) => setBaseline({ childCount: checked ? 1 : 0 })}
               />
             </span>
@@ -666,8 +711,9 @@ export default function BasicCalculator() {
                 value={baseline.costPerChild}
                 onChange={(v) => setBaseline({ costPerChild: v })}
                 prefix={symbol}
-                suffix={t("units.yuanPerChild")}
+                suffix={displayCode === "CNY" ? t("units.yuanPerChild") : undefined}
                 hint={t("basic.childCostHint")}
+                convertRate={rate}
               />
             </>
           ) : null}
@@ -678,7 +724,8 @@ export default function BasicCalculator() {
             value={baseline.healthReserve}
             onChange={(v) => setBaseline({ healthReserve: v })}
             prefix={symbol}
-            suffix={t("units.yuan")}
+            suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+            convertRate={rate}
           />
           <AmountField
             key={"mi-" + resetKey}
@@ -687,8 +734,9 @@ export default function BasicCalculator() {
             value={baseline.majorInvestment}
             onChange={(v) => setBaseline({ majorInvestment: v })}
             prefix={symbol}
-            suffix={t("units.yuan")}
+            suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
             hint={t("basic.majorInvestmentHint")}
+            convertRate={rate}
           />
           {/* ② 自由刻度：选填已有资产（默认 0 = 未填写 → 进度环隐藏，docs/p0-spec.md §3.2） */}
           <AmountField
@@ -697,7 +745,8 @@ export default function BasicCalculator() {
             value={progressInputs.currentAssets}
             onChange={(v) => setProgressInputs({ currentAssets: v })}
             prefix={symbol}
-            suffix={t("units.yuan")}
+            suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+            convertRate={rate}
           />
         </FieldRow>
 

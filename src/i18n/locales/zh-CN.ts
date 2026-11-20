@@ -17,7 +17,9 @@ const zhCN = {
     wasmFailed:
       "计算核心加载失败：{{message}}。页面可正常浏览，但所有计算结果暂不可用；请刷新页面重试，或确认部署时 wasm 静态资源完整。",
     currencyNotice:
-      "默认参数以人民币口径给出，切换币种后请自行调整数值；所有公式与币种无关（乘数 × 月开销在任意币种下成立）。",
+      "金额已按 1 人民币 = {{rate}} {{code}} 换算展示（汇率时点：{{time}}）；输入以展示币种填写、自动回写为人民币口径；所有公式与币种无关。",
+    currencyFallback:
+      "汇率暂不可用：仅切换货币符号，数值保持人民币口径；可稍后在「税务估算与多币种校验」面板重试获取。",
     footerDisclaimer: "本工具基于公开统计与简化假设，仅为规划参考，不构成投资建议。",
     footerPrivacy: "纯前端本地计算（Rust → WebAssembly），不采集、不上传任何数据。",
   },
@@ -79,6 +81,8 @@ const zhCN = {
     tagTitle: "消费构成（合计 {{total}} 元/月）",
     note: "以一线城市口径整理，可自由修改",
     appliedHint: "已应用「{{name}}」画像参数",
+    cancelHint: "再次点击取消该画像，基础参数将回落默认值",
+    cancelled: "已取消「{{name}}」画像，基础参数回落默认值",
     names: {
       singleRenter: "单身租房",
       coupleNoKids: "无孩夫妻",
@@ -100,16 +104,25 @@ const zhCN = {
     ariaLabel: "自由刻度进度环：已有资产约为参考线的 {{pct}}%",
   },
   advanced: {
-    cardTitle: "高级估算与公式原理（按需展开，默认全部收起）",
-    reverseHeader: "① 反向估算 —— 已有资产能支撑每月花多少",
-    loanHeader: "② 贷款计算 —— 月供、总利息与摊销表",
-    rentalHeader: "③ 买房收租 —— 年度净现金流与回本年限",
-    mcHeader: "④ 蒙特卡洛模拟 —— 耗尽概率与财富分布",
-    taxHeader: "⑤ 税务估算与多币种校验",
-    accumulationHeader: "⑥ 打工模拟 —— 靠工资储蓄攒到目标需要多少年",
-    pensionHeader: "⑦ 社保养老金 —— 退休后每月能领多少，参考线能降多少",
-    scenarioHeader: "⑧ 多情景对比 —— 命名保存当前参数，并排对比关键指标",
-    insightsHeader: "⑨ 公式原理与数据依据 —— 480 从哪里来：推导、假设链与数据出处",
+    cardTitle: "高级估算与公式原理（同一时间至多展开一项）",
+    reverseTitle: "反向估算",
+    reverseDesc: "已有资产能支撑每月花多少",
+    loanTitle: "贷款计算",
+    loanDesc: "月供、总利息与摊销表",
+    rentalTitle: "买房收租",
+    rentalDesc: "年度净现金流与回本年限",
+    mcTitle: "蒙特卡洛模拟",
+    mcDesc: "耗尽概率与财富分布",
+    taxTitle: "税务估算",
+    taxDesc: "多币种口径校验",
+    accumulationTitle: "打工模拟",
+    accumulationDesc: "靠工资攒到目标需要多少年",
+    pensionTitle: "社保养老金",
+    pensionDesc: "退休后每月能领多少",
+    scenarioTitle: "多情景对比",
+    scenarioDesc: "命名保存参数并排对比",
+    insightsTitle: "公式原理",
+    insightsDesc: "480 从哪里来：推导、假设与出处",
   },
   insights: {
     formulaTitle: "公式推导",
@@ -442,6 +455,7 @@ const zhCN = {
       "阈值带：文献最优参数 ±20% / ±10% / 末段 15 年不降支（更小的阈值或更大的降支幅度不再改善成功率）。余额比例：按实际口径年金化摊还到规划终点，构造上不破产，购买力风险看「末年支取额」分位数。算术锚：资产 −25% 时同额支取的支取率由 4.00% 升至 5.33%——坏年前期的支取率反弹是序列风险传导的核心。",
     chartAria:
       "蒙特卡洛模拟图：{{paths}} 条路径模拟 {{years}} 年，耗尽概率 {{prob}}%、中位终值 {{median}}",
+    doneAria: "模拟完成：资产耗尽概率 {{prob}}，中位终值 {{median}}",
   },
   accumulation: {
     currentAssets: "当前资产",
@@ -501,11 +515,13 @@ const zhCN = {
     note: "确定性模拟：回报逐年取自所选序列、通胀置 0（名义 = 实际），无随机抽样。起点滚动模式：样本滚动窗口仅 {{count}} 个，结论为演示性质而非统计保证；三序对照模式：升序 / 降序仅改变收益顺序（几何均值不变），期末差异全部来自顺序本身。序列口径沿用数据层标注。",
     chartAria:
       "序列风险命运曲线：最好、中位、最差三条逐年资产路径，{{count}} 个起点窗口 × {{years}} 年",
+    doneAria: "序列对照完成：最好 {{best}}，中位 {{median}}，最差 {{worst}}",
     placeholder:
       "选择序列与口径后点击「运行对照」：逐年取用真实历史收益做确定性模拟，展示同一段历史下不同起点（或顺序）的终值命运差异。",
   },
   scenario: {
     namePlaceholder: "情景名称，如：省吃版",
+    nameLabel: "情景名称",
     save: "保存当前参数",
     saved: "已保存情景「{{name}}」",
     saveFailedFull: "场景库已满（上限 {{max}} 个），请先删除不再需要的情景",
@@ -527,6 +543,10 @@ const zhCN = {
     metricNetIncome: "税后年收入",
     metricSustainable: "可持续月开销",
     metricSaving: "月储蓄（打工口径）",
+    export: "导出图片",
+    exportNote: "本地计算 · 不构成投资建议",
+    exportDone: "对比图片已导出",
+    exportFailed: "导出图片失败",
   },
   tax: {
     countryLabel: "国家 / 地区",
@@ -604,9 +624,14 @@ const zhCN = {
     copyTooltip:
       "把当前全部业务输入（不含主题 / 语言 / 币种等界面偏好）编码进链接；粘贴给他人打开即为同一套参数。",
     copied: "分享链接已复制到剪贴板",
-    copyFailed: "复制失败：请手动复制地址栏链接（含 #s= 的完整部分）",
+    copyFailed: "复制失败：请更新应用或浏览器后重试",
     restored: "已从分享链接恢复全部业务输入",
     restoreIgnored: "分享链接内容无法识别（已忽略，显示默认参数）",
+  },
+  a11y: {
+    skipToContent: "跳转到主内容",
+    resultAnnouncement: "参考线已更新：{{value}}",
+    resultAnnouncementAssets: "已有资产约为参考线的 {{pct}}%",
   },
 };
 

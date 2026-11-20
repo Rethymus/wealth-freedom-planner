@@ -5,11 +5,11 @@
 import { Alert, Button, Descriptions, Message, Tooltip, Typography } from "@arco-design/web-react";
 import { useTranslation } from "react-i18next";
 import { calcReverse } from "../../services/finance";
-import { currencySymbol, formatMoney, formatNumber } from "../../services/format";
+import { formatNumber } from "../../services/format";
 import type { ReverseEstimateInput } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, PercentField } from "../fields";
-import { useFinanceCall, useIsNarrowViewport } from "../hooks";
+import { useFinanceCall, useIsNarrowViewport, useMoney } from "../hooks";
 
 const { Text } = Typography;
 
@@ -45,7 +45,9 @@ export default function ReversePanel() {
   const setInputs = useCalculatorStore((s) => s.setReverseInputs);
   const baseline = useCalculatorStore((s) => s.baselineInputs);
   const displayCode = useCalculatorStore((s) => s.currency.display);
-  const symbol = currencySymbol(displayCode);
+  /** ⑤ 金额展示绑定（p4-spec §3.4）：展示币种符号 + 换算率；rate null = 符号-only */
+  const { symbol, money, display } = useMoney(displayCode);
+  const rate = display.rate;
 
   const { loading, result } = useFinanceCall(() => calcReverse(inputs), [inputs]);
   /** 窄视口下结果 Descriptions 切纵向堆叠（标签上/值下），避免长 label 挤压数值列 */
@@ -74,7 +76,8 @@ export default function ReversePanel() {
           value={inputs.totalAssets}
           onChange={(v) => setInputs({ totalAssets: v })}
           prefix={symbol}
-          suffix={t("units.yuan")}
+          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+          convertRate={rate}
         />
         <AmountField
           label={t("reverse.childReserve")}
@@ -82,7 +85,8 @@ export default function ReversePanel() {
           value={inputs.childReserve}
           onChange={(v) => setInputs({ childReserve: v })}
           prefix={symbol}
-          suffix={t("units.yuan")}
+          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+          convertRate={rate}
         />
         <AmountField
           label={t("common.healthReserve")}
@@ -90,7 +94,8 @@ export default function ReversePanel() {
           value={inputs.healthReserve}
           onChange={(v) => setInputs({ healthReserve: v })}
           prefix={symbol}
-          suffix={t("units.yuan")}
+          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+          convertRate={rate}
         />
         <AmountField
           label={t("common.majorInvestment")}
@@ -98,7 +103,8 @@ export default function ReversePanel() {
           value={inputs.majorInvestment}
           onChange={(v) => setInputs({ majorInvestment: v })}
           prefix={symbol}
-          suffix={t("units.yuan")}
+          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+          convertRate={rate}
         />
         <PercentField
           md={12}
@@ -147,11 +153,11 @@ export default function ReversePanel() {
           layout={isNarrow ? "vertical" : "horizontal"}
           column={{ xs: 1, md: 3 }}
           data={[
-            { label: t("reverse.investable"), value: formatMoney(data.investableAssets, symbol) },
+            { label: t("reverse.investable"), value: money(data.investableAssets) },
             {
               label: t("reverse.sustainableMonthly"),
               value: (
-                <Text bold className="wf-nowrap">{formatMoney(data.sustainableMonthly, symbol)}</Text>
+                <Text bold className="wf-nowrap">{money(data.sustainableMonthly)}</Text>
               ),
             },
             {

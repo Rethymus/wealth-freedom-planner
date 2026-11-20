@@ -13,7 +13,8 @@ const zhHant = {
     "themeToLight": "切換到淺色主題",
     "languageLabel": "語言",
     "wasmFailed": "計算核心加載失敗：{{message}}。頁面可正常瀏覽，但所有計算結果暫不可用；請刷新頁面重試，或確認部署時 wasm 靜態資源完整。",
-    "currencyNotice": "默認參數以人民幣口徑給出，切換幣種後請自行調整數值；所有公式與幣種無關（乘數 × 月開銷在任意幣種下成立）。",
+    "currencyNotice": "金額已按 1 人民幣 = {{rate}} {{code}} 換算展示（匯率時點：{{time}}）；輸入以展示幣種填寫、自動回寫為人民幣口徑；所有公式與幣種無關。",
+    "currencyFallback": "匯率暫不可用：僅切換貨幣符號，數值保持人民幣口徑；可稍後在「稅務估算與多幣種校驗」面板重試獲取。",
     "footerDisclaimer": "本工具基於公開統計與簡化假設，僅為規劃參考，不構成投資建議。",
     "footerPrivacy": "純前端本地計算（Rust → WebAssembly），不採集、不上傳任何數據。"
   },
@@ -72,6 +73,8 @@ const zhHant = {
     "tagTitle": "消費構成（合計 {{total}} 元/月）",
     "note": "以一線城市口徑整理，可自由修改",
     "appliedHint": "已應用「{{name}}」畫像參數",
+    "cancelHint": "再次點擊取消該畫像，基礎參數將回落默認值",
+    "cancelled": "已取消「{{name}}」畫像，基礎參數回落默認值",
     "names": {
       "singleRenter": "單身租房",
       "coupleNoKids": "無孩夫妻",
@@ -93,16 +96,25 @@ const zhHant = {
     "ariaLabel": "自由刻度進度環：已有資產約為參考線的 {{pct}}%"
   },
   "advanced": {
-    "cardTitle": "高級估算與公式原理（按需展開，默認全部收起）",
-    "reverseHeader": "① 反向估算 —— 已有資產能支撐每月花多少",
-    "loanHeader": "② 貸款計算 —— 月供、總利息與攤銷表",
-    "rentalHeader": "③ 買房收租 —— 年度淨現金流與回本年限",
-    "mcHeader": "④ 蒙特卡洛模擬 —— 耗盡概率與財富分佈",
-    "taxHeader": "⑤ 稅務估算與多幣種校驗",
-    "accumulationHeader": "⑥ 打工模擬 —— 靠工資儲蓄攢到目標需要多少年",
-    "pensionHeader": "⑦ 社保養老金 —— 退休後每月能領多少，參考線能降多少",
-    "scenarioHeader": "⑧ 多情景對比 —— 命名保存當前參數，並排對比關鍵指標",
-    "insightsHeader": "⑨ 公式原理與數據依據 —— 480 從哪裏來：推導、假設鏈與數據出處"
+    "cardTitle": "高級估算與公式原理（同一時間至多展開一項）",
+    "reverseTitle": "反向估算",
+    "reverseDesc": "已有資產能支撐每月花多少",
+    "loanTitle": "貸款計算",
+    "loanDesc": "月供、總利息與攤銷表",
+    "rentalTitle": "買房收租",
+    "rentalDesc": "年度淨現金流與回本年限",
+    "mcTitle": "蒙特卡洛模擬",
+    "mcDesc": "耗盡概率與財富分佈",
+    "taxTitle": "稅務估算",
+    "taxDesc": "多幣種口徑校驗",
+    "accumulationTitle": "打工模擬",
+    "accumulationDesc": "靠工資攢到目標需要多少年",
+    "pensionTitle": "社保養老金",
+    "pensionDesc": "退休後每月能領多少",
+    "scenarioTitle": "多情景對比",
+    "scenarioDesc": "命名保存參數並排對比",
+    "insightsTitle": "公式原理",
+    "insightsDesc": "480 從哪裏來：推導、假設與出處"
   },
   "insights": {
     "formulaTitle": "公式推導",
@@ -394,7 +406,8 @@ const zhHant = {
     "withdrawalMedian": "末年支取額中位數",
     "withdrawalP95": "末年支取額第 95 百分位（樂觀）",
     "strategyNote": "閾值帶：文獻最優參數 ±20% / ±10% / 末段 15 年不降支（更小的閾值或更大的降支幅度不再改善成功率）。餘額比例：按實際口徑年金化攤還到規劃終點，構造上不破產，購買力風險看「末年支取額」分位數。算術錨：資產 −25% 時同額支取的支取率由 4.00% 升至 5.33%——壞年前期的支取率反彈是序列風險傳導的核心。",
-    "chartAria": "蒙特卡洛模擬圖：{{paths}} 條路徑模擬 {{years}} 年，耗盡概率 {{prob}}%、中位終值 {{median}}"
+    "chartAria": "蒙特卡洛模擬圖：{{paths}} 條路徑模擬 {{years}} 年，耗盡概率 {{prob}}%、中位終值 {{median}}",
+    "doneAria": "模擬完成：資產耗盡概率 {{prob}}，中位終值 {{median}}"
   },
   "accumulation": {
     "currentAssets": "當前資產",
@@ -447,10 +460,12 @@ const zhHant = {
     "bestFirst": "好年在前（降序）",
     "note": "確定性模擬：回報逐年取自所選序列、通脹置 0（名義 = 實際），無隨機抽樣。起點滾動模式：樣本滾動窗口僅 {{count}} 個，結論為演示性質而非統計保證；三序對照模式：升序 / 降序僅改變收益順序（幾何均值不變），期末差異全部來自順序本身。序列口徑沿用數據層標註。",
     "chartAria": "序列風險命運曲線：最好、中位、最差三條逐年資產路徑，{{count}} 個起點窗口 × {{years}} 年",
+    "doneAria": "序列對照完成：最好 {{best}}，中位 {{median}}，最差 {{worst}}",
     "placeholder": "選擇序列與口徑後點擊「運行對照」：逐年取用真實歷史收益做確定性模擬，展示同一段歷史下不同起點（或順序）的終值命運差異。"
   },
   "scenario": {
     "namePlaceholder": "情景名稱，如：省吃版",
+    "nameLabel": "情景名稱",
     "save": "保存當前參數",
     "saved": "已保存情景「{{name}}」",
     "saveFailedFull": "場景庫已滿（上限 {{max}} 個），請先刪除不再需要的情景",
@@ -471,7 +486,11 @@ const zhHant = {
     "metricCoverage": "養老金覆蓋率",
     "metricNetIncome": "稅後年收入",
     "metricSustainable": "可持續月開銷",
-    "metricSaving": "月儲蓄（打工口徑）"
+    "metricSaving": "月儲蓄（打工口徑）",
+    "export": "導出圖片",
+    "exportNote": "本地計算 · 不構成投資建議",
+    "exportDone": "對比圖片已導出",
+    "exportFailed": "導出圖片失敗"
   },
   "tax": {
     "countryLabel": "國家 / 地區",
@@ -542,9 +561,14 @@ const zhHant = {
     "copyShort": "複製分享",
     "copyTooltip": "把當前全部業務輸入（不含主題 / 語言 / 幣種等界面偏好）編碼進鏈接；粘貼給他人打開即為同一套參數。",
     "copied": "分享鏈接已複製到剪貼板",
-    "copyFailed": "複製失敗：請手動複製地址欄鏈接（含 #s= 的完整部分）",
+    "copyFailed": "複製失敗：請更新應用或瀏覽器後重試",
     "restored": "已從分享鏈接恢復全部業務輸入",
     "restoreIgnored": "分享鏈接內容無法識別（已忽略，顯示默認參數）"
+  },
+  "a11y": {
+    "skipToContent": "跳轉到主內容",
+    "resultAnnouncement": "參考線已更新：{{value}}",
+    "resultAnnouncementAssets": "已有資產約為參考線的 {{pct}}%"
   }
 };
 

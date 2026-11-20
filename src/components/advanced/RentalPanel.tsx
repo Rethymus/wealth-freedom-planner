@@ -19,7 +19,8 @@ import {
   YAxis,
 } from "recharts";
 import { calcRental } from "../../services/finance";
-import { currencySymbol, formatMoney, formatNumber } from "../../services/format";
+import { formatNumber, formatCompactAxis } from "../../services/format";
+import { cnyToDisplay } from "../../services/currency";
 import { LIMITS, MOTION_DURATIONS, resolveThemeTokens } from "../../data/defaults";
 import { CITY_RENT_PARAMS } from "../../data/rentParams";
 import type { CityGroup, CityRentParams } from "../../data/types";
@@ -27,7 +28,7 @@ import type { NumberInputLimit } from "../../data/types";
 import type { RentalBreakdown } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, IntField, NumberField, PercentField } from "../fields";
-import { useFinanceCall, useIsNarrowViewport, usePrefersReducedMotion } from "../hooks";
+import { useFinanceCall, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text } = Typography;
 
@@ -102,11 +103,13 @@ interface WfChartFrame {
  * 合计 / 起 / 终不参与累计；首付 / 贷款金额为一次性金额，不入年度现金流瀑布。
  * breakdown 契约类型为 Record<string, number>（键集以 RentalBreakdown 接口为准），
  * 读取按「不信任 JSON 解析结果」纪律防御取值（缺键 / 非有限数按 0）。
+ * ⑤ 数值与标签经 convert / fmt（展示币种换算）——率 > 0 为线性缩放，几何形状不变。
  */
 function buildWaterfallRows(
   b: Record<string, number>,
   net: number,
-  symbol: string,
+  convert: (v: number) => number,
+  fmt: (v: number) => string,
   label: (key: string) => string,
 ): WaterfallRow[] {
   const numOf = (key: string): number => {
@@ -133,7 +136,7 @@ function buildWaterfallRows(
   const pushTotal = (key: string, name: string, value: number, endLevel: number): void => {
     const row = blank(key, name);
     row.endLevel = endLevel;
-    row.labelText = formatMoney(value, symbol);
+    row.labelText = fmt(value);
     if (value > 0) {
       row.riseSeg = value;
       row.carrier = "riseSeg";
@@ -157,7 +160,7 @@ function buildWaterfallRows(
     row.endLevel = end;
     row.color = "fall";
     row.labelSide = "bottom";
-    row.labelText = `−${formatMoney(amount, symbol)}`;
+    row.labelText = `−${fmt(amount)}`;
     row.carrier = "fallSeg";
     if (end >= 0) {
       row.basePos = end;
@@ -172,16 +175,16 @@ function buildWaterfallRows(
     rows.push(row);
   };
 
-  pushTotal("gross", label("rental.breakdown.annualGrossRent"), numOf("annualGrossRent"), numOf("annualGrossRent"));
-  cum = numOf("annualGrossRent");
-  pushDec("vacancy", label("rental.breakdown.annualVacancyLoss"), numOf("annualVacancyLoss"));
+  pushTotal("gross", label("rental.breakdown.annualGrossRent"), convert(numOf("annualGrossRent")), convert(numOf("annualGrossRent")));
+  cum = convert(numOf("annualGrossRent"));
+  pushDec("vacancy", label("rental.breakdown.annualVacancyLoss"), convert(numOf("annualVacancyLoss")));
   pushTotal("effective", label("rental.breakdown.annualEffectiveRent"), cum, cum);
-  pushDec("tax", label("rental.breakdown.annualRentTax"), numOf("annualRentTax"));
-  pushDec("maintenance", label("rental.breakdown.annualMaintenance"), numOf("annualMaintenance"));
-  pushDec("property", label("rental.breakdown.annualPropertyFee"), numOf("annualPropertyFee"));
-  pushDec("other", label("rental.breakdown.annualOtherCost"), numOf("annualOtherCost"));
-  pushDec("loan", label("rental.breakdown.annualLoanPayment"), numOf("annualLoanPayment"));
-  pushTotal("net", label("rental.annualNetCashFlow"), net, net);
+  pushDec("tax", label("rental.breakdown.annualRentTax"), convert(numOf("annualRentTax")));
+  pushDec("maintenance", label("rental.breakdown.annualMaintenance"), convert(numOf("annualMaintenance")));
+  pushDec("property", label("rental.breakdown.annualPropertyFee"), convert(numOf("annualPropertyFee")));
+  pushDec("other", label("rental.breakdown.annualOtherCost"), convert(numOf("annualOtherCost")));
+  pushDec("loan", label("rental.breakdown.annualLoanPayment"), convert(numOf("annualLoanPayment")));
+  pushTotal("net", label("rental.annualNetCashFlow"), convert(net), convert(net));
   return rows;
 }
 
@@ -214,7 +217,11 @@ export default function RentalPanel() {
   const displayCode = useCalculatorStore((s) => s.currency.display);
   const colorBlindFriendly = useCalculatorStore((s) => s.colorBlindFriendly);
   const theme = useCalculatorStore((s) => s.theme);
-  const symbol = currencySymbol(displayCode);
+  /** ⑤ 金额展示绑定（p4-spec §3.4）：输出与瀑布图标签经展示币种换算；rate null = 符号-only */
+  const { symbol, money, display } = useMoney(displayCode);
+  const rate = display.rate;
+  /** CNY 规范值 → 展示币种数值（瀑布图几何数据同源换算；rate 不可用时恒等） */
+  const convert = (v: number): number => (rate !== null ? cnyToDisplay(v, rate) : v);
   /** 窄视口下结果 Descriptions 切纵向堆叠（标签上/值下），避免长 label 挤压数值列 */
   const isNarrow = useIsNarrowViewport();
 
@@ -239,7 +246,7 @@ export default function RentalPanel() {
   /** C3 瀑布图数据（md+ 桌面渲染；窄屏不渲染，保留明细表信息无损） */
   const waterfallRows =
     data && !isNarrow
-      ? buildWaterfallRows(data.breakdown, netCashFlow, symbol, (key) => t(key))
+      ? buildWaterfallRows(data.breakdown, netCashFlow, convert, money, (key) => t(key))
       : null;
 
   /** C3 ④：标签渲染——变动柱带符号金额 / 合计柱累计值，柱顶 / 柱底自适应（12px chartTick） */
@@ -475,7 +482,8 @@ export default function RentalPanel() {
           value={inputs.price}
           onChange={(v) => setInputs({ price: v })}
           prefix={symbol}
-          suffix={t("units.yuan")}
+          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+          convertRate={rate}
         />
         <AmountField
           label={t("rental.monthlyRent")}
@@ -483,7 +491,8 @@ export default function RentalPanel() {
           value={inputs.monthlyRent}
           onChange={(v) => setInputs({ monthlyRent: v })}
           prefix={symbol}
-          suffix={t("units.yuanPerMonth")}
+          suffix={displayCode === "CNY" ? t("units.yuanPerMonth") : undefined}
+          convertRate={rate}
         />
         <PercentField
           md={12}
@@ -535,7 +544,8 @@ export default function RentalPanel() {
           value={inputs.propertyFeeMonthly}
           onChange={(v) => setInputs({ propertyFeeMonthly: v })}
           prefix={symbol}
-          suffix={t("units.yuanPerMonth")}
+          suffix={displayCode === "CNY" ? t("units.yuanPerMonth") : undefined}
+          convertRate={rate}
         />
         <AmountField
           md={12}
@@ -544,7 +554,8 @@ export default function RentalPanel() {
           value={inputs.otherAnnualCost}
           onChange={(v) => setInputs({ otherAnnualCost: v })}
           prefix={symbol}
-          suffix={t("units.yuanPerYear")}
+          suffix={displayCode === "CNY" ? t("units.yuanPerYear") : undefined}
+          convertRate={rate}
         />
         <NumberField
           md={12}
@@ -567,12 +578,12 @@ export default function RentalPanel() {
             layout={isNarrow ? "vertical" : "horizontal"}
             column={{ xs: 1, md: 3 }}
             data={[
-              { label: t("rental.monthlyPayment"), value: formatMoney(data.monthlyPayment, symbol) },
+              { label: t("rental.monthlyPayment"), value: money(data.monthlyPayment) },
               {
                 label: t("rental.annualNetCashFlow"),
                 value: (
                   <Text bold className="wf-nowrap" style={{ color: semanticPositive ? undefined : semanticFall }}>
-                    {formatMoney(netCashFlow, symbol)}
+                    {money(netCashFlow)}
                   </Text>
                 ),
               },
@@ -594,7 +605,7 @@ export default function RentalPanel() {
             column={{ xs: 1, md: 2 }}
             data={BREAKDOWN_LABELS.map(([key, labelKey]) => ({
               label: t(labelKey),
-              value: key in data.breakdown ? formatMoney(data.breakdown[key], symbol) : "—",
+              value: key in data.breakdown ? money(data.breakdown[key]) : "—",
             }))}
           />
           {/* C3 ⑥ 窄屏降级：瀑布图不渲染，年度明细 Descriptions（上方，信息无损）承载全部数值；
@@ -616,7 +627,7 @@ export default function RentalPanel() {
                   <YAxis
                     width={72}
                     tick={{ fontSize: 12, fill: themeTokens.chartTick }}
-                    tickFormatter={(v: number) => `${Math.round(v / 10000)}${t("units.wan")}`}
+                    tickFormatter={(v: number) => formatCompactAxis(v)}
                   />
                   {/* C3 ⑤ 堆叠透明底段法：透明定位段（正 / 负侧）+ 彩色变动段 */}
                   <Bar dataKey="basePos" stackId="wf" fill="transparent" isAnimationActive={false} />

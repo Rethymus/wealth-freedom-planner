@@ -9,12 +9,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TAX_TABLES } from "../../data/taxTables";
 import { LIMITS } from "../../data/defaults";
-import { currencySymbol, formatMoney, formatNumber, formatPercent } from "../../services/format";
+import { formatNumber, formatPercent } from "../../services/format";
 import type { EstimateTaxInput, TaxBand } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { calcTax } from "../../services/finance";
 import { FieldRow, AmountField } from "../fields";
-import { useFinanceCall, useIsNarrowViewport } from "../hooks";
+import { useFinanceCall, useIsNarrowViewport, useMoney } from "../hooks";
 import CurrencySection from "./CurrencySection";
 
 const { Text } = Typography;
@@ -40,7 +40,10 @@ export default function TaxPanel() {
   const taxInputs = useCalculatorStore((s) => s.taxInputs);
   const setTaxInputs = useCalculatorStore((s) => s.setTaxInputs);
   const displayCode = useCalculatorStore((s) => s.currency.display);
-  const symbol = currencySymbol(displayCode);
+  /** ⑤ 金额展示绑定（p4-spec §3.4）：结果经展示币种换算；rate null = 符号-only。
+   *  非中国税档「本币口径」歧义为现状简化（p4-spec §14 #9）：⑤ 统一换算不修复不恶化 */
+  const { symbol, money, display } = useMoney(displayCode);
+  const rate = display.rate;
   /** 窄视口下结果 Descriptions 切纵向堆叠（标签上/值下），避免长 label 挤压数值列 */
   const isNarrow = useIsNarrowViewport();
 
@@ -134,7 +137,8 @@ export default function TaxPanel() {
           tooltip={t("tax.grossIncomeTooltip")}
           value={taxInputs.grossAnnualIncome}
           onChange={(v) => setTaxInputs({ grossAnnualIncome: v })}
-          suffix={t("units.localPerYear")}
+          suffix={displayCode === "CNY" ? t("units.localPerYear") : undefined}
+          convertRate={rate}
         />
         {isOther ? (
           <Col xs={24} className="wf-field">
@@ -201,9 +205,9 @@ export default function TaxPanel() {
           layout={isNarrow ? "vertical" : "horizontal"}
           column={{ xs: 1, md: 2 }}
           data={[
-            { label: t("tax.taxableIncome"), value: formatMoney(data.taxableIncome, symbol) },
-            { label: t("tax.taxAmount"), value: formatMoney(data.tax, symbol) },
-            { label: t("tax.netIncome"), value: <Text bold className="wf-nowrap">{formatMoney(data.netIncome, symbol)}</Text> },
+            { label: t("tax.taxableIncome"), value: money(data.taxableIncome) },
+            { label: t("tax.taxAmount"), value: money(data.tax) },
+            { label: t("tax.netIncome"), value: <Text bold className="wf-nowrap">{money(data.netIncome)}</Text> },
             { label: t("tax.effectiveRate"), value: formatPercent(data.effectiveRatePct) },
           ]}
         />

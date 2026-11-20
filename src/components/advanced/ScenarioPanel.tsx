@@ -22,9 +22,15 @@ import {
 } from "../../services/scenarios";
 import type { ScenarioEntry } from "../../services/scenarios";
 import { calcBaseline, calcPension, calcRental, calcReverse, calcTax } from "../../services/finance";
-import { currencySymbol, formatMoney, formatMoneyFixed, formatNumber } from "../../services/format";
+import { formatNumber } from "../../services/format";
+import {
+  buildExportFilename,
+  buildScenarioTableBitmap,
+  downloadCanvasPng,
+} from "../../services/exportScenarios";
 import { resolveThemeTokens } from "../../data/defaults";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
+import { useMoney } from "../hooks";
 
 const { Text } = Typography;
 
@@ -50,8 +56,14 @@ const METRIC_KEYS = [
   "scenario.metricSaving",
 ] as const;
 
-/** 单条情景的 8 项指标复算（确定性 wasm 函数；任一失败返回 failed 列） */
-async function computeColumn(entry: ScenarioEntry, symbol: string, yearUnit: string): Promise<CompareCol> {
+/** 单条情景的 8 项指标复算（确定性 wasm 函数；任一失败返回 failed 列）。
+ *  ⑤ 金额经 money / moneyFixed（展示币种换算；p4-spec §3.4）——已存载荷恒为 CNY 规范值 */
+async function computeColumn(
+  entry: ScenarioEntry,
+  money: (v: number) => string,
+  moneyFixed: (v: number) => string,
+  yearUnit: string,
+): Promise<CompareCol> {
   const invalid: CompareCol = { id: entry.id, name: entry.name, valid: false, failed: false, values: [] };
   const shared: ShareState | null = decodeShareState(entry.payload);
   if (!shared) return invalid;
@@ -67,15 +79,15 @@ async function computeColumn(entry: ScenarioEntry, symbol: string, yearUnit: str
   const saving = shared.accumulation.monthlyIncome - shared.accumulation.monthlyExpense;
   const payback = rentalR.data.paybackYears;
   const values: string[] = [
-    formatMoney(baselineR.data.criticalValue, symbol),
-    formatMoney(rentalR.data.annualNetCashFlow, symbol),
+    money(baselineR.data.criticalValue),
+    money(rentalR.data.annualNetCashFlow),
     payback >= 0 ? `${formatNumber(payback, 1)} ${yearUnit}` : "—",
-    formatMoney(pensionR.data.pensionMonthly, symbol),
+    money(pensionR.data.pensionMonthly),
     `${formatNumber(pensionR.data.coverageRatio * 100, 1)}%`,
-    formatMoney(taxR.data.netIncome, symbol),
-    formatMoney(reverseR.data.sustainableMonthly, symbol),
+    money(taxR.data.netIncome),
+    money(reverseR.data.sustainableMonthly),
     // 月储蓄（打工口径）：TS 显示算术，可负（列内固定两位小数与其他金额列对齐）
-    formatMoneyFixed(saving, symbol),
+    moneyFixed(saving),
   ];
   return { id: entry.id, name: entry.name, valid: true, failed: false, values };
 }
@@ -85,7 +97,8 @@ export default function ScenarioPanel() {
   const displayCode = useCalculatorStore((s) => s.currency.display);
   const colorBlindFriendly = useCalculatorStore((s) => s.colorBlindFriendly);
   const theme = useCalculatorStore((s) => s.theme);
-  const symbol = currencySymbol(displayCode);
+  /** ⑤ 金额展示绑定（p4-spec §3.4）：8 项指标中 6 项金额经展示币种换算；rate null = 符号-only */
+  const { money, moneyFixed } = useMoney(displayCode);
   const themeTokens = resolveThemeTokens(theme, colorBlindFriendly);
   const applyShareState = useCalculatorStore((s) => s.applyShareState);
 
@@ -98,17 +111,19 @@ export default function ScenarioPanel() {
     reload();
   }, []);
 
-  /** 对比表复算：条目集或币种变化后逐景重算（毫秒级 × ≤12 情景；过期结果丢弃） */
+  /** 对比表复算：条目集 / 换算率 / 语言变化后逐景重算（毫秒级 × ≤12 情景；过期结果丢弃） */
   useEffect(() => {
     let stale = false;
     void (async () => {
-      const computed = await Promise.all(entries.map((e) => computeColumn(e, symbol, t("units.yearUnit"))));
+      const computed = await Promise.all(
+        entries.map((e) => computeColumn(e, money, moneyFixed, t("units.yearUnit"))),
+      );
       if (!stale) setCols(computed);
     })();
     return () => {
       stale = true;
     };
-  }, [entries, symbol, t]);
+  }, [entries, money, moneyFixed, t]);
 
   const onSave = () => {
     const trimmed = Array.from(name.trim())
@@ -138,6 +153,32 @@ export default function ScenarioPanel() {
     deleteScenario(entry.id);
     Message.success(t("scenario.deleted", { name: entry.name }));
     reload();
+  };
+
+  /** ③ 导出图片（p4-spec §8）：Canvas 2D 手绘对比表 → toBlob → <a download>；
+   *  values 已是 ⑤ 换算后的屏显字符串，导出与屏显逐字符一致；配色取当前生效令牌
+   *  （含色盲友好档语义色），三语文案随界面语言；零新依赖。valid 列数为 0 时按钮禁用 */
+  const onExport = () => {
+    const exportCols = validCols.map((c) => ({ name: c.name, failed: c.failed, values: c.values }));
+    if (exportCols.length === 0) return;
+    const canvas = buildScenarioTableBitmap({
+      title: t("app.title"),
+      metricLabels: METRIC_KEYS.map((key) => t(key)),
+      columns: exportCols,
+      footerLines: [t("app.title"), t("scenario.exportNote")],
+      tokens: {
+        bgPage: themeTokens.bgPage,
+        textPrimary: themeTokens.textPrimary,
+        textSecondary: themeTokens.textSecondary,
+        fall: themeTokens.fall,
+        hairlineCard: themeTokens.hairlineCard,
+      },
+      theme,
+    });
+    void downloadCanvasPng(canvas, buildExportFilename(new Date())).then((ok) => {
+      if (ok) Message.success(t("scenario.exportDone"));
+      else Message.error(t("scenario.exportFailed"));
+    });
   };
 
   /** 对比表数据：行 = 指标、列 = 合法情景（§4.3「对每条合法情景解码后复算」；
@@ -172,6 +213,7 @@ export default function ScenarioPanel() {
           value={name}
           maxLength={SCENARIO_NAME_MAX_CHARS}
           placeholder={t("scenario.namePlaceholder")}
+          aria-label={t("scenario.nameLabel")}
           onChange={(v) => setName(v)}
           style={{ width: 240 }}
           onPressEnter={onSave}
@@ -225,6 +267,17 @@ export default function ScenarioPanel() {
       {/* 并排对比表：行 = 指标、列 = 情景（≤12 列横向滚动；窄屏同口径滚动） */}
       <div style={{ marginTop: 16 }}>
         <Text bold>{t("scenario.compareTitle")}</Text>
+        {/* ③ 导出图片按钮：size="small" + wf-pressable（44px 触控档随既有全局规则命中；
+            文字即自带可访问名称）；valid 列数为 0 时禁用（p4-spec §8.1） */}
+        <Button
+          size="small"
+          className="wf-pressable"
+          style={{ marginLeft: 8 }}
+          disabled={validCols.length === 0}
+          onClick={onExport}
+        >
+          {t("scenario.export")}
+        </Button>
         {cols.filter((c) => c.valid).length === 0 ? (
           <Empty
             style={{ marginTop: 8 }}

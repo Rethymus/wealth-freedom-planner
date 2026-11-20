@@ -1,9 +1,12 @@
 /**
  * UI 层共享 hook。
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MOTION_DURATIONS } from "../data/defaults";
 import type { FinanceResult } from "../services/finance";
+import { currencySymbol, formatMoney, formatMoneyFixed } from "../services/format";
+import { cnyToDisplay, pickRate } from "../services/currency";
+import { getRates } from "../services/rates";
 
 export interface FinanceCallState<O> {
   /** 是否正在调用计算核心 */
@@ -236,4 +239,110 @@ export function useAnimatedNumber(target: number, durationMs?: number): number {
   }, [target, duration, reducedMotion]);
 
   return display;
+}
+
+// ---------------------------------------------------------------------------
+// P4 ⑤ 币种展示换算（docs/p4-spec.md §3.3/§3.4）：store 金额恒为 CNY 规范值，
+// 展示层按 rate（1 CNY = rate 单位展示币种）换算；rate 缺失回退符号-only 模式。
+// 核心公式（wasm）零改动，换算全部在本层完成。
+// ---------------------------------------------------------------------------
+
+/** 展示汇率状态（useDisplayRate 输出；rate = null 表示换算不可用） */
+export interface DisplayRate {
+  /** 当前展示币种 */
+  code: string;
+  /** null = 换算不可用（符号-only 模式） */
+  rate: number | null;
+  /** true = getRates Promise 未决（请求进行中，超时上限 8s）；true 期间调用方
+   *  不得渲染「汇率暂不可用」类断言文案（数据未定，横幅会先撒谎后翻转） */
+  loading: boolean;
+  /** 汇率数据是否来自离线快照 */
+  offline: boolean;
+  /** ratesUpdatedAt（可能为空串） */
+  updatedAt: string;
+  /** 数据来源说明 */
+  source: string;
+}
+
+/** CNY 展示币种恒等态（模块级常量：不发请求、不产生新引用） */
+const CANONICAL_RATE: DisplayRate = {
+  code: "CNY",
+  rate: 1,
+  loading: false,
+  offline: false,
+  updatedAt: "",
+  source: "canonical",
+};
+
+/** 请求未决期占位（rate null → 字段按符号-only 渲染，就绪后整帧切换为换算值） */
+function pendingRate(code: string): DisplayRate {
+  return { code, rate: null, loading: true, offline: false, updatedAt: "", source: "" };
+}
+
+/**
+ * 展示币种 → 换算率（p4-spec §3.3）：
+ * 1. displayCode === "CNY"：恒返回 canonical 态，不发起请求；
+ * 2. 其他币种：调用 getRates()（模块级缓存与 CurrencySection 既有调用自动去重）→
+ *    pickRate(result.rates, displayCode)；快照缺币种时 pickRate 得 null → 符号-only。
+ * 展示币种变化时重跑（deps：displayCode）。已知限制：CurrencySection 强刷
+ * （getRates(true) 覆写模块级 cached）后，已挂载组件持有的 resolved 值不随动，
+ * 至切币种 / 重挂载前保持旧 rate（旧 rate 仍是有效历史值，p4-spec §14 #15）。
+ */
+export function useDisplayRate(displayCode: string): DisplayRate {
+  const [state, setState] = useState<DisplayRate>(() =>
+    displayCode === "CNY" ? CANONICAL_RATE : pendingRate(displayCode),
+  );
+  useEffect(() => {
+    if (displayCode === "CNY") {
+      setState(CANONICAL_RATE);
+      return;
+    }
+    let cancelled = false;
+    setState(pendingRate(displayCode));
+    void getRates().then((r) => {
+      if (cancelled) return;
+      setState({
+        code: displayCode,
+        rate: pickRate(r.rates, displayCode),
+        loading: false,
+        offline: r.offline,
+        updatedAt: r.ratesUpdatedAt,
+        source: r.source,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [displayCode]);
+  return state;
+}
+
+/**
+ * 组件级金额展示绑定（p4-spec §3.4）：rate 可用时换算后格式化，
+ * 否则按 CNY 值直出（符号-only）。money/moneyFixed 经 useCallback 稳定引用
+ * （rate / 符号不变时不触发下游 effect 重跑）；display 一并返回，
+ * 供输入字段 convertRate 与图表数据同源换算使用。
+ */
+export function useMoney(displayCode: string): {
+  /** 展示币种符号（换算不可用时仅切换符号，数值保持 CNY 口径） */
+  symbol: string;
+  /** CNY 规范值 → 展示金额字符串（符号 + 千分位） */
+  money: (cnyValue: number) => string;
+  /** CNY 规范值 → 展示金额字符串（固定两位小数，表格列内精度一致） */
+  moneyFixed: (cnyValue: number) => string;
+  /** 换算率与请求状态（输入字段 convertRate / 图表数据换算取 display.rate） */
+  display: DisplayRate;
+} {
+  const display = useDisplayRate(displayCode);
+  const symbol = currencySymbol(displayCode);
+  const rate = display.rate;
+  const money = useCallback(
+    (v: number) => formatMoney(rate !== null ? cnyToDisplay(v, rate) : v, symbol),
+    [rate, symbol],
+  );
+  const moneyFixed = useCallback(
+    (v: number) => formatMoneyFixed(rate !== null ? cnyToDisplay(v, rate) : v, symbol),
+    [rate, symbol],
+  );
+  return { symbol, money, moneyFixed, display };
 }

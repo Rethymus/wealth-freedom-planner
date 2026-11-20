@@ -9,8 +9,7 @@
  * 图表 role="img" + aria 汇总句、未运行空态改用 Empty 组件。
  * 文案经 react-i18next 三语化；纵轴「万」刻度随语言切换（英文为 ×10k）。
  */
-import { Alert, Button, Descriptions, Empty, Grid, Progress, Radio, Select, Spin, Switch, Tooltip, Typography } from "@arco-design/web-react";
-import { IconQuestionCircle } from "@arco-design/web-react/icon";
+import { Alert, Button, Descriptions, Empty, Grid, Progress, Radio, Select, Spin, Switch, Typography } from "@arco-design/web-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -31,14 +30,15 @@ import {
 } from "../../services/finance";
 import type { FateWindow } from "../../services/finance";
 import type { FinanceResult } from "../../services/finance";
-import { currencySymbol, formatMoney, formatNumber } from "../../services/format";
+import { formatNumber, formatCompactAxis } from "../../services/format";
+import { cnyToDisplay } from "../../services/currency";
 import { LIMITS, MONTE_CARLO_STRATEGY_DEFAULTS, MOTION_DURATIONS, resolveThemeTokens } from "../../data/defaults";
 import { INDEX_ORDER, INDEX_SERIES } from "../../data/indexSeries";
 import type { IndexId, MonteCarloReturnMode } from "../../data/indexSeries";
 import type { MonteCarloOutput, SequenceDirection, SequenceSimOutput, WithdrawalStrategy } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
-import { AmountField, FieldRow, IntField, NumberField, PathsField, PercentField } from "../fields";
-import { compactXInterval, useChartMetrics, useIsNarrowViewport, usePrefersReducedMotion } from "../hooks";
+import { AmountField, FieldRow, FieldTip, IntField, NumberField, PathsField, PercentField } from "../fields";
+import { compactXInterval, useChartMetrics, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text } = Typography;
 const { Col } = Grid;
@@ -91,7 +91,11 @@ export default function MonteCarloPanel() {
   const displayCode = useCalculatorStore((s) => s.currency.display);
   const colorBlindFriendly = useCalculatorStore((s) => s.colorBlindFriendly);
   const theme = useCalculatorStore((s) => s.theme);
-  const symbol = currencySymbol(displayCode);
+  /** ⑤ 金额展示绑定（p4-spec §3.4）：统计行与 aria 内嵌金额经展示币种换算；rate null = 符号-only */
+  const { symbol, money, display } = useMoney(displayCode);
+  const rate = display.rate;
+  /** CNY 规范值 → 展示币种数值（路径图 / 命运曲线几何数据同源换算；rate 不可用时恒等） */
+  const convert = (v: number): number => (rate !== null ? cnyToDisplay(v, rate) : v);
   /** 窄视口下统计 Descriptions 切纵向堆叠（标签上/值下），避免长 label 挤压数值列 */
   const isNarrow = useIsNarrowViewport();
   /** 图表响应式三档（docs/p3-spec.md §6.4 D5）：高度 240/280/320、YAxis 宽 56/72、紧凑档 X 刻度 ≤5 */
@@ -232,7 +236,7 @@ export default function MonteCarloPanel() {
       .finally(() => setRunning(false));
   };
 
-  /** 50 条抽样路径 + 逐年中位数 → 图表数据 */
+  /** 50 条抽样路径 + 逐年中位数 → 图表数据（数值经 convert 换算到展示币种） */
   const chartData: ChartRow[] = useMemo(() => {
     if (!result?.ok) return [];
     const paths = result.data.samplePaths.slice(0, MAX_CHART_PATHS);
@@ -242,7 +246,7 @@ export default function MonteCarloPanel() {
       const row: ChartRow = { year: y + 1 };
       const column: number[] = [];
       paths.forEach((p, i) => {
-        const v = p[y] ?? 0;
+        const v = convert(p[y] ?? 0);
         row[`p${i}`] = v;
         column.push(v);
       });
@@ -251,9 +255,10 @@ export default function MonteCarloPanel() {
       rows.push(row);
     }
     return rows;
-  }, [result]);
+    // convert 随展示币种变化须重算（rate > 0 线性缩放）；rate=1 时与现状逐位一致
+  }, [result, rate]);
 
-  /** 命运曲线图数据：最好 / 中位 / 最差三条逐年资产路径（滚动模式） */
+  /** 命运曲线图数据：最好 / 中位 / 最差三条逐年资产路径（滚动模式；数值换算到展示币种） */
   const seqChartData: ChartRow[] = useMemo(() => {
     if (!seqState || seqState.kind !== "rolling") return [];
     const { windows, bestIndex, medianIndex, worstIndex } = seqState;
@@ -266,13 +271,13 @@ export default function MonteCarloPanel() {
     for (let y = 0; y < years; y += 1) {
       rows.push({
         year: y + 1,
-        best: best.assetPath[y] ?? 0,
-        median: mid.assetPath[y] ?? 0,
-        worst: worst.assetPath[y] ?? 0,
+        best: convert(best.assetPath[y] ?? 0),
+        median: convert(mid.assetPath[y] ?? 0),
+        worst: convert(worst.assetPath[y] ?? 0),
       });
     }
     return rows;
-  }, [seqState]);
+  }, [seqState, rate]);
 
   const data = result?.ok === true ? result.data : null;
   const error = result && !result.ok ? result.error : null;
@@ -303,18 +308,37 @@ export default function MonteCarloPanel() {
       : multiple;
   };
 
+  /** A8 序列完成播报句（p4-spec §7）：绑 seqState 落定帧（滚动模式用命运行值、
+   *  三序模式用倍数行值）；节点常驻、内容替换式更新，只播落定值（防噪三规则） */
+  const seqAria = (() => {
+    if (!seqState) return "";
+    if (seqState.kind === "rolling") {
+      const b = seqState.windows[seqState.bestIndex];
+      const m = seqState.windows[seqState.medianIndex];
+      const w = seqState.windows[seqState.worstIndex];
+      return t("seq.doneAria", {
+        best: b ? fateValue(b) : "—",
+        median: m ? fateValue(m) : "—",
+        worst: w ? fateValue(w) : "—",
+      });
+    }
+    return t("seq.doneAria", {
+      best: reorderValue(seqState.original),
+      median: reorderValue(seqState.ascending),
+      worst: reorderValue(seqState.descending),
+    });
+  })();
+
   return (
     <div>
       {/* 收益模式行（docs/p1-spec.md §4.6）：正态参数 / 历史自助抽样；自助抽样附加序列选择。
-          触控目标由样式层既有触屏媒体查询承担，不额外包命中区扩展层 */}
+          触控目标由样式层既有触屏媒体查询承担，不额外包命中区扩展层。
+          A5：提示图标经 FieldTip（Tab 可聚焦 + focus 触发 Tooltip）；A7：Radio 组补 name */}
       <div className="wf-mc-mode">
         <Text>{t("mc.returnMode")}</Text>
-        <Tooltip content={t("mc.returnModeTooltip")}>
-          <span className="wf-field-tip">
-            <IconQuestionCircle />
-          </span>
-        </Tooltip>
+        <FieldTip text={t("mc.returnModeTooltip")} />
         <Radio.Group
+          name="mc-return-mode"
           value={returnMode}
           onChange={(v) => setReturnMode(v as MonteCarloReturnMode)}
           options={[
@@ -325,11 +349,7 @@ export default function MonteCarloPanel() {
         {returnMode === "bootstrap" ? (
           <>
             <Text>{t("mc.seriesLabel")}</Text>
-            <Tooltip content={t("mc.seriesTooltip")}>
-              <span className="wf-field-tip">
-                <IconQuestionCircle />
-              </span>
-            </Tooltip>
+            <FieldTip text={t("mc.seriesTooltip")} />
             <Select
               size="small"
               value={seriesId}
@@ -344,6 +364,7 @@ export default function MonteCarloPanel() {
       <div className="wf-mc-mode">
         <Text>{t("mc.strategy")}</Text>
         <Radio.Group
+          name="mc-strategy"
           value={inputs.strategy ?? "fixed"}
           onChange={(v) => handleStrategyChange(v as string)}
           options={[
@@ -409,14 +430,12 @@ export default function MonteCarloPanel() {
           <Col className="wf-field" xs={24} md={12}>
             <div className="wf-field-label">
               <Text>{t("mc.thresholdFreeze")}</Text>
-              <Tooltip content={t("mc.thresholdFreezeTooltip")}>
-                <span className="wf-field-tip">
-                  <IconQuestionCircle />
-                </span>
-              </Tooltip>
+              <FieldTip text={t("mc.thresholdFreezeTooltip")} />
             </div>
+            {/* A3：开关补可访问名称（复用标签文案，p4-spec §7） */}
             <Switch
               checked={inputs.threshold.freezeOnLoss}
+              aria-label={t("mc.thresholdFreeze")}
               onChange={(checked) => setInputs({ threshold: { ...inputs.threshold!, freezeOnLoss: checked } })}
             />
           </Col>
@@ -467,7 +486,8 @@ export default function MonteCarloPanel() {
           value={inputs.currentAssets}
           onChange={(v) => setInputs({ currentAssets: v })}
           prefix={symbol}
-          suffix={t("units.yuan")}
+          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+          convertRate={rate}
         />
         <AmountField
           label={t("mc.annualSpend")}
@@ -475,7 +495,8 @@ export default function MonteCarloPanel() {
           value={inputs.annualSpend}
           onChange={(v) => setInputs({ annualSpend: v })}
           prefix={symbol}
-          suffix={t("units.yuanPerYear")}
+          suffix={displayCode === "CNY" ? t("units.yuanPerYear") : undefined}
+          convertRate={rate}
         />
         {/* 自助抽样模式下名义回报均值/标准差不参与计算（分布由所选序列决定），隐藏两个字段；
             通胀均值/标准差保留（通胀仍按正态分布抽样） */}
@@ -563,9 +584,12 @@ export default function MonteCarloPanel() {
           独立 seqRunning，不复用 running 状态 */}
       <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--wf-hairline-card, rgba(29,33,41,0.08))" }}>
         <Text bold>{t("seq.title")}</Text>
+        {/* A8 序列完成播报：绑 seqState 落定帧（运行中内容为空） */}
+        <span className="wf-sr-only" aria-live="polite" aria-atomic="true">{seqAria}</span>
         <div className="wf-mc-mode" style={{ marginTop: 8 }}>
           {/* 对照模式选项自解释（起点滚动 / 三序对照），无独立标签键 */}
           <Radio.Group
+            name="seq-mode"
             value={seqMode}
             onChange={(v) => setSeqMode(v as "rolling" | "reorder")}
             options={[
@@ -575,6 +599,7 @@ export default function MonteCarloPanel() {
           />
           <Text>{t("seq.direction")}</Text>
           <Radio.Group
+            name="seq-direction"
             value={seqDirection}
             onChange={(v) => setSeqDirection(v as SequenceDirection)}
             options={[
@@ -631,7 +656,8 @@ export default function MonteCarloPanel() {
               value={seqSaving}
               onChange={(v) => setSeqSaving(v)}
               prefix={symbol}
-              suffix={t("units.yuanPerYear")}
+              suffix={displayCode === "CNY" ? t("units.yuanPerYear") : undefined}
+              convertRate={rate}
             />
           )}
         </FieldRow>
@@ -673,7 +699,7 @@ export default function MonteCarloPanel() {
                     <YAxis
                       width={yAxisWidth}
                       tick={{ fontSize: 12, fill: themeTokens.chartTick }}
-                      tickFormatter={(v: number) => `${Math.round(v / 10000)}${t("units.wan")}`}
+                      tickFormatter={(v: number) => formatCompactAxis(v)}
                     />
                     <Line
                       dataKey="best"
@@ -765,6 +791,12 @@ export default function MonteCarloPanel() {
 
       {error ? <Alert type="error" style={{ marginTop: 8 }} content={error} /> : null}
 
+      {/* A8 完成播报（p4-spec §7）：视觉隐藏 live 节点绑 result 落定帧（data 派生自 settled
+          result，无动画中间帧），运行期间内容为空、完成时 polite 整句播报一次（防噪三规则） */}
+      <span className="wf-sr-only" aria-live="polite" aria-atomic="true">
+        {data ? t("mc.doneAria", { prob: formatNumber(depletionPercent, 1), median: money(data.medianTerminal) }) : ""}
+      </span>
+
       {data ? (
         <>
           <div className="wf-mc-progress">
@@ -783,11 +815,11 @@ export default function MonteCarloPanel() {
             layout={isNarrow ? "vertical" : "horizontal"}
             column={{ xs: 1, md: 2 }}
             data={[
-              { label: t("mc.medianTerminal"), value: <Text bold className="wf-nowrap">{formatMoney(data.medianTerminal, symbol)}</Text> },
-              { label: t("mc.p5"), value: formatMoney(data.p5, symbol) },
-              { label: t("mc.p25"), value: formatMoney(data.p25, symbol) },
-              { label: t("mc.p75"), value: formatMoney(data.p75, symbol) },
-              { label: t("mc.p95"), value: formatMoney(data.p95, symbol) },
+              { label: t("mc.medianTerminal"), value: <Text bold className="wf-nowrap">{money(data.medianTerminal)}</Text> },
+              { label: t("mc.p5"), value: money(data.p5) },
+              { label: t("mc.p25"), value: money(data.p25) },
+              { label: t("mc.p75"), value: money(data.p75) },
+              { label: t("mc.p95"), value: money(data.p95) },
               {
                 label: `${t("mc.paths")} / ${t("mc.years")}`,
                 value: t("mc.pathsYears", { paths: formatNumber(inputs.paths, 0), years: inputs.years }),
@@ -797,19 +829,15 @@ export default function MonteCarloPanel() {
                 label: (
                   <span>
                     {t("mc.initialWithdrawalRate")}
-                    <Tooltip content={t("mc.initialWithdrawalRateTooltip")}>
-                      <span className="wf-field-tip">
-                        <IconQuestionCircle />
-                      </span>
-                    </Tooltip>
+                    <FieldTip text={t("mc.initialWithdrawalRateTooltip")} />
                   </span>
                 ),
                 value: initialRateText,
               },
               /* P2-F1 §2.4 ④：末年支取额三分位（键清单逐键成行） */
-              { label: t("mc.withdrawalP5"), value: formatMoney(data.withdrawalP5, symbol) },
-              { label: t("mc.withdrawalMedian"), value: formatMoney(data.withdrawalMedian, symbol) },
-              { label: t("mc.withdrawalP95"), value: formatMoney(data.withdrawalP95, symbol) },
+              { label: t("mc.withdrawalP5"), value: money(data.withdrawalP5) },
+              { label: t("mc.withdrawalMedian"), value: money(data.withdrawalMedian) },
+              { label: t("mc.withdrawalP95"), value: money(data.withdrawalP95) },
             ]}
           />
           {/* P2-F1 §2.4 ⑤：策略口径注（单一键承载阈值带 / 余额比例 / 算术锚三段声明） */}
@@ -824,7 +852,7 @@ export default function MonteCarloPanel() {
                 paths: formatNumber(chartPathCount, 0),
                 years: inputs.years,
                 prob: formatNumber(depletionPercent, 1),
-                median: formatMoney(data.medianTerminal, symbol),
+                median: money(data.medianTerminal),
               })}
             >
               <ResponsiveContainer width="100%" height={chartHeight}>
@@ -840,7 +868,7 @@ export default function MonteCarloPanel() {
                   <YAxis
                     width={yAxisWidth}
                     tick={{ fontSize: 12, fill: themeTokens.chartTick }}
-                    tickFormatter={(v: number) => `${Math.round(v / 10000)}${t("units.wan")}`}
+                    tickFormatter={(v: number) => formatCompactAxis(v)}
                   />
                   {Array.from({ length: chartPathCount }, (_, i) => (
                     <Line

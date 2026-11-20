@@ -22,12 +22,13 @@ import {
 } from "recharts";
 import { calcAccumulation, calcBaseline, calcRequiredSaving } from "../../services/finance";
 import type { FinanceResult } from "../../services/finance";
-import { currencySymbol, formatMoney, formatNumber } from "../../services/format";
+import { formatNumber, formatCompactAxis } from "../../services/format";
+import { cnyToDisplay } from "../../services/currency";
 import { LIMITS, MOTION_DURATIONS, resolveThemeTokens } from "../../data/defaults";
 import type { AccumulationOutput, RequiredSavingOutput } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, IntField, PathsField, PercentField } from "../fields";
-import { compactXInterval, useChartMetrics, useFinanceCall, useIsNarrowViewport, usePrefersReducedMotion } from "../hooks";
+import { compactXInterval, useChartMetrics, useFinanceCall, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text, Title } = Typography;
 const { Col } = Grid;
@@ -59,7 +60,11 @@ export default function AccumulationPanel() {
   const displayCode = useCalculatorStore((s) => s.currency.display);
   const colorBlindFriendly = useCalculatorStore((s) => s.colorBlindFriendly);
   const theme = useCalculatorStore((s) => s.theme);
-  const symbol = currencySymbol(displayCode);
+  /** ⑤ 金额展示绑定（p4-spec §3.4）：储蓄行 / 分位数 / 大数字经展示币种换算；rate null = 符号-only */
+  const { symbol, money, display } = useMoney(displayCode);
+  const rate = display.rate;
+  /** CNY 规范值 → 展示币种数值（路径图 / 目标线几何数据同源换算；rate 不可用时恒等） */
+  const convert = (v: number): number => (rate !== null ? cnyToDisplay(v, rate) : v);
   /** 窄视口下统计 Descriptions 切纵向堆叠（标签上/值下），避免长 label 挤压数值列 */
   const isNarrow = useIsNarrowViewport();
   /** 图表响应式三档（docs/p3-spec.md §6.4 D5）：高度 240/280/320、YAxis 宽 56/72、紧凑档 X 刻度 ≤5 */
@@ -156,7 +161,7 @@ export default function AccumulationPanel() {
       .finally(() => setVerifyRunning(false));
   };
 
-  /** 50 条抽样路径 + 逐年中位数 + 展示口径目标线 → 图表数据 */
+  /** 50 条抽样路径 + 逐年中位数 + 展示口径目标线 → 图表数据（数值经 convert 换算到展示币种） */
   const chartData: ChartRow[] = useMemo(() => {
     if (!result?.ok) return [];
     const paths = result.data.samplePaths.slice(0, MAX_CHART_PATHS);
@@ -166,7 +171,7 @@ export default function AccumulationPanel() {
       const row: ChartRow = { year: y + 1 };
       const column: number[] = [];
       paths.forEach((p, i) => {
-        const v = p[y] ?? 0;
+        const v = convert(p[y] ?? 0);
         row[`p${i}`] = v;
         column.push(v);
       });
@@ -174,11 +179,12 @@ export default function AccumulationPanel() {
       row.median = median(column);
       // 展示口径目标线 = effectiveTarget × (1 + 通胀均值)^year（契约不含各路径目标序列，
       // 各路径实际判定使用其自身通胀样本——图下注释注明）
-      row.target = effectiveTarget * Math.pow(1 + inputs.inflationMeanPct / 100, y + 1);
+      row.target = convert(effectiveTarget * Math.pow(1 + inputs.inflationMeanPct / 100, y + 1));
       rows.push(row);
     }
     return rows;
-  }, [result, effectiveTarget, inputs.inflationMeanPct]);
+    // convert 随展示币种变化须重算（rate > 0 线性缩放）；rate=1 时与现状逐位一致
+  }, [result, effectiveTarget, inputs.inflationMeanPct, rate]);
 
   const data = result?.ok === true ? result.data : null;
   /** 统一错误提示：正向运行 / 反推闭式解 / 蒙特卡洛验证任一步失败均走既有 error Alert */
@@ -191,11 +197,11 @@ export default function AccumulationPanel() {
 
   /** 月储蓄（可为负；负值以跌色展示，正值以涨色展示） */
   const saving = inputs.monthlyIncome - inputs.monthlyExpense;
-  const savingText = formatMoney(saving, symbol);
+  const savingText = money(saving);
   /** 整句经 i18n 插值后定位储蓄数值子串，按正负着色（同串渲染，不拆文案键） */
   const savingLine = t("accumulation.savingLine", {
-    income: formatMoney(inputs.monthlyIncome, symbol),
-    expense: formatMoney(inputs.monthlyExpense, symbol),
+    income: money(inputs.monthlyIncome),
+    expense: money(inputs.monthlyExpense),
     saving: savingText,
   });
   const savingIdx = savingLine.lastIndexOf(savingText);
@@ -214,6 +220,7 @@ export default function AccumulationPanel() {
       <div className="wf-mc-mode">
         <Text>{t("accumulation.mode")}</Text>
         <Radio.Group
+          name="acc-mode"
           value={mode}
           onChange={(v) => setMode(v as "forward" | "reverse")}
           options={[
@@ -230,7 +237,8 @@ export default function AccumulationPanel() {
           value={inputs.currentAssets}
           onChange={(v) => setInputs({ currentAssets: v })}
           prefix={symbol}
-          suffix={t("units.yuan")}
+          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+          convertRate={rate}
         />
         {/* 反推模式隐藏「税后月收入」（docs/p2-spec.md §5.2；所需月储蓄即其反解值） */}
         {mode === "forward" ? (
@@ -240,7 +248,8 @@ export default function AccumulationPanel() {
             value={inputs.monthlyIncome}
             onChange={(v) => setInputs({ monthlyIncome: v })}
             prefix={symbol}
-            suffix={t("units.yuan")}
+            suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+            convertRate={rate}
           />
         ) : null}
         <AmountField
@@ -249,7 +258,8 @@ export default function AccumulationPanel() {
           value={inputs.monthlyExpense}
           onChange={(v) => setInputs({ monthlyExpense: v })}
           prefix={symbol}
-          suffix={t("units.yuan")}
+          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+          convertRate={rate}
         />
         <AmountField
           key={`target-sync-${targetSyncEpoch}`}
@@ -261,8 +271,9 @@ export default function AccumulationPanel() {
             setSynced(false); // 手动修改目标值即解除联动
           }}
           prefix={symbol}
-          suffix={t("units.yuan")}
+          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
           hint={synced ? t("accumulation.syncedHint") : undefined}
+          convertRate={rate}
         />
         {/* 反推模式为确定性口径：只消费均值，隐藏两个标准差字段（§5.2 字段清单） */}
         {mode === "forward" ? (
@@ -399,7 +410,7 @@ export default function AccumulationPanel() {
                 margin: 0,
               }}
             >
-              {revData ? formatMoney(revData.requiredMonthlySaving, symbol) : "—"}
+              {revData ? money(revData.requiredMonthlySaving) : "—"}
             </Title>
             <Text type="secondary">
               {t("accumulation.reverseNote", { years: inputs.years })}
@@ -428,13 +439,13 @@ export default function AccumulationPanel() {
                     years: inputs.years,
                     pct: formatNumber(verifyPercent, 1),
                     paths: formatNumber(inputs.paths, 0),
-                    saving: formatMoney(revData ? revData.requiredMonthlySaving : 0, symbol),
+                    saving: money(revData ? revData.requiredMonthlySaving : 0),
                   })}
                 </Text>
                 <Text type="secondary">
                   {t("accumulation.verifyNote", {
                     years: inputs.years,
-                    saving: formatMoney(revData ? revData.requiredMonthlySaving : 0, symbol),
+                    saving: money(revData ? revData.requiredMonthlySaving : 0),
                   })}
                 </Text>
               </>
@@ -480,16 +491,16 @@ export default function AccumulationPanel() {
             column={{ xs: 1, md: 2 }}
             title={t("accumulation.finalTitle")}
             data={[
-              { label: t("mc.p5"), value: formatMoney(data.finalAssetPercentiles.p5, symbol) },
-              { label: t("mc.p25"), value: formatMoney(data.finalAssetPercentiles.p25, symbol) },
+              { label: t("mc.p5"), value: money(data.finalAssetPercentiles.p5) },
+              { label: t("mc.p25"), value: money(data.finalAssetPercentiles.p25) },
               {
                 label: t("mc.medianTerminal"),
                 value: (
-                  <Text bold className="wf-nowrap">{formatMoney(data.finalAssetPercentiles.p50, symbol)}</Text>
+                  <Text bold className="wf-nowrap">{money(data.finalAssetPercentiles.p50)}</Text>
                 ),
               },
-              { label: t("mc.p75"), value: formatMoney(data.finalAssetPercentiles.p75, symbol) },
-              { label: t("mc.p95"), value: formatMoney(data.finalAssetPercentiles.p95, symbol) },
+              { label: t("mc.p75"), value: money(data.finalAssetPercentiles.p75) },
+              { label: t("mc.p95"), value: money(data.finalAssetPercentiles.p95) },
               {
                 label: `${t("mc.paths")} / ${t("mc.years")}`,
                 value: t("mc.pathsYears", { paths: formatNumber(inputs.paths, 0), years: inputs.years }),
@@ -519,7 +530,7 @@ export default function AccumulationPanel() {
                   <YAxis
                     width={yAxisWidth}
                     tick={{ fontSize: 12, fill: themeTokens.chartTick }}
-                    tickFormatter={(v: number) => `${Math.round(v / 10000)}${t("units.wan")}`}
+                    tickFormatter={(v: number) => formatCompactAxis(v)}
                   />
                   {Array.from({ length: chartPathCount }, (_, i) => (
                     <Line

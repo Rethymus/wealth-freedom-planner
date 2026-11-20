@@ -8,12 +8,12 @@ import type { TableColumnProps } from "@arco-design/web-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { calcAmortize } from "../../services/finance";
-import { currencySymbol, formatMoneyFixed, formatNumber } from "../../services/format";
+import { formatNumber } from "../../services/format";
 import { LIMITS } from "../../data/defaults";
 import type { AmortizeRow } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, IntField, PercentField } from "../fields";
-import { useFinanceCall, useIsNarrowViewport } from "../hooks";
+import { useFinanceCall, useIsNarrowViewport, useMoney } from "../hooks";
 
 const { Text } = Typography;
 const { Col } = Grid;
@@ -29,7 +29,9 @@ export default function LoanPanel() {
   const inputs = useCalculatorStore((s) => s.loanInputs);
   const setInputs = useCalculatorStore((s) => s.setLoanInputs);
   const displayCode = useCalculatorStore((s) => s.currency.display);
-  const symbol = currencySymbol(displayCode);
+  /** ⑤ 金额展示绑定（p4-spec §3.4）：摘要三值与摊销表四列经展示币种换算；rate null = 符号-only */
+  const { symbol, moneyFixed, display } = useMoney(displayCode);
+  const rate = display.rate;
 
   const [loanKind, setLoanKind] = useState<LoanKind>("commercial");
 
@@ -56,10 +58,10 @@ export default function LoanPanel() {
       width: 96,
       render: (v: number) => <span className="wf-nowrap">{t("loan.period", { n: v })}</span>,
     },
-    { title: t("loan.colPayment"), dataIndex: "payment", align: "right", render: (v: number) => formatMoneyFixed(v, symbol) },
-    { title: t("loan.colPrincipal"), dataIndex: "principalPart", align: "right", render: (v: number) => formatMoneyFixed(v, symbol) },
-    { title: t("loan.colInterest"), dataIndex: "interestPart", align: "right", render: (v: number) => formatMoneyFixed(v, symbol) },
-    { title: t("loan.colRemaining"), dataIndex: "remaining", align: "right", render: (v: number) => formatMoneyFixed(v, symbol) },
+    { title: t("loan.colPayment"), dataIndex: "payment", align: "right", render: (v: number) => moneyFixed(v) },
+    { title: t("loan.colPrincipal"), dataIndex: "principalPart", align: "right", render: (v: number) => moneyFixed(v) },
+    { title: t("loan.colInterest"), dataIndex: "interestPart", align: "right", render: (v: number) => moneyFixed(v) },
+    { title: t("loan.colRemaining"), dataIndex: "remaining", align: "right", render: (v: number) => moneyFixed(v) },
   ];
 
   return (
@@ -71,7 +73,8 @@ export default function LoanPanel() {
           value={inputs.principal}
           onChange={(v) => setInputs({ principal: v })}
           prefix={symbol}
-          suffix={t("units.yuan")}
+          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+          convertRate={rate}
         />
         <PercentField
           label={t("loan.annualRate")}
@@ -115,6 +118,7 @@ export default function LoanPanel() {
             </Text>
           </div>
           <Radio.Group
+            name="loan-method"
             value={inputs.method}
             onChange={(v) => setInputs({ method: v as typeof inputs.method })}
           >
@@ -136,12 +140,12 @@ export default function LoanPanel() {
             data={[
               {
                 label: equalPrincipal ? t("loan.monthlyPaymentFirst") : t("loan.monthlyPaymentFixed"),
-                value: <Text bold className="wf-nowrap">{formatMoneyFixed(data.monthlyPayment, symbol)}</Text>,
+                value: <Text bold className="wf-nowrap">{moneyFixed(data.monthlyPayment)}</Text>,
               },
-              { label: t("loan.totalInterest"), value: formatMoneyFixed(data.totalInterest, symbol) },
+              { label: t("loan.totalInterest"), value: moneyFixed(data.totalInterest) },
               {
                 label: t("loan.totalRepayment"),
-                value: formatMoneyFixed(inputs.principal + data.totalInterest, symbol),
+                value: moneyFixed(inputs.principal + data.totalInterest),
               },
             ]}
           />

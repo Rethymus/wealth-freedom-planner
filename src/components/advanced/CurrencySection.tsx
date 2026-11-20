@@ -48,9 +48,11 @@ export default function CurrencySection() {
   /** 币种选项：代码 + 符号（跨语言通用，避免界面文案夹带数据层名称） */
   const currencyOptions = CURRENCIES.map((c) => ({ label: `${c.code}（${c.symbol}）`, value: c.code }));
 
-  /** 月开销偏离检测：按 regional.ts 用法建议，以中国城镇人均消费（RMB 锚点）为基准，不做汇率换算 */
+  /** 月开销偏离检测：按 regional.ts 用法建议，以中国城镇人均消费（RMB 锚点）为基准，不做汇率换算。
+   *  ⑤（p4-spec §14 #8）：store 月开销恒为 CNY 规范值，检测与展示币种解耦——
+   *  删除既有 displayCode !== "CNY" 提前返回分支，非 CNY 展示下检测同样执行（行为微变已登记） */
   const benchmarkAlert = (() => {
-    if (!CN_BENCHMARK?.monthlyConsumptionAnchorCny || displayCode !== "CNY") return null;
+    if (!CN_BENCHMARK?.monthlyConsumptionAnchorCny) return null;
     const anchor = CN_BENCHMARK.monthlyConsumptionAnchorCny;
     const anchorText = formatNumber(anchor, 0);
     const region = t("common.regionUrbanCn");
@@ -88,7 +90,7 @@ export default function CurrencySection() {
             {t("currency.hint")}
           </Text>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div className="wf-currency-meta" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <Select
             value={displayCode}
             options={currencyOptions}
@@ -156,11 +158,8 @@ export default function CurrencySection() {
           content={t("currency.benchmarkNoticePrefix") + benchmarkAlert}
         />
       ) : CN_BENCHMARK ? (
-        <Alert
-          type="info"
-          style={{ marginBottom: 12 }}
-          content={displayCode !== "CNY" ? t("currency.benchmarkInfoOther") : t("currency.benchmarkInfoCny")}
-        />
+        // 检测已与展示币种解耦（⑤）：口径说明恒为「以人民币口径为锚」，不再分叉展示币种
+        <Alert type="info" style={{ marginBottom: 12 }} content={t("currency.benchmarkInfoCny")} />
       ) : (
         <Alert type="info" style={{ marginBottom: 12 }} content={t("currency.benchmarkEmpty")} />
       )}

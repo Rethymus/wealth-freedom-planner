@@ -11,7 +11,9 @@ import { CURRENCIES, MOTION_DURATIONS, THEME, THEME_DARK, resolveThemeTokens } f
 import type { ThemeMode } from "./data/defaults";
 import { persistLanguage, SUPPORTED_LANGS } from "./i18n";
 import type { SupportedLang } from "./i18n";
+import { formatNumber, formatTimestamp } from "./services/format";
 import { useCalculatorStore } from "./store/useCalculatorStore";
+import { useDisplayRate } from "./components/hooks";
 import BasicCalculator from "./components/BasicCalculator";
 import AdvancedPanel from "./components/AdvancedPanel";
 
@@ -40,6 +42,10 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
   const applyShareState = useCalculatorStore((s) => s.applyShareState);
   const resetBusinessInputs = useCalculatorStore((s) => s.resetBusinessInputs);
   const shareHandledRef = useRef(false);
+  /** ⑤ App 级换算提示（p4-spec §3.7）：分三态——loading 态不渲染横幅（静默过渡，
+   *  getRates 超时上限 8s，字段已按符号-only 渲染，横幅闪变比误报更伤）；
+   *  落定后 rate 可用 → 换算说明（含汇率时点）；rate null（离线 / 缺币种）→ 符号-only 回退说明 */
+  const rateInfo = useDisplayRate(displayCode);
   useEffect(() => {
     /** 分享 hash 处理：首挂载与同文档 hashchange 共用同一口径——合法载荷恢复并提示成功；
      * 损坏 / 版本不符业务参数回落默认并提示一次。同文档导航（地址栏改 hash / 粘贴仅差
@@ -216,7 +222,13 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
+      {/* A1 跳过链接（p4-spec §7）：置 Layout 首个子元素（Header 之前）——须先于重复块成为
+          首 Tab 停留点方有效；Enter 后焦点落 #wf-main（Content tabIndex={-1}） */}
+      <a className="wf-skip-link" href="#wf-main">
+        {t("a11y.skipToContent")}
+      </a>
       <Header
+        role="banner"
         className="wf-header wf-surface-topbar"
         style={{
           display: "flex",
@@ -288,6 +300,9 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
           width:100% + 水平 padding 会在窄视口溢出（375px 实测 scrollWidth 392）。
           maxWidth 同步 +32（padding），保持桌面端 1080 内容宽度不变。 */}
       <Content
+        role="main"
+        id="wf-main"
+        tabIndex={-1}
         style={{
           boxSizing: "border-box",
           width: "100%",
@@ -304,14 +319,27 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
             content={t("app.wasmFailed", { message: wasmBootstrap.message })}
           />
         ) : null}
-        {displayCode !== "CNY" ? (
-          <Alert type="info" style={{ marginBottom: 16 }} content={t("app.currencyNotice")} />
+        {/* ⑤ 换算提示三态（p4-spec §3.7）：CNY 恒不渲染；loading 不渲染（防先撒谎后翻转）；
+            落定可用 → 换算说明（{{rate}}/{{time}}/{{code}} 占位）；落定不可用 → 符号-only 回退说明 */}
+        {displayCode !== "CNY" && !rateInfo.loading && rateInfo.rate !== null ? (
+          <Alert
+            type="info"
+            style={{ marginBottom: 16 }}
+            content={t("app.currencyNotice", {
+              rate: formatNumber(rateInfo.rate, 4),
+              code: rateInfo.code,
+              time: formatTimestamp(rateInfo.updatedAt, t("currency.noTimestamp")),
+            })}
+          />
+        ) : null}
+        {displayCode !== "CNY" && !rateInfo.loading && rateInfo.rate === null ? (
+          <Alert type="warning" style={{ marginBottom: 16 }} content={t("app.currencyFallback")} />
         ) : null}
         <BasicCalculator />
         <AdvancedPanel />
       </Content>
 
-      <Footer className="wf-footer" style={{ textAlign: "center", padding: "16px 24px" }}>
+      <Footer role="contentinfo" className="wf-footer" style={{ textAlign: "center", padding: "16px 24px" }}>
         <div>
           <Text type="secondary">{t("app.footerDisclaimer")}</Text>
         </div>

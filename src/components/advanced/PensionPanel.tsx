@@ -10,12 +10,12 @@ import { Alert, Button, Descriptions, Spin, Typography } from "@arco-design/web-
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { calcPension } from "../../services/finance";
-import { currencySymbol, formatMoney, formatNumber } from "../../services/format";
+import { formatNumber } from "../../services/format";
 import { LIMITS, resolveThemeTokens } from "../../data/defaults";
 import { effectiveMonthsDivisor, PENSION_WAGE_SOURCE_NOTE } from "../../data/pensionParams";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, IntField, NumberField } from "../fields";
-import { useFinanceCall, useIsNarrowViewport } from "../hooks";
+import { useFinanceCall, useIsNarrowViewport, useMoney } from "../hooks";
 
 const { Text } = Typography;
 
@@ -29,7 +29,9 @@ export default function PensionPanel() {
   const displayCode = useCalculatorStore((s) => s.currency.display);
   const colorBlindFriendly = useCalculatorStore((s) => s.colorBlindFriendly);
   const theme = useCalculatorStore((s) => s.theme);
-  const symbol = currencySymbol(displayCode);
+  /** ⑤ 金额展示绑定（p4-spec §3.4）：两层养老金与调整后参考线经展示币种换算；rate null = 符号-only */
+  const { symbol, money, display } = useMoney(displayCode);
+  const rate = display.rate;
   /** 窄视口下结果 Descriptions 切纵向堆叠（标签上/值下） */
   const isNarrow = useIsNarrowViewport();
   /** 覆盖率满额行的涨色：经主题解析函数取解析值（不感知主题，见设计规范第 8 节口径） */
@@ -105,7 +107,8 @@ export default function PensionPanel() {
           value={pensionInputs.accountBalance}
           onChange={(v) => setPensionInputs({ accountBalance: v })}
           prefix={symbol}
-          suffix={t("units.yuan")}
+          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+          convertRate={rate}
         />
         <AmountField
           label={t("pension.avgWage")}
@@ -113,7 +116,8 @@ export default function PensionPanel() {
           value={pensionInputs.avgMonthlyWage}
           onChange={(v) => setPensionInputs({ avgMonthlyWage: v })}
           prefix={symbol}
-          suffix={t("units.yuanPerMonth")}
+          suffix={displayCode === "CNY" ? t("units.yuanPerMonth") : undefined}
+          convertRate={rate}
         />
         <IntField
           key={`months-sync-${monthsSyncEpoch}`}
@@ -169,12 +173,12 @@ export default function PensionPanel() {
                 label: t("pension.monthlyPension"),
                 value: (
                   <Text bold className="wf-nowrap">
-                    {formatMoney(data.pensionMonthly, symbol)}
+                    {money(data.pensionMonthly)}
                   </Text>
                 ),
               },
-              { label: t("pension.basicPart"), value: formatMoney(data.basicPensionMonthly, symbol) },
-              { label: t("pension.accountPart"), value: formatMoney(data.accountPensionMonthly, symbol) },
+              { label: t("pension.basicPart"), value: money(data.basicPensionMonthly) },
+              { label: t("pension.accountPart"), value: money(data.accountPensionMonthly) },
               {
                 label: t("pension.yearsToRetire"),
                 value: `${data.yearsToRetire} ${t("units.yearUnit")}`,
@@ -195,13 +199,13 @@ export default function PensionPanel() {
             data={[
               {
                 label: t("pension.adjustedExpense"),
-                value: formatMoney(data.adjustedMonthlyExpense, symbol),
+                value: money(data.adjustedMonthlyExpense),
               },
               {
                 label: t("pension.adjustedCritical"),
                 value: (
                   <Text bold className="wf-nowrap">
-                    {formatMoney(data.adjustedCriticalValue, symbol)}
+                    {money(data.adjustedCriticalValue)}
                   </Text>
                 ),
               },

@@ -396,6 +396,88 @@ body {
   opacity: 0.85;
 }
 
+/* A6（p4-spec §7）：折叠头键盘焦点环令牌化——环成立时才去默认 outline；
+   顶栏内无折叠头，不需 -dark 变体分支 */
+.arco-collapse-item-header:focus-visible {
+  box-shadow: var(--wf-focus-ring);
+  outline: none;
+}
+
+/* ⑦ 高级面板折叠头两行标题（p4-spec §5.2 F5）：短标签主行 + 描述副行；
+   副行基态隐藏（移动优先），≥640 放行显示——全仓唯一新增媒体查询 */
+.wf-collapse-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wf-collapse-head-desc {
+  font-size: var(--wf-text-xs);
+  color: var(--wf-text-secondary);
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .wf-collapse-head-desc {
+    display: block;
+  }
+}
+
+/* A1（p4-spec §7）：跳过链接——首 Tab 停留点（Layout 首子元素），获焦前视觉隐藏、
+   获焦后固定位立即浮现（不做位移过渡：焦点态必须即时可测可见）；点击跳 #wf-main
+   （焦点经 Content tabIndex={-1} 落主内容）。获焦时叠 --wf-focus-ring（WCAG 2.4.7
+   焦点指示器；outline 按仓库环体系以 box-shadow 承载），z-index 200 高于顶栏 100 防遮挡 */
+.wf-skip-link {
+  position: fixed;
+  top: -48px;
+  left: 12px;
+  z-index: 200;
+  padding: 8px 16px;
+  background: var(--wf-primary, #4a6fa5);
+  color: #ffffff;
+  border-radius: var(--wf-radius-s);
+  font-size: var(--wf-text-md);
+  text-decoration: none;
+  box-shadow: var(--wf-shadow-2);
+}
+
+.wf-skip-link:focus-visible {
+  top: 8px;
+  outline: none;
+  box-shadow: var(--wf-shadow-2), var(--wf-focus-ring);
+}
+
+/* 深色主题跳链底色固定浅色品牌主色（验收 T2-3，WCAG 1.4.3）：background 引用的
+   --wf-primary 在深色解析为提亮主色 #7B9FD1，白字实测 2.72:1 < 4.5；固定 #4A6FA5
+   后白字 5.11:1 达标（与浅色主按钮同对）。两主题白字同为 5.11:1，行为对称 */
+[data-theme="dark"] .wf-skip-link {
+  background: #4A6FA5;
+}
+
+/* A8（p4-spec §7）：实时区域视觉隐藏类——clip-path 口径，与既有收纳档隐藏写法同构
+   （读屏可达、视觉不占位；live 节点常驻 DOM，更新时替换其文本内容） */
+.wf-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A9（p4-spec §7，2.4.11 焦点遮挡最低档）：可聚焦元素滚动落点预留顶栏与底部 dock 高度，
+   键盘 Tab 向下滚动时聚焦控件不被整遮 */
+a[href],
+button,
+input,
+select,
+textarea,
+[tabindex] {
+  scroll-margin-top: calc(var(--wf-topbar-h, 56px) + 12px);
+  scroll-margin-bottom: 72px;
+}
+
 /* 触控目标 ≥44px：只在触屏或窄屏生效，桌面指针精度下维持现状紧凑尺寸 */
 @media (pointer: coarse), (max-width: 767.9px) {
   .arco-btn {
@@ -719,6 +801,29 @@ body {
   }
 }
 
+/* 浅色 Descriptions / 表格标签色覆写（验收 T3-1，WCAG 1.4.3）：组件库默认标签灰
+   #86909C 对页底 #F7F8FA 实测 3.05:1 < 4.5（14px 常规，全页 36 处同类：贷款摊销表 /
+   收租年度明细 / 税务表格等）；改用既有达标令牌 --wf-text-secondary #646E7A（页底
+   实测 4.88:1，check:a11y 在册）。深色主题同位置复审达标（0 违规）不动 */
+[data-theme="light"] .arco-descriptions-item-label {
+  color: var(--wf-text-secondary, #646E7A);
+}
+
+/* 浅色空态说明文字覆写（验收 T3-2，WCAG 1.4.3）：组件库默认 #A9AEB8 对页底实测
+   2.10:1，且空态文字承载操作指引（选择序列与口径后运行）非纯装饰；改用
+   --wf-text-secondary（页底 4.88:1，按验收建议取次级而非三级）。深色复审达标不动 */
+[data-theme="light"] .arco-empty-description {
+  color: var(--wf-text-secondary, #646E7A);
+}
+
+/* 浅色汇率来源「离线快照」橙 Tag 文字加深（验收 T3-3，WCAG 1.4.3）：组件库预设橙
+   #FF7D00 对染底 #FFF7E8 实测 2.41:1，12px 承载汇率数据来源关键状态语义；改橙深档
+   #AD4E00（组件库 orange-8）实测 5.10:1。深色主题同 Tag 复审达标不动。
+   注意：验收建议的 #D25F00 实测仅 3.67:1 不达标（§6.2 公式复算），故取 orange-8 */
+[data-theme="light"] .wf-currency-meta .arco-tag-orange .arco-tag-content {
+  color: #AD4E00;
+}
+
 /* 蒙特卡洛 */
 .wf-mc-actions {
   display: flex;
@@ -765,6 +870,13 @@ body {
 /* ===== P1 冲刺：社保养老金 / 历史自助抽样 / 欲望敏感性 / 场景分享（docs/p1-spec.md §10） ===== */
 .wf-mc-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
 .wf-sens-toggle { margin-top: 8px; }
+/* 深色主题文字按钮用提亮主色（验收 T2-2，WCAG 1.4.3）：深色令牌组 --primary-6 恒为
+   浅色品牌主色（global.css:350，供主色实底按钮白字 5.11:1），组件库 text 按钮以
+   rgb(var(--primary-6)) 取字色 → 深卡 3.11:1 < 4.5。改取 --wf-primary（深色 = 提亮
+   主色 #7B9FD1，卡合成底 5.84:1 达标；浅色下 --wf-primary 与 --primary-6 同值不受影响） */
+[data-theme="dark"] .wf-sens-toggle {
+  color: var(--wf-primary, #7B9FD1);
+}
 .wf-sens-block { margin-top: 8px; }
 .wf-sens-group { margin-top: 8px; }
 .wf-sens-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; font-variant-numeric: tabular-nums; }
@@ -794,6 +906,13 @@ body {
 }
 .wf-insight-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .wf-insight-main .arco-tag { margin-left: auto; }
+/* 浅色主题来源标签文字改深色（验收 T2-4，WCAG 1.4.3）：组件库预设彩色 Tag 的默认
+   文字（浅蓝 / 浅绿 / 浅橙字色）对各自浅色染底实测 2.41–2.92:1 < 4.5（12px 正文级）；
+   深色组同组标签实测达标（0 违规）不动。改 #1D2129 后三底 14.7–15.3:1（check:a11y
+   浅色组三对在册）。仅覆盖本面板来源标签，不影响其余组件库彩色 Tag */
+[data-theme="light"] .wf-insight-main .arco-tag-content {
+  color: #1D2129;
+}
 .wf-insight-source { font-size: 12px; line-height: 18px; }
 .wf-insight-note { display: block; margin-top: 8px; font-size: 12px; }
 
