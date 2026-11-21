@@ -896,6 +896,9 @@ fn accumulation_validation_errors() {
 
 ---
 
+
+> **P7 增补（2026-11-21 实施）**：本节锚点全部保持现状零漂移（pass1 与 sustainYears 无条件解耦）。新增存续口径与随机流拓扑裁定以 docs/p7-spec.md §2.2 为唯一登记口径——**两段式独立派生流**：pass1 纯积累（原流序逐字节不变）+ pass2 仅达标路径派生流 `seed ^ ((p+1)×0x9E37_79B9_7F4A_7C15)` 续接支取（耗尽即提前终止、未达标路径零抽样）；可复现性三不变 (a)(b)(c) 与锁定测试 `accumulation_sustained_invariant_same_seed`（真实量级 σ）见 p7-spec §2.2/§3.8。
+
 ## 5. 新增文案键清单（37 键，简中基准；zh-Hant 逐词字形转换、en 翻译）
 
 落点文件：`src/i18n/locales/zh-CN.ts` / `zh-Hant.ts` / `en.ts`；插值占位符名三份必须一致。

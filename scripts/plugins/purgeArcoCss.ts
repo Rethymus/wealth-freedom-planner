@@ -70,6 +70,29 @@ const DENYLIST: readonly DenylistEntry[] = [
   // arco-textarea 开头（组件库类名前缀唯一性由组件名保证）
   { name: "arco-textarea", pattern: /\.arco-textarea[a-z0-9_-]*/ },
   { name: "arco-tag-checkable", pattern: /\.arco-tag-checkable(?![a-z0-9_-])/ },
+
+  // —— P7 二轮扩充（docs/p7-spec.md §6.3 回收令 (a) 复跑实测；逐条附 src/ 全目录
+  //    grep 零命中证据，实施会话实测；启用对应形态前须先摘除条目再施工）——
+  // Menu 全族：src/ grep 'Menu' 零命中（vite.config Sider stub 注释实测「本应用未引
+  // Menu」；CSS 仅经 Layout 传递链入包）；dist 实测 88 规则 ≈ 15.8KB
+  { name: "arco-menu", pattern: /\.arco-menu[a-z0-9_-]*/ },
+  // InputGroup 全族（-wrapper / -addbefore / -addafter / -separate 等）：src/ grep
+  // 'InputGroup|input-group' 零命中；dist 实测 167 规则 ≈ 29.7KB
+  { name: "arco-input-group", pattern: /\.arco-input-group[a-z0-9_-]*/ },
+  // Select 多选变体：src/ 无 mode="multiple"；单选类名 arco-select-single 保留；
+  // dist 实测 27 规则 ≈ 2.9KB
+  { name: "arco-select-multiple", pattern: /\.arco-select-multiple[a-z0-9_-]*/ },
+  // 【2026-11-21 教训登记】RadioButton 按钮形态条目已摘除：Radio.Group 传
+  // type="button"（AdvancedPanel.tsx 高级分组切换）渲染 .arco-radio-button 系类名；
+  // 按组件导入名（RadioButton）grep 审计对类名级 purge 是假阴性——类名级删留的
+  // 安全审计必须按实际渲染类名核对，不能只查组件导入名。该条目曾致高级区分段
+  // 控件药丸描边与选中态全失（IAB 实拍复现），摘除后规则回归在位。
+  // Dropdown 下拉菜单：src/ grep 'Dropdown' 零命中（确认弹层走 Popconfirm）；dist
+  // 实测 24 规则 ≈ 3.8KB
+  { name: "arco-dropdown", pattern: /\.arco-dropdown[a-z0-9_-]*/ },
+  // Tabs 卡片形态导航（type="card"）：全仓 Tabs 未传 type prop（AdvancedPanel 等
+  // 走默认 line 形态）；dist 实测 36 规则 ≈ 6.9KB
+  { name: "arco-tabs-header-nav-card", pattern: /\.arco-tabs-header-nav-card[a-z0-9_-]*/ },
 ];
 
 export interface PurgeStats {

@@ -353,11 +353,12 @@ pub fn estimate_pension(input: &str) -> String {
   5. `to_u32_int("当前年龄", v, 16, 70)`；
   6. `to_u32_int("退休年龄", v, 40, 75)`；
   7. `ensure(retire_age > current_age, "退休年龄须大于当前年龄")`；
-  8. `to_u32_int("缴费年限", v, 0, 50)`；
-  9. `ensure(contrib_index >= 0 && contrib_index <= 10, "缴费基数指数须在 [0, 10]（小数形式，1.0 = 按社平工资 100% 缴费）")`；
-  10. `check_nonneg_money("个人账户余额估计")`；
-  11. `check_nonneg_money("计发口径社会平均工资")`；
-  12. `to_u32_int("计发月数", v, 1, 600)`。
+  8. `to_u32_int("停止工作年龄", v, 16, 75)`（P7/P0-1 插入项，`targetRetireAge` 缺省 = None 时不触发、取 retire_age）；
+  9. `to_u32_int("缴费年限", v, 0, 50)`；
+  10. `ensure(contrib_index >= 0 && contrib_index <= 10, "缴费基数指数须在 [0, 10]（小数形式，1.0 = 按社平工资 100% 缴费）")`；
+  11. `check_nonneg_money("个人账户余额估计")`；
+  12. `check_nonneg_money("计发口径社会平均工资")`；
+  13. `to_u32_int("计发月数", v, 1, 600)`。
 - **计算**（校验全过后，全部 checked 运算 + `ok_or` 中文溢出消息，模式同 `baseline.rs:110-128`）：
 
 ```rust
@@ -1323,6 +1324,8 @@ import 增：`encodeShareState`、`buildShareUrl`、`copyShareUrl`（`../service
 | P-C | 指数 1.0 / 40 年 / 余额 200,000 / 月开销 2,000 / 健康 10 万 | pension = 5,576.05；coverage = 2.79（不封顶）；adjusted = 0；adjustedCritical = 100,000.00 |
 | B-D | series = [5]（单元素）、A₀ = 1,000,000、年支出 50,000、名义字段（校验用）5/1e-9、通胀 2/1e-9、20 年 | 每年回报恒 5% → 期末全分位 ≈ 668,802.18（与既有名义口径闭式解同式同值） |
 | B-E | series = [0]、通胀 2/1e-9、A₀ = 1,000,000、年支出 50,000、20 年 | 第 16 年末 ≈ 49,396 > 0、第 17 年末 ≤ 0 → 全部路径耗尽：depletionProb = 1.0、medianTerminal = 0、全部分位 0、路径第 17 年及以后为 0 |
+| P-T1（P7 补） | P-A 输入 + targetRetireAge = 30 | bridgeYears = 30；bridgeFundingNeeded = round2(2,990 × 480) = **1,435,200.00**（纯生活费口径，附加项单次计入段 2——修订轮二 R5）；两段相加 1,706,225.60 = 真实总需；P-A 九锚点零漂移 |
+| P-T7（P7 补） | calculate_baseline：2,990 / 1 孩 20 万 / 4.5−2.0 | multiplierExact = **489.6**（= 12×1.02/0.025 精确）；criticalValueExact = **1,663,904.00**（= 2,990×489.6 + 200,000）；480 三锚点（2.5 / 480 / 1,635,200）零漂移 |
 
 ```rust
 // ---------------------------------------------------------------------------
