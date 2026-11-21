@@ -99,7 +99,7 @@ function contrast(fg, bg) {
 // 令牌静态值（与 src/data/defaults.ts THEME / THEME_DARK、global.css :root 双块对账；
 // 改令牌须同步本清单——静态档审计以「登记值」为对象）
 // ---------------------------------------------------------------------------
-const LIGHT_PAGE = "#f7f8fa";
+const LIGHT_PAGE = "#F8F7F3"; // V2（p6-spec §3）：画布暖白微偏，与 defaults.ts THEME.bgPage / global.css :root 同步
 const DARK_PAGE = "#17171A";
 const LIGHT_CARD_COMPOSITE = over(parseColor("rgba(255,255,255,0.72)"), parseColor(LIGHT_PAGE));
 const DARK_CARD_COMPOSITE = over(parseColor("rgba(35,35,36,0.92)"), parseColor(DARK_PAGE));
@@ -122,12 +122,14 @@ const PAIRS = [
   { name: "浅 来源标签 #1D2129 / 绿染底 #E8FFEA", fg: "#1D2129", bg: "#E8FFEA", need: 4.5, ref: 15.3 },
   { name: "浅 来源标签 #1D2129 / 橙染底 #FFF7E8", fg: "#1D2129", bg: "#FFF7E8", need: 4.5, ref: 15.15 },
   // —— 验收 T3-1 / T3-2 增补：Descriptions 标签与空态说明改次级令牌后的页底实色对 ——
-  { name: "浅 描述标签/空态说明 #646E7A / 页底 #F7F8FA", fg: "#646E7A", bg: "#F7F8FA", need: 4.5, ref: 4.88 },
+  // V2（p6-spec §3）：页底改 #F8F7F3，ref 以脚本 rgba 合成底口径实测值回填 4.83
+  { name: "浅 描述标签/空态说明 #646E7A / 页底 #F8F7F3", fg: "#646E7A", bg: "#F8F7F3", need: 4.5, ref: 4.83 },
   // —— 验收 T3-3 增补：离线快照橙 Tag 文字加深（orange-8）后的实色对 ——
   { name: "浅 离线快照 #AD4E00 / 橙染底 #FFF7E8", fg: "#AD4E00", bg: "#FFF7E8", need: 4.5, ref: 5.1 },
   // —— 深色主题（10 组，无豁免）——
   { name: "深 正文 #F2F3F5 / 卡合成底", fg: "#F2F3F5", bg: DARK_CARD_COMPOSITE, need: 4.5, ref: 14.31 },
-  { name: "深 次级 #A9AEB8 / 卡合成底", fg: "#A9AEB8", bg: DARK_CARD_COMPOSITE, need: 4.5, ref: 7.14 },
+  // V3（p6-spec §3）：深色次级文字 #A6B0C3（冷偏微提亮），ref 以脚本 rgba 合成底口径实测值回填 7.28
+  { name: "深 次级 #A6B0C3 / 卡合成底", fg: "#A6B0C3", bg: DARK_CARD_COMPOSITE, need: 4.5, ref: 7.28 },
   { name: "深 三级 #8F95A0 / 卡合成底", fg: "#8F95A0", bg: DARK_CARD_COMPOSITE, need: 4.5, ref: 5.28 },
   { name: "深 提亮主色 #7B9FD1 / 页底（焦点环 ≥3 非文本口径）", fg: "#7B9FD1", bg: DARK_PAGE, need: 3, ref: 6.58 },
   { name: "深 涨 #27C346 / 卡合成底", fg: "#27C346", bg: DARK_CARD_COMPOSITE, need: 4.5, ref: 6.79 },

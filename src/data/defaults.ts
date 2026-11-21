@@ -234,8 +234,9 @@ export const THEME: ThemeTokens = {
   riseColorBlind: "#0072B2",
   fallColorBlind: "#E69F00",
   // —— 表面阶（body 背景与实时区底色改挂令牌，解除硬编码与组件库色阶依赖；
-  //    CSS 名映射：bgPage→--wf-bg-sunken / bgInset→--wf-bg-inset / bgSurface→--wf-bg-surface / tintBg→--wf-bg-tint） ——
-  bgPage: "#f7f8fa",
+  //    CSS 名映射：bgPage→--wf-bg-sunken / bgInset→--wf-bg-inset / bgSurface→--wf-bg-surface / tintBg→--wf-bg-tint）
+  //    V2（p6-spec §3）：画布暖白微偏 #F8F7F3——次级文字对新画布 4.83:1 ≥ 4.5 达标 ——
+  bgPage: "#F8F7F3",
   bgInset: "#F2F3F5",
   bgSurface: "#FFFFFF",
   tintBg: "rgba(74,111,165,0.08)",
@@ -281,7 +282,7 @@ export const THEME: ThemeTokens = {
 export const THEME_DARK: ThemeTokens = {
   primary: "#7B9FD1", // 提亮主色：卡底 5.84:1、最不利 4.53:1（大数字 / 焦点环 / 悬浮反馈用）
   textPrimary: "#F2F3F5", // 正文：常态 14.31:1 / 最不利 11.10:1
-  textSecondary: "#A9AEB8", // 次级文字：常态 7.14:1 / 最不利 5.54:1
+  textSecondary: "#A6B0C3", // 次级文字：常态 7.28:1 / 最不利 5.65:1（V3 冷偏微提亮，p6-spec §3）
   textTertiary: "#8F95A0", // 三级文字：卡底 5.28:1（刻度仅存在于卡面，无透底场景）
   rise: "#27C346", // 涨色：常态 6.79:1 / 最不利 5.27:1
   fall: "#F98D86", // 跌色：常态 6.95:1 / 最不利 5.39:1

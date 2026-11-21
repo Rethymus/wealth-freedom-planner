@@ -5,7 +5,7 @@
  */
 import { Alert, Descriptions, Grid, Radio, Select, Table, Typography } from "@arco-design/web-react";
 import type { TableColumnProps } from "@arco-design/web-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { calcAmortize } from "../../services/finance";
 import { formatNumber } from "../../services/format";
@@ -13,7 +13,7 @@ import { LIMITS } from "../../data/defaults";
 import type { AmortizeRow } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, IntField, PercentField } from "../fields";
-import { useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney } from "../hooks";
+import { useAnimatedNumber, useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney } from "../hooks";
 
 const { Text } = Typography;
 const { Col } = Grid;
@@ -26,6 +26,8 @@ const LOAN_YEARS_LIMIT = LIMITS.loanYears;
 
 export default function LoanPanel() {
   const { t } = useTranslation();
+  /** S18 可见性闸宿主（hooks.ts useAnimatedNumber）：hidden/视口外暂停 rAF（§6 红线 2） */
+  const hostRef = useRef<HTMLDivElement>(null);
   const inputs = useCalculatorStore((s) => s.loanInputs);
   const setInputs = useCalculatorStore((s) => s.setLoanInputs);
   const displayCode = useCalculatorStore((s) => s.currency.display);
@@ -46,6 +48,8 @@ export default function LoanPanel() {
   const data = result?.ok === true ? result.data : null;
   const error = result && !result.ok ? result.error : null;
   const equalPrincipal = inputs.method === "equal_principal";
+  /** S18 面板主数渐近滚动（p6-spec §2）：rAF 中间帧只进显示值、永不进 store（§6 红线 2） */
+  const animatedMonthlyPayment = useAnimatedNumber(data?.monthlyPayment ?? 0, undefined, hostRef);
 
   /** 贷款类型选项（文案随语言切换） */
   const loanKindOptions = [
@@ -69,7 +73,7 @@ export default function LoanPanel() {
   ];
 
   return (
-    <div>
+    <div ref={hostRef}>
       <FieldRow>
         <AmountField
           label={t("loan.principal")}
@@ -144,7 +148,7 @@ export default function LoanPanel() {
             data={[
               {
                 label: equalPrincipal ? t("loan.monthlyPaymentFirst") : t("loan.monthlyPaymentFixed"),
-                value: <Text bold className="wf-nowrap">{moneyFixed(data.monthlyPayment)}</Text>,
+                value: <Text bold className="wf-nowrap">{moneyFixed(animatedMonthlyPayment)}</Text>,
               },
               { label: t("loan.totalInterest"), value: moneyFixed(data.totalInterest) },
               {

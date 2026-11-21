@@ -53,8 +53,10 @@
   --wf-fall: #F53F3F; /* 红跌语义色（同上） */
 
   /* —— 表面阶（主题组，docs/design-language.md §3.2）：分层背景四档 sunken（页面画布）
-     → inset（面板凹面区）→ surface（平面卡底）→ 材质层；着色底承载 hover / 着色表面半档 —— */
-  --wf-bg-sunken: #F7F8FA;
+     → inset（面板凹面区）→ surface（平面卡底）→ 材质层；着色底承载 hover / 着色表面半档。
+     V2（p6-spec §3）：画布自冷灰蓝白向暖白偏移一档（取色温不取色相）；次级文字对新
+     画布 4.83:1 ≥ 4.5 达标（check-a11y 同步改值） —— */
+  --wf-bg-sunken: #F8F7F3;
   --wf-bg-inset: #F2F3F5;
   --wf-bg-surface: #FFFFFF;
   --wf-bg-tint: rgba(74,111,165,0.08);
@@ -147,7 +149,7 @@ body {
 
 body {
   color: var(--wf-text, #1d2129);
-  background: var(--wf-bg-sunken, #f7f8fa);
+  background: var(--wf-bg-sunken, #f8f7f3);
   font-family:
     system-ui, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
 }
@@ -202,7 +204,10 @@ body {
   }
 }
 
-/* L2 悬浮输出卡：以既有类直接作选择器，JSX 零改动获得材质 */
+/* L2 悬浮输出卡：以既有类直接作选择器，JSX 零改动获得材质。
+   S19（p6-spec §2）：补 position:relative 作 ::after 着色底覆盖层的定位上下文
+   （P2 命中安全裁定）；既有 box-shadow 过渡时长按①档修正为 fast，并把 transform /
+   background-color 纳入同一过渡声明（悬浮上浮 1px，规则组见 P6 区） */
 .wf-output-card {
   background: var(--wf-surface-card-bg);
   -webkit-backdrop-filter: var(--wf-surface-card-blur);
@@ -210,8 +215,12 @@ body {
   border: 1px solid var(--wf-hairline-card);
   border-radius: var(--wf-radius-l);
   /* 静置第二档 ⇄ 吸附第三档（升档样式见下，状态类由动效方经锚点检测切换） */
+  position: relative;
   box-shadow: var(--wf-shadow-2);
-  transition: box-shadow var(--wf-dur-base) var(--wf-ease-standard);
+  transition:
+    transform var(--wf-dur-fast) var(--wf-ease-standard),
+    box-shadow var(--wf-dur-fast) var(--wf-ease-standard),
+    background-color var(--wf-dur-fast) var(--wf-ease-standard);
 }
 
 .wf-output-card.wf-is-stuck {
@@ -301,7 +310,8 @@ body {
 :root[data-theme="dark"] {
   /* —— 文字分级（常态合成卡底 / 最不利透底双口径实测，设计规范 5.3） —— */
   --wf-text: #F2F3F5; /* 14.31:1 / 11.10:1，禁用纯白 */
-  --wf-text-secondary: #A9AEB8; /* 7.14:1 / 5.54:1 */
+  /* V3（p6-spec §3）：次级文字自中性灰向冷灰蓝微偏（冷偏同时提亮，最不利口径余量扩大） */
+  --wf-text-secondary: #A6B0C3; /* 7.28:1 / 5.65:1 */
   --wf-text-tertiary: #8F95A0; /* 卡底 5.28:1（刻度文字位于卡面，无透底场景） */
 
   /* —— 色彩 —— */
@@ -653,7 +663,9 @@ textarea,
 
 /* 逐选择器清单（文档性冗余，不依赖其兜底；P5 新增动画类登记：S1 刻度点 / S2 脉冲组 /
    S9 呼吸 / S14 段位涨色——四者均为 animation 承载，由上方兜底块的
-   animation-duration/iteration-count 全停，transition 清单按既有惯例列过渡承载类） */
+   animation-duration/iteration-count 全停，transition 清单按既有惯例列过渡承载类；
+   P6 新增动画类登记：S16 .wf-flash/.wf-flash-single（animation 承载，同由兜底块全停）。
+   S22 的 ::view-transition-* UA 自定义伪元素不被通配兜底命中，显式停用规则见 P6 区） */
 @media (prefers-reduced-motion: reduce) {
   .wf-output-card,
   .wf-field-tip,
@@ -1207,12 +1219,15 @@ textarea,
   font-weight: bold;
 }
 
-/* S3 图表轴刻度等宽字排（SVG text 支持该特性；不支持的字体无害） */
+/* S3 图表轴刻度等宽字排（SVG text 支持该特性；不支持的字体无害）。
+   V1（p6-spec §3，宪法 S3 扩展变更）：刻度文字追加系统 mono 字族——与 tabular-nums
+   同位的「非数值精密位」延伸；纯 font-family 声明，无 mono 栈字体回退 sans-serif 无害 */
 .wf-mc-chart .recharts-text,
 .wf-acc-chart .recharts-text,
 .wf-sens-chart .recharts-text,
 .wf-waterfall-chart .recharts-text {
   font-variant-numeric: tabular-nums;
+  font-family: var(--wf-font-mono);
 }
 
 /* S3 Descriptions 值列右对齐 + 等宽：由 <640 档升为全宽度生效（p5-spec §1.2 缺口收编；
@@ -1313,3 +1328,136 @@ textarea,
   0% { color: var(--wf-primary); }
   100% { color: inherit; }
 }
+
+/* ============================== P6 交互巧思区 ============================== */
+/* docs/p6-spec.md §2/§3：交互巧思 S16–S26 + 视觉微调 V1。全部动效时长/曲线只引用
+   既有令牌（--wf-dur-fast/base/slow、--wf-ease-standard/asymptotic/emphasis），零新增
+   时长键；新增动画类已登记进 reduced-motion 逐选择器清单注释（上方动效区）。
+   尺寸降档（§8 顺序，实施轮实测回写）：dist 原始字节门禁 2,000,000 实余仅 7.3KB
+   （§8 前提「余量 ≈54KB」为 gzip 口径，raw 口径不成立），11 项全量实测 2,001,800B
+   超限 1,800B——按降档顺序裁撤 S26（−875B）→ S23（−420B）→ S17（−505B）后通过
+   （1,999,865B）。S16/S18/S19/S20/S21/S22/S24/S25/V1/V2/V3 全保 */
+
+/* V1 mono 刻度注记（宪法 S3「度量字排」扩展变更）：静态层令牌，两主题同值不入对账。
+   消费点 = 上方 S3 图表刻度选择器组 + 输入单位后缀（下方规则）；口径注 prose 明确
+   不纳入（mono 不利于长句可读性） */
+:root {
+  --wf-font-mono: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+/* V1 输入单位后缀（「元/月」「%」等非数值精密位）：容器类名为组件库 InputNumber
+   后缀承载（es/InputNumber/index.js:242 prefixCls + "-suffix" 源码实证） */
+.wf-field .arco-input-number-suffix {
+  font-family: var(--wf-font-mono);
+}
+
+/* S16 输出卡因果闪亮：① 汇总/乘数行容器 key 重挂挂 .wf-flash（重挂承载）、② 明细区
+   flashOn 挂 .wf-flash-single（类承载，P5 裁定：明细区禁重挂）——共用同一段 keyframes，
+   主色 8% 底一次性淡出（慢档标准曲线单次，与段位闪色同构）；静息态与变化前逐像素
+   一致；reduced-motion 由兜底块全停，信息由数值滚动本身承载 */
+.wf-flash,
+.wf-flash-single {
+  animation: wf-flash-bg var(--wf-dur-slow) var(--wf-ease-standard) 1;
+}
+
+@keyframes wf-flash-bg {
+  0% { background-color: var(--wf-bg-tint); }
+  100% { background-color: transparent; }
+}
+
+/* S17 敏感性双向高亮：已按 §8 降档顺序整体裁撤（docs/p6-spec.md §8 降档顺序第 3 项；
+   .wf-linked 描边与 .wf-sens-link-zone 事件包装随 TSX 挂点一并移除） */
+
+/* S19 输出卡克制悬浮：非吸附态 hover 上浮 1px + ::after 着色底半档（表面色变化，
+   不用海拔动画——宪法 §3.2 口径）。层序裁定（P2）：::after 不设 z-index，按绘制顺序
+   盖于卡面内容之上形成整卡着色底；必须 pointer-events:none 使其完全不参与命中测试
+   ——非吸附态卡内预设/分享/明细开关/敏感性开关点击直达；吸附态 .wf-is-stuck 恒
+   pointer-events:none 天然不触发 hover，穿透链不受影响（定位上下文 position:relative
+   与 fast 过渡已落于上方 .wf-output-card 既有规则处） */
+.wf-output-card:hover:not(.wf-is-stuck) {
+  transform: translateY(-1px);
+}
+
+.wf-output-card:hover:not(.wf-is-stuck)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--wf-bg-tint);
+  pointer-events: none;
+}
+
+/* S22 主题切换圆形揭示（View Transitions）：接管浏览器默认交叉淡化——旧主题快照
+   静止、新主题快照由 JS clip-path 圆形揭示驱动（App.tsx revealTheme）。
+   P7 裁定：通配兜底块（*、*::before、*::after）不命中 ::view-transition-* UA 自定义
+   伪元素，减弱动效必须显式停用（规则组见下方媒体查询） */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(root),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+}
+
+/* S23 结果行与展开容器进场：已按 §8 降档顺序整体裁撤（docs/p6-spec.md §8 降档顺序
+   第 2 项；.wf-row-enter 与 @starting-style 规则随 TSX 挂点一并移除） */
+
+/* S24 字段错误态左标线：位置 + 颜色双通道冗余（WCAG 1.4.1，S10 ▲▼ 同构思路的
+   错误态延伸）。.arco-input-error 为组件库错误态类名（InputNumber error → status
+   → 裸 input 元素，es/Input/input-element.js:130 源码实证）；无 :has() 支持整规则
+   不生效，错误信息仍由行内文字 + aria-invalid + 组件库红框三既有通道兜底。
+   无过渡——错误出现即标线在、消失即无（诚实反馈不延时）；条色挂 --wf-fall，
+   色盲友好档经既有解析链自动随档替换 */
+.wf-field {
+  position: relative;
+}
+
+.wf-field:has(.arco-input-error)::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 10%;
+  height: 80%;
+  width: 2px;
+  background: var(--wf-fall);
+  border-radius: 1px;
+}
+
+/* S25 图表 hover 读数气泡：读数窗隐喻从卡面延伸到图形。底挂平面卡底 + 发丝线卡线 +
+   第一档阴影（均既有双主题令牌）；气泡数值等宽字排（S3 口径）；气泡出现即时
+   （无位移动画，cursor 虚线轻量降噪——偏差登记：无显示延迟） */
+.wf-chart-tip {
+  background: var(--wf-bg-surface);
+  border: 1px solid var(--wf-hairline-card);
+  border-radius: var(--wf-radius-s);
+  box-shadow: var(--wf-shadow-1);
+  padding: 6px 10px;
+  font-size: var(--wf-text-caption);
+  color: var(--wf-text);
+}
+
+.wf-chart-tip-label {
+  color: var(--wf-text-tertiary);
+  margin-bottom: 2px;
+}
+
+.wf-chart-tip-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wf-chart-tip-value {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* S26 分享按钮磁吸微行程：已按 §8 降档顺序整体裁撤（docs/p6-spec.md §8 降档顺序第 1 项；
+   dist 原始字节门禁实测：P6 净增 9.2KB > 实余 7.3KB，门禁 2,000,000 不放宽） */

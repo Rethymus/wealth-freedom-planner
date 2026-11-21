@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { Alert, Button, Layout, Message, Select, Switch, Typography } from "@arco-design/web-react";
 import { IconMoonFill, IconSunFill, IconThunderbolt } from "@arco-design/web-react/icon";
+import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { CURRENCIES, MOTION_DURATIONS, THEME, THEME_DARK, resolveThemeTokens } from "./data/defaults";
 import type { ThemeMode } from "./data/defaults";
@@ -13,12 +14,54 @@ import { persistLanguage, SUPPORTED_LANGS } from "./i18n";
 import type { SupportedLang } from "./i18n";
 import { formatNumber, formatTimestamp } from "./services/format";
 import { useCalculatorStore } from "./store/useCalculatorStore";
-import { useDisplayRate } from "./components/hooks";
+import { useDisplayRate, usePrefersReducedMotion } from "./components/hooks";
 import BasicCalculator from "./components/BasicCalculator";
 import AdvancedPanel from "./components/AdvancedPanel";
 
 const { Header, Content, Footer } = Layout;
 const { Text, Title } = Typography;
+
+/** View Transitions 造型的最小结构类型（lib.dom 尚未收录 startViewTransition 的
+ *  运行环境兼容写法；仅本函数使用，不污染全局） */
+interface ViewTransitionLike {
+  ready: Promise<void>;
+}
+type DocumentWithViewTransition = Document & {
+  startViewTransition?: (updateCallback: () => void) => ViewTransitionLike;
+};
+
+/**
+ * S22 主题切换圆形揭示（p6-spec §2 S22；research-ui-trends §1 S1 定案版）：
+ * 新主题自触发点坐标 clip-path 圆形揭示铺满全屏。双降级链——无
+ * startViewTransition API 或系统「减弱动效」命中 → 直接 apply()（=现状令牌直换）；
+ * vt.ready 被拒即静默放弃（换肤已完成，无视觉残留）。
+ * apply 必须经 flushSync 包裹后再传入：React 18 的 setState 在
+ * startViewTransition 回调内非同步提交 DOM，不包 flushSync 则浏览器快照「新状态」
+ * 时 DOM 仍是旧主题，揭示的是旧皮随后硬切。360ms 与 cubic-bezier(0.2,0,0,1) 为
+ * --wf-dur-slow / --wf-ease-standard 的字面值对齐（View Transitions 内联动画不走
+ * CSS 令牌）；键盘激活（e.detail === 0）坐标回退按钮几何中心。
+ * 低频纪律：仅主题切换按钮一处调用，不得用于高频动作。
+ */
+function revealTheme(x: number, y: number, apply: () => void, reduced: boolean): void {
+  const doc = document as DocumentWithViewTransition;
+  if (reduced || typeof doc.startViewTransition !== "function") {
+    apply();
+    return;
+  }
+  const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
+  const transition = doc.startViewTransition(() => flushSync(apply)); // 同步提交防 React 批处理漏帧
+  void transition.ready
+    .then(() => {
+      document.documentElement.animate(
+        { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
+        // 360ms = --wf-dur-slow 量级；cubic-bezier(0.2,0,0,1) = --wf-ease-standard 同曲
+        { duration: 360, easing: "cubic-bezier(0.2, 0, 0, 1)", pseudoElement: "::view-transition-new(root)" },
+      );
+    })
+    .catch(() => {
+      /* ready 不决时静默放弃：主题已切换完成，无视觉残留 */
+    });
+}
 
 /** WASM 计算核心引导状态（由 main.tsx 的异步 bootstrap 提供） */
 export type WasmBootstrapStatus =
@@ -39,6 +82,18 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
   const setCurrency = useCalculatorStore((s) => s.setCurrency);
   const theme = useCalculatorStore((s) => s.theme);
   const toggleTheme = useCalculatorStore((s) => s.toggleTheme);
+  /** S22 减弱动效判定：复用既有 usePrefersReducedMotion（hooks.ts:162 为唯一来源） */
+  const reducedMotion = usePrefersReducedMotion();
+  /** S22 主题按钮接入：键盘激活（Enter/Space，detail === 0 无指针坐标）回退按钮
+   *  几何中心为揭示原点；指针激活取点击坐标。组件库 Button 的 onClick 形参类型为
+   *  Event（es/Button/interface.d.ts:82），运行时为 DOM MouseEvent，此处窄化取用 */
+  const handleThemeToggle = (e: Event) => {
+    const mouseEvent = e as MouseEvent;
+    const rect = (mouseEvent.currentTarget as HTMLButtonElement | null)?.getBoundingClientRect();
+    const x = mouseEvent.detail === 0 ? (rect ? rect.left + rect.width / 2 : 0) : mouseEvent.clientX;
+    const y = mouseEvent.detail === 0 ? (rect ? rect.top + rect.height / 2 : 0) : mouseEvent.clientY;
+    revealTheme(x, y, toggleTheme, reducedMotion);
+  };
   const applyShareState = useCalculatorStore((s) => s.applyShareState);
   const resetBusinessInputs = useCalculatorStore((s) => s.resetBusinessInputs);
   const shareHandledRef = useRef(false);
@@ -293,7 +348,7 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
                   <IconMoonFill style={{ color: "#fff" }} />
                 )
               }
-              onClick={toggleTheme}
+              onClick={handleThemeToggle}
             />
           </span>
         </div>

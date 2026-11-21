@@ -114,7 +114,7 @@ const zhCN = {
     groupPlan: "人生规划",
     groupHousing: "购房金融",
     groupAnalysis: "分析工具",
-    tabsKbdHint: "估算面板：左右方向键切换标签",
+    tabsKbdHint: "估算面板：左右方向键切换标签；数字键 1/2/3 切换分组（输入框内不生效）",
     reverseTitle: "反向估算",
     reverseDesc: "已有资产能支撑每月花多少",
     loanTitle: "贷款计算",

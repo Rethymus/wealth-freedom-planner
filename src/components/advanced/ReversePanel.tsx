@@ -3,13 +3,14 @@
  * 文案经 react-i18next 三语化。
  */
 import { Alert, Button, Descriptions, Message, Tooltip, Typography } from "@arco-design/web-react";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { calcReverse } from "../../services/finance";
 import { formatNumber } from "../../services/format";
 import type { ReverseEstimateInput } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, FieldTip, PercentField } from "../fields";
-import { useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney } from "../hooks";
+import { useAnimatedNumber, useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney } from "../hooks";
 
 const { Text } = Typography;
 
@@ -41,6 +42,8 @@ const REVERSE_EXAMPLES: { id: "A" | "B"; nameKey: string; inputs: ReverseEstimat
 
 export default function ReversePanel() {
   const { t } = useTranslation();
+  /** S18 可见性闸宿主（hooks.ts useAnimatedNumber）：hidden/视口外暂停 rAF（§6 红线 2） */
+  const hostRef = useRef<HTMLDivElement>(null);
   const inputs = useCalculatorStore((s) => s.reverseInputs);
   const setInputs = useCalculatorStore((s) => s.setReverseInputs);
   const baseline = useCalculatorStore((s) => s.baselineInputs);
@@ -60,6 +63,9 @@ export default function ReversePanel() {
 
   const data = result?.ok === true ? result.data : null;
   const error = result && !result.ok ? result.error : null;
+  /** S18 面板主数渐近滚动（p6-spec §2）：防抖落定值经渐近收敛呈现；rAF 中间帧只进
+   *  显示值、永不进 store（§6 红线 2）；reduced-motion / 首值 / 非有限数由 hook 内建短路 */
+  const animatedSustainable = useAnimatedNumber(data?.sustainableMonthly ?? 0, undefined, hostRef);
 
   /** 与基础模式同步预留与回报假设（数值全部来自 store，不写死） */
   const syncFromBaseline = () => {
@@ -73,7 +79,7 @@ export default function ReversePanel() {
   };
 
   return (
-    <div>
+    <div ref={hostRef}>
       <FieldRow>
         <AmountField
           label={t("reverse.totalAssets")}
@@ -167,7 +173,7 @@ export default function ReversePanel() {
             {
               label: t("reverse.sustainableMonthly"),
               value: (
-                <Text bold className="wf-nowrap">{money(data.sustainableMonthly)}</Text>
+                <Text bold className="wf-nowrap">{money(animatedSustainable)}</Text>
               ),
             },
             {

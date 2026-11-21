@@ -10,7 +10,8 @@
  * 文案经 react-i18next 三语化。
  */
 import { Alert, Button, Descriptions, Empty, Grid, Progress, Radio, Spin, Typography } from "@arco-design/web-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import {
   CartesianGrid,
@@ -18,19 +19,20 @@ import {
   LineChart,
   ReferenceLine,
   ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { calcAccumulation, calcBaseline, calcRequiredSaving } from "../../services/finance";
 import type { FinanceResult } from "../../services/finance";
-import { formatNumber, formatCompactAxis } from "../../services/format";
+import { formatNumber, formatCompactAxis, formatMoney } from "../../services/format";
 import { cnyToDisplay } from "../../services/currency";
 import { LIMITS, MOTION_DURATIONS, resolveThemeTokens } from "../../data/defaults";
 import type { AccumulationOutput, RequiredSavingOutput } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, IntField, PathsField, PercentField } from "../fields";
 import { EmptyRulerArt } from "../EmptyRuler";
-import { compactXInterval, useChartMetrics, useFinanceCall, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
+import { compactXInterval, useAnimatedNumber, useChartMetrics, useFinanceCall, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text, Title } = Typography;
 const { Col } = Grid;
@@ -54,6 +56,8 @@ function median(sorted: number[]): number {
 
 export default function AccumulationPanel() {
   const { t } = useTranslation();
+  /** S18 可见性闸宿主（hooks.ts useAnimatedNumber）：hidden/视口外暂停 rAF（§6 红线 2） */
+  const hostRef = useRef<HTMLDivElement>(null);
   const inputs = useCalculatorStore((s) => s.accumulationInputs);
   const setInputs = useCalculatorStore((s) => s.setAccumulationInputs);
   const synced = useCalculatorStore((s) => s.accumulationTargetSynced);
@@ -222,9 +226,41 @@ export default function AccumulationPanel() {
   /** 反推模式达成概率（验证结果行） */
   const verifyData = verifyState?.ok === true ? verifyState.data : null;
   const verifyPercent = verifyData ? Math.round(verifyData.fiProbability * 1000) / 10 : 0;
+  /** S18 面板主数渐近滚动（p6-spec §2，反推模式大数）：hook 必须无条件调用（规则 hooks），
+   *  未就绪以 0 占位（hook 首值纪律：0→有值直接落值不滚动）；rAF 中间帧只进显示值、
+   *  永不进 store（§6 红线 2）；submittedTarget 同帧快照（S15 锚点）不触碰 */
+  const animatedRequiredSaving = useAnimatedNumber(revData ? revData.requiredMonthlySaving : 0, undefined, hostRef);
+  /** S25 图表 hover 读数（p6-spec §2）：十字虚线 + 读数气泡（中位与展示口径目标线两行；
+   *  50 条抽样路径不入气泡降噪）。金额与图轴同源（chartData 已按展示币种换算，formatMoney
+   *  直出不再二次换算）；系列名复用既有键。触屏无 hover 无气泡，分位 Descriptions 兜底 */
+  const renderAccTip = (): ReactElement => (
+    <Tooltip
+      cursor={{ stroke: themeTokens.textTertiary, strokeDasharray: "3 3" }}
+      content={({ active, payload, label }) => {
+        if (!active || !payload?.length) return null;
+        const names: Record<string, string> = {
+          median: t("seq.fateMedian"),
+          target: t("accumulation.targetLineLabel"),
+        };
+        const rows = payload.filter((p) => p.dataKey === "median" || p.dataKey === "target");
+        if (rows.length === 0) return null;
+        return (
+          <div className="wf-chart-tip">
+            <div className="wf-chart-tip-label">{label}</div>
+            {rows.map((p) => (
+              <div key={String(p.dataKey)} className="wf-chart-tip-row">
+                <span>{names[String(p.dataKey)] ?? String(p.dataKey)}</span>
+                <span className="wf-chart-tip-value">{formatMoney(Number(p.value), symbol)}</span>
+              </div>
+            ))}
+          </div>
+        );
+      }}
+    />
+  );
 
   return (
-    <div>
+    <div ref={hostRef}>
       {/* P2-F4 模拟模式行（docs/p2-spec.md §5.2）：面板顶部 */}
       <div className="wf-mc-mode">
         <Text>{t("accumulation.mode")}</Text>
@@ -421,7 +457,7 @@ export default function AccumulationPanel() {
                 margin: 0,
               }}
             >
-              {revData ? money(revData.requiredMonthlySaving) : "—"}
+              {revData ? money(animatedRequiredSaving) : "—"}
             </Title>
             <Text type="secondary">
               {t("accumulation.reverseNote", { years: inputs.years })}
@@ -530,6 +566,8 @@ export default function AccumulationPanel() {
             >
               <ResponsiveContainer width="100%" height={chartHeight}>
                 <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+                  {/* S25 读数气泡 */}
+                  {renderAccTip()}
                   {/* §6 图表质感：仅水平 1px 实线网格，去轴框与刻度短线 */}
                   <CartesianGrid stroke={themeTokens.chartGrid} vertical={false} />
                   {/* 紧凑档（<640）X 刻度 ≤5：interval 按刻度总数（= 年数）推导，非紧凑档不干预 */}

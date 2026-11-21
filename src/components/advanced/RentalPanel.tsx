@@ -4,7 +4,7 @@
  * 四档分组展示，并在下拉旁附各档参照城市图例；文案经 react-i18next 三语化。
  */
 import { Alert, Descriptions, Select, Tag, Typography } from "@arco-design/web-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -15,6 +15,7 @@ import {
   Customized,
   LabelList,
   ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
@@ -28,7 +29,7 @@ import type { NumberInputLimit } from "../../data/types";
 import type { RentalBreakdown } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, FieldTip, IntField, NumberField, PercentField } from "../fields";
-import { useFinanceCall, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
+import { useAnimatedNumber, useFinanceCall, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text } = Typography;
 
@@ -232,6 +233,8 @@ const CITY_NAME_KEY: Record<CityName, string> = {
 
 export default function RentalPanel() {
   const { t } = useTranslation();
+  /** S18 可见性闸宿主（hooks.ts useAnimatedNumber）：hidden/视口外暂停 rAF（§6 红线 2） */
+  const hostRef = useRef<HTMLDivElement>(null);
   const inputs = useCalculatorStore((s) => s.rentalInputs);
   const setInputs = useCalculatorStore((s) => s.setRentalInputs);
   const displayCode = useCalculatorStore((s) => s.currency.display);
@@ -256,6 +259,9 @@ export default function RentalPanel() {
 
   const netCashFlow = data?.annualNetCashFlow ?? 0;
   const semanticPositive = netCashFlow >= 0;
+  /** S18 面板主数渐近滚动（p6-spec §2）：rAF 中间帧只进显示值、永不进 store（§6 红线 2）；
+   *  ▲▼ 字形与语义色仍取落定值（S10 方向冗余编码路径原样保留） */
+  const animatedNetCashFlow = useAnimatedNumber(netCashFlow, undefined, hostRef);
   // 图表 / 语义色经主题解析函数取值（规范 6.2 #12 与第 8 节取色口径）：深浅选组与
   // 色盲友好替换在函数内完成，组件不感知主题
   const themeTokens = resolveThemeTokens(theme, colorBlindFriendly);
@@ -335,6 +341,29 @@ export default function RentalPanel() {
     animationEasing: "ease-out",
   } as const;
 
+  /** S25 图表 hover 读数（p6-spec §2）：十字虚线 + 读数气泡。瀑布列为堆叠定位段结构，
+   *  气泡取该列彩色承载段的既有标签值（labelText 已带符号金额，与柱上标签同源一致）；
+   *  cursor 描边取解析值（仓库取色纪律：SVG 属性经 resolveThemeTokens，不传 CSS 变量
+   *  字符串）。触屏无 hover 无气泡，年度明细 Descriptions 承载全部数值 */
+  const renderWaterfallTip = (): ReactElement => (
+    <Tooltip
+      cursor={{ stroke: themeTokens.textTertiary, strokeDasharray: "3 3" }}
+      content={({ active, payload, label }) => {
+        if (!active || !payload?.length) return null;
+        const row = payload[0]?.payload as WaterfallRow | undefined;
+        if (!row || row.labelText === "") return null;
+        return (
+          <div className="wf-chart-tip">
+            <div className="wf-chart-tip-label">{label}</div>
+            <div className="wf-chart-tip-row">
+              <span className="wf-chart-tip-value">{row.labelText}</span>
+            </div>
+          </div>
+        );
+      }}
+    />
+  );
+
   /** 选中分组即填充该组代表城市的持有成本默认值（代表城市由数据层 representative 标记）；
    *  房价 / 租金保留用户输入，组内其他城市口径可经提示行参考后手动微调 */
   const applyGroup = (value: CityGroup | "" | undefined) => {
@@ -400,7 +429,7 @@ export default function RentalPanel() {
   ];
 
   return (
-    <div>
+    <div ref={hostRef}>
       {CITY_RENT_PARAMS.length === 0 ? (
         <Alert
           type="info"
@@ -610,7 +639,7 @@ export default function RentalPanel() {
                     {/* T10 = S10 方向冗余编码：净现金流正负前置 ▲/▼ 字形（形状通道独立于颜色通道，
                         WCAG 1.4.1），字形走 caption 档字号；语义色仍由涨跌令牌承载 */}
                     <span style={{ fontSize: "var(--wf-text-caption)" }}>{semanticPositive ? "▲" : "▼"}</span>{" "}
-                    {money(netCashFlow)}
+                    {money(animatedNetCashFlow)}
                   </Text>
                 ),
               },
@@ -645,6 +674,8 @@ export default function RentalPanel() {
                   margin={{ top: 24, right: 16, bottom: 0, left: 0 }}
                   barSize={28}
                 >
+                  {/* S25 读数气泡 */}
+                  {renderWaterfallTip()}
                   {/* §6 图表质感：仅水平 1px 实线网格（去虚线），去轴框与刻度短线 */}
                   <CartesianGrid stroke={themeTokens.chartGrid} vertical={false} />
                   <XAxis

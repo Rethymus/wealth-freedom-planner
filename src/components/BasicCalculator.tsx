@@ -14,6 +14,7 @@ import {
   LabelList,
   ReferenceLine,
   ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
@@ -28,7 +29,7 @@ import type { ThemeTokens } from "../data/types";
 import { useCalculatorStore } from "../store/useCalculatorStore";
 import { AmountField, FieldRow, IntField, PercentField } from "./fields";
 import { EmptyRulerArt } from "./EmptyRuler";
-import { useAnimatedNumber, useFinanceCall, useIsCompactViewport, useIsNarrowViewport, useIsWorkbenchViewport, useMoney, usePrefersReducedMotion } from "./hooks";
+import { useAnimatedNumber, useFinanceCall, useFlashOnChange, useIsCompactViewport, useIsNarrowViewport, useIsWorkbenchViewport, useMoney, usePrefersReducedMotion } from "./hooks";
 
 const { Text, Title } = Typography;
 const CollapseItem = Collapse.Item;
@@ -127,6 +128,7 @@ function SensitivitySection(props: {
   const { open, onToggle, loading, rows, unavailable, delta, money, convert, baseline, tokens, reducedMotion } = props;
   const plusRows = rows.filter((r) => r.pct > 0);
   const minusRows = rows.filter((r) => r.pct < 0);
+  // P6 S17 已按 §8 降档顺序裁撤（docs/p6-spec.md §8；dist 原始字节门禁实测回写）
 
   /** C1 ②：按 |档位临界值 − 基准临界值| 降序（layout="vertical" 下数据首行渲染在顶部，
    *  降序数组即「最大在顶」）；档位临界值 null（该档计算失败）不渲染该行。
@@ -157,6 +159,30 @@ function SensitivitySection(props: {
     animationDuration: MOTION_DURATIONS.slow,
     animationEasing: "ease-out",
   } as const;
+
+  /** S25 图表 hover 读数（p6-spec §2）：十字虚线 + 读数气泡（读数窗隐喻延伸到图形）。
+   *  cursor 描边取 resolveThemeTokens 解析值（仓库取色纪律：SVG 属性一律经解析函数，
+   *  不传 CSS 变量字符串——与其余图表 stroke 取值同口径）；系列名复用既有方向图例键；
+   *  触屏无 hover 无气泡，数值信息由图下明细行兜底（R13 aria 链路不重复播报） */
+  const renderTornadoTip = (): ReactElement => (
+    <Tooltip
+      cursor={{ stroke: tokens.textTertiary, strokeDasharray: "3 3" }}
+      content={({ active, payload }) => {
+        if (!active || !payload?.length) return null;
+        const row = payload[0]?.payload as TornadoRow | undefined;
+        if (!row) return null;
+        return (
+          <div className="wf-chart-tip">
+            <div className="wf-chart-tip-label">{row.name}</div>
+            <div className="wf-chart-tip-row">
+              <span>{row.up ? t("sensitivity.legendHigher") : t("sensitivity.legendLower")}</span>
+              <span className="wf-chart-tip-value">{`${row.up ? "+" : "−"}${money(row.delta)}`}</span>
+            </div>
+          </div>
+        );
+      }}
+    />
+  );
 
   /** C1 ⑦：数值标签带符号金额（正 + / 负 −），up 标在段右、down 标在段左（12px chartTick 色） */
   const renderTornadoLabel = (shape: unknown): ReactElement => {
@@ -240,6 +266,8 @@ function SensitivitySection(props: {
                           fill: tokens.textTertiary,
                         }}
                       />
+                      {/* S25 读数气泡 */}
+                      {renderTornadoTip()}
                       {/* C1 ③：每档两段堆叠——透明底段 + 彩色偏离段（Cell 按方向取色） */}
                       <Bar dataKey="base" stackId="tornado" fill="transparent" isAnimationActive={false} />
                       <Bar dataKey="delta" stackId="tornado" {...barAnimationProps}>
@@ -565,6 +593,11 @@ export default function BasicCalculator() {
    *  （首挂载不涨色；reduced-motion 下由 CSS 兜底块停动画、Tag 常驻信息不丢） */
   const [multFlashEpoch, setMultFlashEpoch] = useState(0);
   const prevMultSegmentRef = useRef<number | null>(null);
+  /** S14 × S16 共存闸：涨色类按「刚跨档」布尔承载（基础档计时摘类，先例 = S1 popTick）。
+   *  S16 重挂容器包含段位 Tag——Tag 若常挂动画类会随每次落定重挂重播涨色（把 S14 的
+   *  「跨档单发」变成「每落定一发」）；类闸使重挂仅在跨档后的单发窗口内重播，触发时机
+   *  与登记语义一致 */
+  const [multFlashOn, setMultFlashOn] = useState(false);
 
   const data = result?.ok === true ? result.data : null;
   const serviceError = result && !result.ok ? result.error : null;
@@ -574,10 +607,25 @@ export default function BasicCalculator() {
   const semanticRise = themeTokens.rise;
   const semanticFall = themeTokens.fall;
 
-  /** 临界值大数字：防抖结果经数值渐近滚动呈现（hook 内部处理首值落值与减弱动效降级） */
-  const animatedCritical = useAnimatedNumber(data?.criticalValue ?? 0);
+  /** 临界值大数字：防抖结果经数值渐近滚动呈现（hook 内部处理首值落值与减弱动效降级）。
+   *  S18 可见性闸：宿主根元素经 IntersectionObserver 监听——hidden/视口外暂停 rAF（§6 红线 2） */
+  const rootRef = useRef<HTMLDivElement>(null);
+  const animatedCritical = useAnimatedNumber(data?.criticalValue ?? 0, undefined, rootRef);
   /** 系统「减弱动态效果」偏好：命中时龙卷风图入场动画停用（C1 ⑨，与既有折线图同口径） */
   const reducedMotion = usePrefersReducedMotion();
+
+  /** S16 输出卡因果闪亮（p6-spec §2）：epoch 由落定值派生（首值不闪，零计算触发）——
+   *  ① 汇总/乘数两行经 key={flashEpoch} 重挂承载；② 明细区经 flashOn 类承载
+   *  （P5 同落点裁定：明细区禁重挂——展开开关焦点不因落定丢失；
+   *  摘类先例 = S1 popTick，slow 档计时后移除） */
+  const flashEpoch = useFlashOnChange(data?.criticalValue ?? 0);
+  const [breakdownFlashOn, setBreakdownFlashOn] = useState(false);
+  useEffect(() => {
+    if (flashEpoch === 0) return;
+    setBreakdownFlashOn(true);
+    const timer = window.setTimeout(() => setBreakdownFlashOn(false), MOTION_DURATIONS.slow);
+    return () => window.clearTimeout(timer);
+  }, [flashEpoch]);
 
   /** T14 段位判定：乘数取防抖结果（未就绪退回本地预览）；≥ 2 才有段位（整数位）
    *  跨入新段位时递增 flash 序号重挂 Tag 触发单次涨色（首挂载不涨色） */
@@ -586,12 +634,22 @@ export default function BasicCalculator() {
     Number.isFinite(multiplierValue) && multiplierValue >= 2 ? Math.floor(multiplierValue) : null;
   useEffect(() => {
     if (multSegment !== null && prevMultSegmentRef.current !== multSegment) {
-      if (prevMultSegmentRef.current !== null) setMultFlashEpoch((e) => e + 1);
+      if (prevMultSegmentRef.current !== null) {
+        setMultFlashEpoch((e) => e + 1);
+        setMultFlashOn(true);
+      }
       prevMultSegmentRef.current = multSegment;
     } else if (multSegment === null) {
       prevMultSegmentRef.current = null;
     }
   }, [multSegment]);
+
+  // 涨色单发摘类：基础档计时后移除动画类（类摘除后同段位不重播）
+  useEffect(() => {
+    if (!multFlashOn) return;
+    const timer = window.setTimeout(() => setMultFlashOn(false), MOTION_DURATIONS.base);
+    return () => window.clearTimeout(timer);
+  }, [multFlashOn]);
 
   /** 当前生效画像（"custom" 时为 null；Tag 行仅在有画像时渲染） */
   const activeProfile =
@@ -675,7 +733,7 @@ export default function BasicCalculator() {
     localInvalid || (sensState.rows.length > 0 && sensState.rows.every((r) => r.critical === null));
 
   return (
-    <div>
+    <div ref={rootRef}>
       {/* sticky 锚点：纯视觉元素，滚动时先于输出卡离开视口顶 */}
       <div ref={stickyAnchorRef} className="wf-sticky-anchor" aria-hidden />
       {/* 输出区：置顶恒可见 */}
@@ -750,55 +808,62 @@ export default function BasicCalculator() {
                   <Text type="secondary">{t("progress.emptyHint")}</Text>
                 </div>
               ) : null}
-              <div className="wf-output-line">
-                <Text>
-                  {t("basic.summaryPrefix")}{" "}
-                  <Text bold className="wf-nowrap wf-num">
-                    {data ? (
-                      displayCode === "CNY" ? (
-                        i18n.language.startsWith("en") ? (
-                          // 英文语境用惯用百万读法（163.5 万 → 1.635 million），避免「×10k」被误读为算式
-                          `${formatNumber(animatedCritical / 1_000_000, 3)} ${t("units.wanUnit")}`
+              {/* S16 ① 重挂承载：汇总/乘数两行外包 key={flashEpoch} 容器（无状态、无可聚焦元素；
+                  epoch 0 首挂不挂类不闪；hero 与明细展开开关严禁进入重挂范围——S1/S2 闩锁与
+                  键盘焦点不受扰）。段位 Tag 涨色经 multFlashOn 类闸限定单发（见上方 S14 注释） */}
+              <div key={flashEpoch} className={flashEpoch > 0 ? "wf-flash" : undefined}>
+                <div className="wf-output-line">
+                  <Text>
+                    {t("basic.summaryPrefix")}{" "}
+                    <Text bold className="wf-nowrap wf-num">
+                      {data ? (
+                        displayCode === "CNY" ? (
+                          i18n.language.startsWith("en") ? (
+                            // 英文语境用惯用百万读法（163.5 万 → 1.635 million），避免「×10k」被误读为算式
+                            `${formatNumber(animatedCritical / 1_000_000, 3)} ${t("units.wanUnit")}`
+                          ) : (
+                            `${formatNumber(toWan(animatedCritical), 1)} ${t("units.wanUnit")}`
+                          )
                         ) : (
-                          `${formatNumber(toWan(animatedCritical), 1)} ${t("units.wanUnit")}`
+                          // ⑤ 非 CNY 展示币种：与 money 同源换算但取数值路径（money 返回已格式化
+                          // 字符串不可作 compact 入参），走 Intl compact 统一口径（en 分支删除）
+                          formatCompactAxis(convert(animatedCritical))
                         )
                       ) : (
-                        // ⑤ 非 CNY 展示币种：与 money 同源换算但取数值路径（money 返回已格式化
-                        // 字符串不可作 compact 入参），走 Intl compact 统一口径（en 分支删除）
-                        formatCompactAxis(convert(animatedCritical))
-                      )
-                    ) : (
-                      "—"
-                    )}
-                  </Text>{" "}
-                  {t("basic.summarySuffix")}
-                </Text>
-              </div>
-              {/* T14 = S14 段位徽标：乘数 ≥ 2 时行尾段位 Tag（key 含 flash 序号——仅真实跨档
-                  重挂触发一次涨色；无段位不渲染） */}
-              <div className="wf-output-line">
-                <Text>
-                  {t("basic.savePrefix")}{" "}
-                  <Text bold className="wf-nowrap wf-num">
-                    {formatMultiplier(multiplierValue)}
-                  </Text>{" "}
-                  {t("basic.saveSuffix")}
-                  {multSegment !== null ? (
-                    <Tag
-                      size="small"
-                      className="wf-mult-tag"
-                      key={`${multSegment}-${multFlashEpoch}`}
-                      aria-label={t("basic.multTagAria", { mult: formatMultiplier(multiplierValue), n: multSegment })}
-                      style={{ marginLeft: 8 }}
-                    >
-                      {t("basic.multTag", { n: multSegment })}
-                    </Tag>
-                  ) : null}
-                </Text>
+                        "—"
+                      )}
+                    </Text>{" "}
+                    {t("basic.summarySuffix")}
+                  </Text>
+                </div>
+                {/* T14 = S14 段位徽标：乘数 ≥ 2 时行尾段位 Tag（key 含 flash 序号——仅真实跨档
+                    重挂触发一次涨色；无段位不渲染） */}
+                <div className="wf-output-line">
+                  <Text>
+                    {t("basic.savePrefix")}{" "}
+                    <Text bold className="wf-nowrap wf-num">
+                      {formatMultiplier(multiplierValue)}
+                    </Text>{" "}
+                    {t("basic.saveSuffix")}
+                    {multSegment !== null ? (
+                      <Tag
+                        size="small"
+                        className={multFlashOn ? "wf-mult-tag" : undefined}
+                        key={`${multSegment}-${multFlashEpoch}`}
+                        aria-label={t("basic.multTagAria", { mult: formatMultiplier(multiplierValue), n: multSegment })}
+                        style={{ marginLeft: 8 }}
+                      >
+                        {t("basic.multTag", { n: multSegment })}
+                      </Tag>
+                    ) : null}
+                  </Text>
+                </div>
               </div>
               {/* D9 输出卡紧凑模式（docs/p3-spec.md §6.8）：<768 明细拆解默认收起、按钮切换；
                   ≥768 现状全量。§4 结构化：插值长句改 2 列键值表（单份表格定义、分支行为
-                  原样保留——修订 #6）；≥768 分支补 T7 分组左标线小节头 */}
+                  原样保留——修订 #6）；≥768 分支补 T7 分组左标线小节头。
+                  S16 ② 明细区因果闪亮走 flashOn 类承载（禁重挂——P5 裁定，展开开关焦点不受扰）；
+                  S23 已按 §8 降档顺序裁撤（<768 展开分支不再挂进场类） */}
               {data ? (
                 isNarrow ? (
                   <>
@@ -812,7 +877,7 @@ export default function BasicCalculator() {
                       {t("basic.breakdownTitle")} {breakdownOpen ? t("basic.collapse") : t("basic.expand")}
                     </Button>
                     {breakdownOpen ? (
-                      <div className="wf-output-breakdown">
+                      <div className={breakdownFlashOn ? "wf-output-breakdown wf-flash-single" : "wf-output-breakdown"}>
                         <BreakdownTable
                           expense={money(baseline.monthlyExpense)}
                           multiplier={formatMultiplier(data.multiplier)}
@@ -826,7 +891,7 @@ export default function BasicCalculator() {
                     ) : null}
                   </>
                 ) : (
-                  <div className="wf-output-breakdown">
+                  <div className={breakdownFlashOn ? "wf-output-breakdown wf-flash-single" : "wf-output-breakdown"}>
                     <Divider orientation="left" className="wf-group-line">
                       {t("basic.breakdownTitle")}
                     </Divider>

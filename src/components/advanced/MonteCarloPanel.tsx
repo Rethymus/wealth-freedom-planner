@@ -10,13 +10,15 @@
  * 文案经 react-i18next 三语化；纵轴「万」刻度随语言切换（英文为 ×10k）。
  */
 import { Alert, Button, Descriptions, Empty, Grid, Progress, Radio, Select, Spin, Switch, Typography } from "@arco-design/web-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import {
   CartesianGrid,
   Line,
   LineChart,
   ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
@@ -30,7 +32,7 @@ import {
 } from "../../services/finance";
 import type { FateWindow } from "../../services/finance";
 import type { FinanceResult } from "../../services/finance";
-import { formatNumber, formatCompactAxis } from "../../services/format";
+import { formatNumber, formatCompactAxis, formatMoney } from "../../services/format";
 import { cnyToDisplay } from "../../services/currency";
 import { LIMITS, MONTE_CARLO_STRATEGY_DEFAULTS, MOTION_DURATIONS, resolveThemeTokens } from "../../data/defaults";
 import { INDEX_ORDER, INDEX_SERIES } from "../../data/indexSeries";
@@ -39,7 +41,7 @@ import type { MonteCarloOutput, SequenceDirection, SequenceSimOutput, Withdrawal
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, FieldTip, IntField, NumberField, PathsField, PercentField } from "../fields";
 import { EmptyRulerArt } from "../EmptyRuler";
-import { compactXInterval, useChartMetrics, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
+import { compactXInterval, useAnimatedNumber, useChartMetrics, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text } = Typography;
 const { Col } = Grid;
@@ -83,6 +85,8 @@ function median(sorted: number[]): number {
 
 export default function MonteCarloPanel() {
   const { t } = useTranslation();
+  /** S18 可见性闸宿主（hooks.ts useAnimatedNumber）：hidden/视口外暂停 rAF（§6 红线 2） */
+  const hostRef = useRef<HTMLDivElement>(null);
   const inputs = useCalculatorStore((s) => s.monteCarloInputs);
   const setInputs = useCalculatorStore((s) => s.setMonteCarloInputs);
   const returnMode = useCalculatorStore((s) => s.monteCarloReturnMode);
@@ -283,6 +287,9 @@ export default function MonteCarloPanel() {
   const data = result?.ok === true ? result.data : null;
   const error = result && !result.ok ? result.error : null;
   const depletionPercent = data ? Math.round(data.depletionProb * 1000) / 10 : 0;
+  /** S18 面板主数渐近滚动（p6-spec §2）：rAF 中间帧只进显示值、永不进 store（§6 红线 2）；
+   *  aria live 区只绑落定值 data.medianTerminal（R13 锚点，动画中间值不入播报） */
+  const animatedMedianTerminal = useAnimatedNumber(data?.medianTerminal ?? 0, undefined, hostRef);
   /** 图表实际绘制的路径条数（契约 50 条；按返回数据兜底） */
   const chartPathCount = data ? Math.min(MAX_CHART_PATHS, data.samplePaths.length) : 0;
   /** 初始支取率（输入侧实时）= 年支出（基期）÷ 当前资产；currentAssets = 0 显示「—」（除零防护） */
@@ -305,6 +312,60 @@ export default function MonteCarloPanel() {
     source: seqSeriesMeta.source,
   });
 
+  /** S25 图表 hover 读数（p6-spec §2）：十字虚线 + 读数气泡，金额与图轴同源（chartData
+   *  已按展示币种换算，格式化取 formatMoney 直出不再二次换算）。系列名复用既有键；
+   *  主线图 50 条抽样路径不入气泡（共享气泡降噪，中位粗线为读数主体）；两图
+   *  syncId="wf-mc" + syncMethod="value" 按年份值对齐（两图行数可能不同——窗长 ≠ 年数，
+   *  index 对齐有错位风险，research §4.2 口径）。触屏无 hover 无气泡，明细行兜底 */
+  const fateYearOf = (kind: "best" | "worst"): string => {
+    if (!seqState || seqState.kind !== "rolling") return "—";
+    const index = kind === "best" ? seqState.bestIndex : seqState.worstIndex;
+    const window = seqState.windows[index];
+    return window ? `${window.startYear}` : "—";
+  };
+  const renderFateTip = (): ReactElement => (
+    <Tooltip
+      cursor={{ stroke: themeTokens.textTertiary, strokeDasharray: "3 3" }}
+      content={({ active, payload, label }) => {
+        if (!active || !payload?.length) return null;
+        const names: Record<string, string> = {
+          best: t("seq.fateBest", { year: fateYearOf("best") }),
+          median: t("seq.fateMedian"),
+          worst: t("seq.fateWorst", { year: fateYearOf("worst") }),
+        };
+        return (
+          <div className="wf-chart-tip">
+            <div className="wf-chart-tip-label">{label}</div>
+            {payload.map((p) => (
+              <div key={String(p.dataKey)} className="wf-chart-tip-row">
+                <span>{names[String(p.dataKey)] ?? String(p.dataKey)}</span>
+                <span className="wf-chart-tip-value">{formatMoney(Number(p.value), symbol)}</span>
+              </div>
+            ))}
+          </div>
+        );
+      }}
+    />
+  );
+  const renderMainTip = (): ReactElement => (
+    <Tooltip
+      cursor={{ stroke: themeTokens.textTertiary, strokeDasharray: "3 3" }}
+      content={({ active, payload, label }) => {
+        if (!active || !payload?.length) return null;
+        const median = payload.find((p) => p.dataKey === "median");
+        if (!median) return null;
+        return (
+          <div className="wf-chart-tip">
+            <div className="wf-chart-tip-label">{label}</div>
+            <div className="wf-chart-tip-row">
+              <span>{t("seq.fateMedian")}</span>
+              <span className="wf-chart-tip-value">{formatMoney(Number(median.value), symbol)}</span>
+            </div>
+          </div>
+        );
+      }}
+    />
+  );
   /** 命运行数值：期末倍数 + 耗尽年标注 */
   const fateValue = (w: FateWindow): string => {
     const multiple = `${formatNumber(w.terminalMultiple, 2)}×`;
@@ -342,7 +403,7 @@ export default function MonteCarloPanel() {
   })();
 
   return (
-    <div>
+    <div ref={hostRef}>
       {/* 收益模式行（docs/p1-spec.md §4.6）：正态参数 / 历史自助抽样；自助抽样附加序列选择。
           触控目标由样式层既有触屏媒体查询承担，不额外包命中区扩展层。
           A5：提示图标经 FieldTip（Tab 可聚焦 + focus 触发 Tooltip）；A7：Radio 组补 name */}
@@ -687,7 +748,10 @@ export default function MonteCarloPanel() {
                 })}
               >
                 <ResponsiveContainer width="100%" height={chartHeight}>
-                  <LineChart data={seqChartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+                  {/* S25：与主线图同 syncId 联动（value 按年份值对齐） */}
+                  <LineChart data={seqChartData} syncId="wf-mc" syncMethod="value" margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+                    {/* S25 读数气泡 */}
+                    {renderFateTip()}
                     {/* §6 图表质感：仅水平 1px 实线网格，去轴框与刻度短线 */}
                     <CartesianGrid stroke={themeTokens.chartGrid} vertical={false} />
                     {/* 紧凑档（<640）X 刻度 ≤5：interval 按刻度总数（= 窗长）推导，非紧凑档不干预 */}
@@ -817,7 +881,7 @@ export default function MonteCarloPanel() {
             layout={isNarrow ? "vertical" : "horizontal"}
             column={{ xs: 1, md: 2 }}
             data={[
-              { label: t("mc.medianTerminal"), value: <Text bold className="wf-nowrap">{money(data.medianTerminal)}</Text> },
+              { label: t("mc.medianTerminal"), value: <Text bold className="wf-nowrap">{money(animatedMedianTerminal)}</Text> },
               { label: t("mc.p5"), value: money(data.p5) },
               { label: t("mc.p25"), value: money(data.p25) },
               { label: t("mc.p75"), value: money(data.p75) },
@@ -860,7 +924,9 @@ export default function MonteCarloPanel() {
               })}
             >
               <ResponsiveContainer width="100%" height={chartHeight}>
-                <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+                <LineChart data={chartData} syncId="wf-mc" syncMethod="value" margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+                  {/* S25 读数气泡 */}
+                  {renderMainTip()}
                   {/* §6 图表质感：仅水平 1px 实线网格，去轴框与刻度短线 */}
                   <CartesianGrid stroke={themeTokens.chartGrid} vertical={false} />
                   {/* 紧凑档（<640）X 刻度 ≤5：interval 按刻度总数（= 年数）推导，非紧凑档不干预 */}

@@ -131,7 +131,7 @@ const en = {
     groupPlan: "Life planning",
     groupHousing: "Housing & loans",
     groupAnalysis: "Analysis tools",
-    tabsKbdHint: "Estimate panels: use left/right arrow keys to switch tabs",
+    tabsKbdHint: "Estimate panels: left/right arrow keys switch tabs; number keys 1/2/3 switch groups (inactive inside inputs)",
     reverseTitle: "Reverse estimation",
     reverseDesc: "How much your existing assets can support per month",
     loanTitle: "Loan calculator",

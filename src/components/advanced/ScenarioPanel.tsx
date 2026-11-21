@@ -106,6 +106,7 @@ export default function ScenarioPanel() {
   const [name, setName] = useState("");
   const [entries, setEntries] = useState<ScenarioEntry[]>([]);
   const [cols, setCols] = useState<CompareCol[]>([]);
+  // P6 S23 已按 §8 降档顺序裁撤（docs/p6-spec.md §8；dist 原始字节门禁实测回写）
 
   const reload = () => setEntries(listScenarios());
   useEffect(() => {

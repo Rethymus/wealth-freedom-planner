@@ -10,7 +10,8 @@
  * - 每组记忆各自最后激活标签，切回分组时停留原面板。
  * - 键盘：组件库 Tabs 原生具备 ARIA tab 语义（role="tab" / aria-selected /
  *   tabindex=0 / aria-controls，源码实证），但无方向键漫游——本组件在外层
- *   捕获 ←/→ 切换并把焦点移到新标签头（roving tabindex 惯例）。
+ *   捕获 ←/→ 切换并把焦点移到新标签头（roving tabindex 惯例）；数字键 1/2/3
+ *   切换分组（输入控件内不派发，WCAG 2.1.4 输入豁免，提示见 tabsKbdHint）。
  * - 标签悬停提示（title）显示描述副行（*Desc 键），信息不因重构丢失。
  * - 面板标题经 react-i18next 三语化。
  */
@@ -89,8 +90,25 @@ export default function AdvancedPanel() {
 
   /** 方向键漫游：组件库 Tabs 无原生方向键（源码实证），←/→ 在组内标签间
    *  循环切换并把 DOM 焦点移到新标签（roving tabindex 惯例）。键盘事件由
-   *  获得焦点的标签（原生 tabindex=0）冒泡至本包装层，无需额外焦点停靠。 */
+   *  获得焦点的标签（原生 tabindex=0）冒泡至本包装层，无需额外焦点停靠。
+   *  S21 数字键切组（p6-spec §2）：1/2/3 → 分段控件展示序的分组；分支前置显式
+   *  输入豁免（WCAG 2.1.4 字符键快捷键：焦点在 INPUT/TEXTAREA/SELECT 或
+   *  contenteditable 内不派发——组件库 InputNumber 仅对 ↑/↓ stopPropagation，
+   *  字符键会从输入框冒泡到本容器，无豁免则输入中途被切组摧毁焦点与上下文，
+   *  修订轮 P1）；←/→ 分支行为不变（R2 漫游不回退）。 */
   const makeTabsKeyDown = (gid: string) => (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "1" || e.key === "2" || e.key === "3") {
+      const target = e.target as HTMLElement | null;
+      const typing =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
+        target?.isContentEditable === true;
+      if (typing) return;
+      const nextGroup = GROUPS[Number(e.key) - 1]; // 键位序 = GROUPS 展示序；越界忽略
+      if (nextGroup) setGroupId(nextGroup.id);
+      return;
+    }
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
     const panels = GROUPS.find((g) => g.id === gid)?.panels ?? [];
@@ -141,6 +159,7 @@ export default function AdvancedPanel() {
             type="capsule"
             activeTab={activeByGroup[g.id] ?? g.panels[0].key}
             lazyload
+            animation={{ inkBar: true, tabPane: true }}
             onChange={(v: string) => setActiveByGroup((m) => ({ ...m, [g.id]: v }))}
           >
             {g.panels.map((p) => (

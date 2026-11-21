@@ -107,7 +107,7 @@ const zhHant = {
     "groupPlan": "人生規劃",
     "groupHousing": "購房金融",
     "groupAnalysis": "分析工具",
-    "tabsKbdHint": "估算面板：左右方向鍵切換標籤",
+    "tabsKbdHint": "估算面板：左右方向鍵切換標籤；數字鍵 1/2/3 切換分組（輸入框內不生效）",
     "reverseTitle": "反向估算",
     "reverseDesc": "已有資產能支撐每月花多少",
     "loanTitle": "貸款計算",

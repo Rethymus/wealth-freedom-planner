@@ -2,7 +2,9 @@
  * UI 层共享 hook。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { MOTION_DURATIONS } from "../data/defaults";
+// P6 S26 useMagnetic 已按 §8 降档顺序裁撤（docs/p6-spec.md §8；dist 原始字节门禁实测回写）
 import type { FinanceResult } from "../services/finance";
 import { currencySymbol, formatMoney, formatMoneyFixed } from "../services/format";
 import { cnyToDisplay, pickRate } from "../services/currency";
@@ -193,9 +195,14 @@ const RAF_FALLBACK_GRACE_MS = 500;
  * - 卸载/依赖变更时取消未完成帧；
  * - 墙钟兜底：个别环境 rAF 帧回调停摆（页面 visible 且聚焦仍可能发生），
  *   超过「动画时长 + 宽限」仍无完成帧时直接落值到目标，保证显示值最终一致
- *   （rAF 正常时循环早已完成，兜底不触发）。
+ *   （rAF 正常时循环早已完成，兜底不触发）；
+ * - 可见性闸（P6 S18，p6-spec §6 红线 2 硬性要求）：hostRef 指向宿主元素时经
+ *   IntersectionObserver 监听其可见性——宿主 display:none（方案 B 常驻+hidden
+ *   面板）或视口外时 rAF 循环当帧暂停不再调度，恢复可见时从当前显示值续播
+ *   （墙钟已过时长则恢复帧直接落定值）；hostRef 未提供时闸不生效（行为同前）。
+ *   observer 卸载 disconnect；rAF 中间帧只进显示值，永不进 store。
  */
-export function useAnimatedNumber(target: number, durationMs?: number): number {
+export function useAnimatedNumber(target: number, durationMs?: number, hostRef?: RefObject<HTMLElement>): number {
   const duration = durationMs ?? MOTION_DURATIONS.slow;
   const reducedMotion = usePrefersReducedMotion();
   const [display, setDisplay] = useState(target);
@@ -204,6 +211,20 @@ export function useAnimatedNumber(target: number, durationMs?: number): number {
   const frameRef = useRef<number | null>(null);
   /** 首值不滚动：挂载后接收到的首个目标值直接落值 */
   const firstValueRef = useRef(true);
+  /** S18 可见性闸：宿主可见性（初始按可见处理，IO 首报后以实测为准） */
+  const [hostVisible, setHostVisible] = useState(true);
+  useEffect(() => {
+    const el = hostRef?.current;
+    if (!el || typeof IntersectionObserver !== "function") return;
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries[entries.length - 1];
+      if (entry) setHostVisible(entry.isIntersecting);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hostRef]);
+  /** 动画回合计时起点（跨 effect 重跑保持：目标变更开启新回合，可见性恢复沿用原起点） */
+  const startRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (frameRef.current !== null) {
@@ -215,17 +236,24 @@ export function useAnimatedNumber(target: number, durationMs?: number): number {
       reducedMotion || !Number.isFinite(target) || firstValueRef.current || displayRef.current === 0;
     if (snapDirectly) {
       firstValueRef.current = false;
+      startRef.current = null;
       displayRef.current = target;
       setDisplay(target);
       return;
     }
     const from = displayRef.current;
-    if (from === target) return;
-    const start = performance.now();
+    if (from === target) {
+      startRef.current = null;
+      return;
+    }
+    // 新回合（目标 / 时长 / 减动效偏好变化）从头计时；可见性恢复沿用原起点续播
+    if (startRef.current === null) startRef.current = performance.now();
+    const start = startRef.current;
     let completed = false;
     const finish = () => {
-      if (completed) return; // 正常完成帧已落值；兜底到点时空转
+      if (completed || !hostVisible) return; // 宿主不可见时不落值（恢复后按墙钟判定直接落定）
       completed = true;
+      startRef.current = null;
       if (frameRef.current !== null) {
         cancelAnimationFrame(frameRef.current);
         frameRef.current = null;
@@ -246,9 +274,12 @@ export function useAnimatedNumber(target: number, durationMs?: number): number {
       setDisplay(value);
       frameRef.current = requestAnimationFrame(step);
     };
-    frameRef.current = requestAnimationFrame(step);
-    // 墙钟兜底：rAF 停摆时不依赖帧回调，到点直接落值（正常时 completed 已为 true，此处空转）
-    const fallbackTimer = window.setTimeout(finish, duration + RAF_FALLBACK_GRACE_MS);
+    // 宿主不可见：当帧暂停不再调度（effect 重跑已取消在飞帧），恢复可见时本 effect 重跑续播
+    frameRef.current = hostVisible ? requestAnimationFrame(step) : null;
+    // 墙钟兜底：rAF 停摆时不依赖帧回调，到点直接落值（正常时 completed 已为 true，此处空转；
+    // 暂停期间计时继续走，恢复后按已过时长决定续播或立即落定）
+    const elapsed = performance.now() - start;
+    const fallbackTimer = window.setTimeout(finish, Math.max(0, duration + RAF_FALLBACK_GRACE_MS - elapsed));
     return () => {
       completed = true;
       window.clearTimeout(fallbackTimer);
@@ -257,9 +288,33 @@ export function useAnimatedNumber(target: number, durationMs?: number): number {
         frameRef.current = null;
       }
     };
-  }, [target, duration, reducedMotion]);
+  }, [target, duration, reducedMotion, hostVisible]);
 
   return display;
+}
+
+/**
+ * 因果高亮序号（P6 S16，p6-spec §2；research 片段 6.1）：值变化返回递增 epoch，
+ * 宿主以 key={epoch} 重挂承载一次性 CSS 动画（与段位涨色 multFlashEpoch 同构）。
+ * 首值不闪（与 useAnimatedNumber 首值纪律一致）；epoch 只驱动重渲染，
+ * 不进 store、不触发任何计算路径（§6 红线 4）。
+ */
+export function useFlashOnChange(value: number): number {
+  const [epoch, setEpoch] = useState(0);
+  const prev = useRef(value);
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      prev.current = value;
+      return;
+    }
+    if (value !== prev.current) {
+      prev.current = value;
+      setEpoch((e) => e + 1);
+    }
+  }, [value]);
+  return epoch;
 }
 
 // ---------------------------------------------------------------------------

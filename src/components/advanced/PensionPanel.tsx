@@ -7,7 +7,7 @@
  * 文案经 react-i18next 三语化。
  */
 import { Alert, Button, Descriptions, Spin, Typography } from "@arco-design/web-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { calcPension } from "../../services/finance";
 import { formatNumber } from "../../services/format";
@@ -15,12 +15,14 @@ import { LIMITS, resolveThemeTokens } from "../../data/defaults";
 import { effectiveMonthsDivisor, PENSION_WAGE_SOURCE_NOTE } from "../../data/pensionParams";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, FieldTip, IntField, NumberField } from "../fields";
-import { useFinanceCall, useIsNarrowViewport, useMoney } from "../hooks";
+import { useAnimatedNumber, useFinanceCall, useIsNarrowViewport, useMoney } from "../hooks";
 
 const { Text } = Typography;
 
 export default function PensionPanel() {
   const { t } = useTranslation();
+  /** S18 可见性闸宿主（hooks.ts useAnimatedNumber）：hidden/视口外暂停 rAF（§6 红线 2） */
+  const hostRef = useRef<HTMLDivElement>(null);
   const pensionInputs = useCalculatorStore((s) => s.pensionInputs);
   const setPensionInputs = useCalculatorStore((s) => s.setPensionInputs);
   const monthsSynced = useCalculatorStore((s) => s.pensionMonthsSynced);
@@ -61,9 +63,11 @@ export default function PensionPanel() {
 
   const data = result?.ok === true ? result.data : null;
   const serviceError = result && !result.ok ? result.error : null;
+  /** S18 面板主数渐近滚动（p6-spec §2）：rAF 中间帧只进显示值、永不进 store（§6 红线 2） */
+  const animatedPensionMonthly = useAnimatedNumber(data?.pensionMonthly ?? 0, undefined, hostRef);
 
   return (
-    <div>
+    <div ref={hostRef}>
       {/* 说明行：两层公式 + 简化口径 */}
       <Text type="secondary">{t("pension.formulaNote")}</Text>
 
@@ -172,7 +176,7 @@ export default function PensionPanel() {
                 label: t("pension.monthlyPension"),
                 value: (
                   <Text bold className="wf-nowrap">
-                    {money(data.pensionMonthly)}
+                    {money(animatedPensionMonthly)}
                   </Text>
                 ),
               },
