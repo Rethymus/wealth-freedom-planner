@@ -32,7 +32,7 @@ import type { AccumulationOutput, RequiredSavingOutput } from "../../wasm/bridge
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, IntField, PathsField, PercentField } from "../fields";
 import { EmptyRulerArt } from "../EmptyRuler";
-import { compactXInterval, useAnimatedNumber, useChartMetrics, useFinanceCall, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
+import { compactXInterval, useAnimatedNumber, useChartMetrics, useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text, Title } = Typography;
 const { Col } = Grid;
@@ -73,6 +73,10 @@ export default function AccumulationPanel() {
   const convert = (v: number): number => (rate !== null ? cnyToDisplay(v, rate) : v);
   /** 窄视口下统计 Descriptions 切纵向堆叠（标签上/值下），避免长 label 挤压数值列 */
   const isNarrow = useIsNarrowViewport();
+  /** V-V2（P7.1 视觉验收）：双栏右栏容器 ~618px 装不下 md:2 表宽（实测 757px 被祖先
+   *  裁切、中位终值整列不可见）——workbench 形态统计表切单列 + fixed 布局
+   *  （P5 BreakdownTable 同款先例），窄视口维持纵向堆叠既有口径 */
+  const isWorkbench = useIsWorkbenchViewport();
   /** 图表响应式三档（docs/p3-spec.md §6.4 D5）：高度 240/280/320、YAxis 宽 56/72、紧凑档 X 刻度 ≤5 */
   const { chartHeight, yAxisWidth, isCompact } = useChartMetrics();
 
@@ -549,14 +553,15 @@ export default function AccumulationPanel() {
             size="small"
             style={{ marginTop: 8 }}
             layout={isNarrow ? "vertical" : "horizontal"}
-            column={{ xs: 1, md: 2 }}
+            column={isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }}
+            tableLayout={isWorkbench ? "fixed" : "auto"}
             title={t("accumulation.yearsTitle")}
             data={[
-              { label: t("mc.p5"), value: formatYearsValue(data.yearsP5) },
-              { label: t("mc.p25"), value: formatYearsValue(data.yearsP25) },
-              { label: t("mc.medianTerminal"), value: formatYearsValue(data.yearsMedian) },
-              { label: t("mc.p75"), value: formatYearsValue(data.yearsP75) },
-              { label: t("mc.p95"), value: formatYearsValue(data.yearsP95) },
+              { label: t("mc.p5"), value: <span className="wf-nowrap">{formatYearsValue(data.yearsP5)}</span> },
+              { label: t("mc.p25"), value: <span className="wf-nowrap">{formatYearsValue(data.yearsP25)}</span> },
+              { label: t("mc.medianTerminal"), value: <span className="wf-nowrap">{formatYearsValue(data.yearsMedian)}</span> },
+              { label: t("mc.p75"), value: <span className="wf-nowrap">{formatYearsValue(data.yearsP75)}</span> },
+              { label: t("mc.p95"), value: <span className="wf-nowrap">{formatYearsValue(data.yearsP95)}</span> },
             ]}
           />
           <Descriptions
@@ -564,19 +569,20 @@ export default function AccumulationPanel() {
             size="small"
             style={{ marginTop: 8 }}
             layout={isNarrow ? "vertical" : "horizontal"}
-            column={{ xs: 1, md: 2 }}
+            column={isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }}
+            tableLayout={isWorkbench ? "fixed" : "auto"}
             title={t("accumulation.finalTitle")}
             data={[
-              { label: t("mc.p5"), value: money(data.finalAssetPercentiles.p5) },
-              { label: t("mc.p25"), value: money(data.finalAssetPercentiles.p25) },
+              { label: t("mc.p5"), value: <span className="wf-nowrap">{money(data.finalAssetPercentiles.p5)}</span> },
+              { label: t("mc.p25"), value: <span className="wf-nowrap">{money(data.finalAssetPercentiles.p25)}</span> },
               {
                 label: t("mc.medianTerminal"),
                 value: (
                   <Text bold className="wf-nowrap">{money(data.finalAssetPercentiles.p50)}</Text>
                 ),
               },
-              { label: t("mc.p75"), value: money(data.finalAssetPercentiles.p75) },
-              { label: t("mc.p95"), value: money(data.finalAssetPercentiles.p95) },
+              { label: t("mc.p75"), value: <span className="wf-nowrap">{money(data.finalAssetPercentiles.p75)}</span> },
+              { label: t("mc.p95"), value: <span className="wf-nowrap">{money(data.finalAssetPercentiles.p95)}</span> },
               {
                 label: `${t("mc.paths")} / ${t("mc.years")}`,
                 value: t("mc.pathsYears", { paths: formatNumber(inputs.paths, 0), years: inputs.years }),

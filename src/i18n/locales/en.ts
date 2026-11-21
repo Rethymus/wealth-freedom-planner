@@ -303,7 +303,7 @@ const en = {
     leverageYears: "Return leverage years",
     leverageTooltip:
       "Definition: 12 ÷ real return rate (in percentage points) = 480 multiplier ÷ 100; it measures how strongly the return rate leverages asset longevity. It does not mean “the assets will only last N years” — if you withdraw at the critical-principal level (i.e. the “safe monthly spending” amount), actual returns exactly cover all spending and the assets never run out (this holds within the model’s assumptions; real-world sequence risk can break this conclusion).",
-    note: "“Safe monthly spending” = investable assets × real return rate ÷ 12 (perpetual withdrawal basis: only returns are spent, principal is untouched); “Return leverage years” = 12 ÷ real return rate (= 480 multiplier ÷ 100), not the years until the assets run out — at the withdrawal level above, the assets never run out.",
+    note: "“Safe monthly spending” = investable assets × real return rate ÷ 12 (perpetual withdrawal basis: only returns are spent, principal is untouched); “Return leverage years” = 12 ÷ real return rate (= 480 multiplier ÷ 100), not the years until the assets run out — at the withdrawal level above, the assets never run out (this holds within the model’s assumptions; real-world sequence risk can break it).",
     exampleLegend: "Worked examples (video-demonstration basis)",
     exampleA: "Example A: 6M − 1 child 700k − health 500k",
     exampleB: "Example B: 6M − 0 children − home 1.2M",
@@ -584,7 +584,7 @@ const en = {
     sustainYearsTooltip:
       "After the target is reached, simulate N more years of withdrawing the full monthly expense (rising with inflation) and test survival; 0 = off. Reaching the target once ≠ staying wealthy: sequence risk can wreck the plan right after the goal is hit — the sustained success rate counts only paths that reach the target AND survive N years of withdrawals.",
     sustainedLabel: "Sustained success probability",
-    sustainedHint: "Share of paths that reach the target and survive {{years}} years of withdrawals; {{years}} = 0 means not measured",
+    sustainedHint: "Share of paths that reach the target and survive {{years}} years of withdrawals; N = 0 means not measured",
     yearsTitle:
       "First-hit year distribution (integer years, reaching paths only; “—” means no path reaches the target)",
     finalTitle: "End-of-period asset distribution (all paths)",

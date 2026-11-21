@@ -15,7 +15,7 @@ import { LIMITS, resolveThemeTokens } from "../../data/defaults";
 import { effectiveMonthsDivisor, PENSION_WAGE_SOURCE_NOTE } from "../../data/pensionParams";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, FieldTip, IntField, NumberField } from "../fields";
-import { useAnimatedNumber, useFinanceCall, useIsNarrowViewport, useMoney } from "../hooks";
+import { useAnimatedNumber, useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney } from "../hooks";
 
 const { Text } = Typography;
 
@@ -36,6 +36,10 @@ export default function PensionPanel() {
   const rate = display.rate;
   /** 窄视口下结果 Descriptions 切纵向堆叠（标签上/值下） */
   const isNarrow = useIsNarrowViewport();
+  /** V-V3（P7.1 视觉验收）：双栏右栏容器 ~618px 装不下 md:2 表宽（实测 757px 裁切、
+   *  个人账户养老金与覆盖率两格不可见）——workbench 形态三张结果表切单列 + fixed
+   *  布局（P5 BreakdownTable 同款先例），窄视口维持纵向堆叠既有口径 */
+  const isWorkbench = useIsWorkbenchViewport();
   /** 覆盖率满额行的涨色：经主题解析函数取解析值（不感知主题，见设计规范第 8 节口径） */
   const themeTokens = resolveThemeTokens(theme, colorBlindFriendly);
 
@@ -182,7 +186,8 @@ export default function PensionPanel() {
             size="small"
             style={{ marginTop: 8, opacity: loading ? 0.45 : 1 }}
             layout={isNarrow ? "vertical" : "horizontal"}
-            column={{ xs: 1, md: 2 }}
+            column={isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }}
+            tableLayout={isWorkbench ? "fixed" : "auto"}
             data={[
               {
                 label: t("pension.monthlyPension"),
@@ -192,8 +197,8 @@ export default function PensionPanel() {
                   </Text>
                 ),
               },
-              { label: t("pension.basicPart"), value: money(data.basicPensionMonthly) },
-              { label: t("pension.accountPart"), value: money(data.accountPensionMonthly) },
+              { label: t("pension.basicPart"), value: <span className="wf-nowrap">{money(data.basicPensionMonthly)}</span> },
+              { label: t("pension.accountPart"), value: <span className="wf-nowrap">{money(data.accountPensionMonthly)}</span> },
               {
                 label: t("pension.yearsToRetire"),
                 value: `${data.yearsToRetire} ${t("units.yearUnit")}`,
@@ -209,12 +214,13 @@ export default function PensionPanel() {
             size="small"
             style={{ marginTop: 8, opacity: loading ? 0.45 : 1 }}
             layout={isNarrow ? "vertical" : "horizontal"}
-            column={{ xs: 1, md: 2 }}
+            column={isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }}
+            tableLayout={isWorkbench ? "fixed" : "auto"}
             title={t("pension.adjustedTitle")}
             data={[
               {
                 label: t("pension.adjustedExpense"),
-                value: money(data.adjustedMonthlyExpense),
+                value: <span className="wf-nowrap">{money(data.adjustedMonthlyExpense)}</span>,
               },
               {
                 label: t("pension.adjustedCritical"),
@@ -227,7 +233,7 @@ export default function PensionPanel() {
               {
                 // 覆盖率是倍率不是百分点：× 100 后按一位小数渲染（如 0.95 → 95%）
                 label: t("pension.coverage"),
-                value: `${formatNumber(data.coverageRatio * 100, 1)}%`,
+                value: <span className="wf-nowrap">{`${formatNumber(data.coverageRatio * 100, 1)}%`}</span>,
               },
             ]}
           />
@@ -241,7 +247,8 @@ export default function PensionPanel() {
                 size="small"
                 style={{ marginTop: 8, opacity: loading ? 0.45 : 1 }}
                 layout={isNarrow ? "vertical" : "horizontal"}
-                column={{ xs: 1, md: 2 }}
+                column={isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }}
+                tableLayout={isWorkbench ? "fixed" : "auto"}
                 title={t("pension.bridgeTitle")}
                 data={[
                   {
