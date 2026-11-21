@@ -63,7 +63,7 @@ const en = {
     inputTitle: "Basic Parameters",
     monthlyExpense: "Monthly expense",
     monthlyExpenseTooltip:
-      "Your average total monthly spending under your current lifestyle; it is the anchor of the whole reference line.",
+      "Your average total monthly spending under your current lifestyle; it is the anchor of the whole reference line. The default is rounded from the NBS urban per-capita consumption figure.",
     planChildren: "Plan to have children",
     planChildrenHint:
       "When enabled, the cost of raising each child is added to the reference line as a lump sum",
@@ -71,10 +71,10 @@ const en = {
     childCountTooltip:
       "How many children you plan to raise; each child's cost is counted separately.",
     childCountHint:
-      "Cumulative child-raising cost for ages 0–18; see “Cost per child”.",
+      "Cumulative child-raising cost for ages 0–17 (through the day before the 18th birthday); see “Cost per child”.",
     childCost: "Cost per child",
     childCostTooltip:
-      "The total cost of raising one child to adulthood (cumulative for ages 0–18).",
+      "The total cost of raising one child to adulthood (report basis: cumulative for ages 0–17, through the day before the 18th birthday).",
     childCostHint:
       "The average cost per child typically drops about 15% with each additional child (ignored by default under the video claim); fold it in yourself if needed.",
     healthReserve: "Lifetime health reserve",

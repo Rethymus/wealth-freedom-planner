@@ -56,7 +56,7 @@ export const PRESET_PROFILES: PresetProfile[] = [
     // 一线含房租三口口径：11000/月 = 吃 4000 + 住 4500 + 行 800 + 通讯 250 + 其他 1450
     baseline: { monthlyExpense: 11000, childCount: 1, costPerChild: 580000, healthReserve: 200000, majorInvestment: 0 },
     breakdown: { food: 4000, housing: 4500, transport: 800, communication: 250, other: 1450 },
-    note: "以一线城市口径整理：三口之家，含房租约 4,500 元/月；1 孩抚养成本按 58 万整理。可自由修改。",
+    note: "以一线城市口径整理：三口之家，含房租约 4,500 元/月；1 孩抚养成本按 58 万整理（视频口径示例值；报告原文 0–17 岁平均 53.8 万，见面板⑨）。可自由修改。",
   },
   {
     id: "zen_frugal",

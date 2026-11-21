@@ -32,7 +32,7 @@ export const BASELINE_DEFAULTS: BaselineInput = {
   monthlyExpense: 2990,
   // 默认不计划要孩子：首屏临界值 = 2990 × 480 + 200,000 = 1,635,200 元（与验收口径一致）
   childCount: 0,
-  costPerChild: 580000, // 每孩总抚养成本（元）
+  costPerChild: 580000, // 每孩总抚养成本（元）：视频口径示例值 58 万（非《中国生育成本报告 2024 版》原文值——原文 0–17 岁全国平均 53.8 万，见面板⑨）；保留为可编辑示例
   healthReserve: 200000, // 健康预留（元）
   majorInvestment: 0, // 重大投入（元）
   nominalReturnPct: 4.5,
@@ -78,10 +78,10 @@ export const LIMITS: InputLimits = {
   sustainYears: { min: 0, max: 200, step: 1, precision: 0 },
 };
 
-/** 反向估算面板默认输入（占位：childReserve 沿用 1 孩成本，totalAssets 为示例值） */
+/** 反向估算面板默认输入（占位：childReserve 沿用 1 孩成本，即视频口径示例值 58 万——报告原文 0–17 岁平均 53.8 万，见面板⑨；totalAssets 为示例值） */
 export const REVERSE_ESTIMATE_DEFAULTS: ReverseEstimateInput = {
   totalAssets: 2_000_000,
-  childReserve: 580000,
+  childReserve: 580000, // 视频口径示例值 58 万（报告原文 0–17 岁平均 53.8 万，见面板⑨）
   healthReserve: 200000,
   majorInvestment: 0,
   nominalReturnPct: 4.5,

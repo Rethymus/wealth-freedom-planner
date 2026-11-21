@@ -11,6 +11,7 @@
     "check:size": "node scripts/check-size.mjs",
     "check:currency": "node scripts/check-currency.mjs",
     "check:share": "node scripts/check-share.mjs",
+    "check:data": "node scripts/check-data.mjs",
     "check:a11y": "node scripts/check-a11y-contrast.mjs"
   },
   "dependencies": {

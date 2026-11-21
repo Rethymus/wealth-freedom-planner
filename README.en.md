@@ -256,7 +256,7 @@ One-time GitHub Pages settings (repo Settings → Pages):
 | City rental yields | Numbeo city property pages (rolling 18-month window) | read 2026-11, base year 2025 | Gross yield (annual rent ÷ price); holding costs are market-convention estimates (see each city's `note`) |
 | City grouping | China: organized from Yicai's City Business Attractiveness Rankings and common conventions (Tier-1 to Tier-4); international: GaWC (Globalization and World Cities Research Network) 2024 classification (not on the Chinese scale) | classified 2024, verified 2026-11 | Alpha++ and Alpha+ → global financial hubs; Alpha and below / unclassified → regional hubs; international cities use independent living-cost and tax conventions and are not compared head-to-head with Chinese cities |
 | GDP per capita (PPP) / consumption share | World Bank API (NY.GDP.PCAP.PP.CD / NE.CON.PRVT.ZS) | 2024 values, snapshot 2026-11-11 | National basis, for scale reference only |
-| Household consumption / Engel coefficient (China) | National Bureau of Statistics, "2024 household income and consumption expenditure" | published 2025-01-17 | Urban per-capita consumption 34,557 yuan/year ≈ 2,880 yuan/month (the reference behind the default 2,990 monthly expense) |
+| Household consumption / Engel coefficient (China) | National Bureau of Statistics, "2025 household income and consumption expenditure" (published 2026-01-19, verified 2026-11-21) | 2025 | Urban per-capita consumption 35,869 yuan/year ≈ 2,989 yuan/month; national 29,476 yuan/year ≈ 2,456 yuan/month (monthly figures are the annual value ÷ 12, derived arithmetic; the default 2,990 monthly expense is rounded from the urban figure to the nearest ten) |
 | Exchange rates | open.er-api.com free open endpoint (no key) | fetched live, timestamp shown on page | 8-second timeout; on failure/timeout falls back to the bundled snapshot labeled "offline snapshot" |
 
 > Every dataset in `src/data/**` carries structured `source` / `year` / `note` fields that are shown on screen; code comments are the authoritative statement of each convention.
@@ -281,7 +281,7 @@ What this project **cannot do today, or simplifies on purpose** — please read 
 > The "years sustainable" figure in reverse estimation is a **return-leverage convention** at a fixed real return rate (same origin as the 480 multiplier) — it does **not** mean "this money only lasts N years"; the panel copy explains further.
 
 > [!NOTE]
-> All defaults (monthly expense 2,990, 580k per child, 200k health reserve, 4.5% nominal, 2.0% inflation) are **reference conventions organized from public statistics**, not advice for any personal situation; adjust them to your own.
+> All defaults are reference conventions, not advice for any personal situation: monthly expense 2,990 (rounded from the NBS 2025 urban per-capita figure), 200k health reserve, 4.5% nominal / 2.0% inflation (planning assumptions, not literature-derived conclusions); **580k per child is the original video's sample value** (the 2024 China Fertility Cost Report's own figure averages 538k for ages 0–17, compared item by item in panel ⑨ of the app); adjust them to your own situation.
 
 ## 🗺 Roadmap
 
