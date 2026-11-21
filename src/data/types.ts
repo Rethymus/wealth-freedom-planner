@@ -49,6 +49,10 @@ export interface InputLimits {
   strategyCapPct: NumberInputLimit;
   /** 支取策略实际回报假设（百分点，−100–100 对称防误输入域） */
   strategyRealReturnPct: NumberInputLimit;
+  /** 想停止工作的年龄（P7/P0-1 桥接口径） */
+  targetRetireAge: NumberInputLimit;
+  /** 存续验证年数（P7/P0-2 双指标；0 = 关闭） */
+  sustainYears: NumberInputLimit;
 }
 
 // ---------------------------------------------------------------------------

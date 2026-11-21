@@ -89,6 +89,18 @@ export default function PensionPanel() {
           suffix={t("units.yearUnit")}
           hint={t("pension.retireAgeDelayNote")}
         />
+        {/* P7/P0-1：想停止工作的年龄（时间口径）——只驱动桥接两字段，不影响任何
+            养老金金额（金额仍全部由 retireAge 经计发月数联动承载，验收锚点 ①） */}
+        <IntField
+          md={12}
+          label={t("pension.targetRetireAge")}
+          tooltip={t("pension.targetRetireAgeTooltip")}
+          value={pensionInputs.targetRetireAge}
+          onChange={(v) => setPensionInputs({ targetRetireAge: v })}
+          min={LIMITS.targetRetireAge.min}
+          max={LIMITS.targetRetireAge.max}
+          suffix={t("units.yearUnit")}
+        />
         <IntField
           md={12}
           label={t("pension.contribYears")}
@@ -219,6 +231,38 @@ export default function PensionPanel() {
               },
             ]}
           />
+          {/* P7/P0-1 桥接块（§4.2）：bridgeYears > 0 才渲染——缺省（targetRetireAge =
+              retireAge）视图 bridgeYears = 0，面板形状与 README 锚点截图一致；
+              金额经 money() 展示币种换算（§6 红线 4）；块尾 bridgeNote 口径注 */}
+          {data.bridgeYears > 0 ? (
+            <>
+              <Descriptions
+                border
+                size="small"
+                style={{ marginTop: 8, opacity: loading ? 0.45 : 1 }}
+                layout={isNarrow ? "vertical" : "horizontal"}
+                column={{ xs: 1, md: 2 }}
+                title={t("pension.bridgeTitle")}
+                data={[
+                  {
+                    label: t("pension.bridgeYearsLabel"),
+                    value: `${data.bridgeYears} ${t("units.yearUnit")}`,
+                  },
+                  {
+                    label: t("pension.bridgeFundingLabel"),
+                    value: (
+                      <Text bold className="wf-nowrap">
+                        {money(data.bridgeFundingNeeded)}
+                      </Text>
+                    ),
+                  },
+                ]}
+              />
+              <Text type="secondary" className="wf-panel-note">
+                {t("pension.bridgeNote")}
+              </Text>
+            </>
+          ) : null}
           {data.coverageRatio >= 1 ? (
             <div style={{ marginTop: 8 }}>
               <Text bold style={{ color: themeTokens.rise }}>

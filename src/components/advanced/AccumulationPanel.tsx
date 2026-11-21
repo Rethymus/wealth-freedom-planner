@@ -395,6 +395,18 @@ export default function AccumulationPanel() {
           onChange={(v) => setInputs({ seed: v })}
           suffix="#"
         />
+        {/* P7/P0-2：达标后接支取模拟的存续年数（0 = 关闭）。经 ...inputs 随 run()
+            自动携带，calcAccumulation 调用点零改动（§5 红线 5：P7 调用点增量 = 0） */}
+        <IntField
+          md={12}
+          label={t("accumulation.sustainYears")}
+          tooltip={t("accumulation.sustainYearsTooltip")}
+          value={inputs.sustainYears ?? 0}
+          onChange={(v) => setInputs({ sustainYears: v })}
+          min={LIMITS.sustainYears.min}
+          max={LIMITS.sustainYears.max}
+          suffix={t("units.yearUnit")}
+        />
       </FieldRow>
 
       {/* 目标值联动恢复按钮（模式同 ReversePanel 的同步按钮）；点击递增重挂载序号，
@@ -515,6 +527,23 @@ export default function AccumulationPanel() {
             />
             <Text type="secondary">{t("accumulation.fiHint")}</Text>
           </div>
+          {/* P7/P0-2 持续成功率（双指标）：仅输入侧 sustainYears > 0 时渲染（0 = 关闭
+              不占位，零默认行为变化）；sustainedProbability = 0.0 为「未度量」哨兵，
+              Rust 不引入 -1 特判——判定语义见 bridge.ts §g */}
+          {(inputs.sustainYears ?? 0) > 0 ? (
+            <div className="wf-acc-progress">
+              <Text>{t("accumulation.sustainedLabel")}</Text>
+              <Progress
+                percent={data.sustainedProbability * 100}
+                color={pathColor}
+                formatText={(p) => `${formatNumber(p, 1)}%`}
+                style={{ maxWidth: 420 }}
+              />
+              <Text type="secondary">
+                {t("accumulation.sustainedHint", { years: inputs.sustainYears ?? 0 })}
+              </Text>
+            </div>
+          ) : null}
           <Descriptions
             border
             size="small"

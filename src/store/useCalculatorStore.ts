@@ -108,6 +108,11 @@ interface CalculatorState {
   currency: CurrencySetting;
   /** 色盲友好模式（开启后涨跌语义色替换为 Okabe–Ito 蓝/橙） */
   colorBlindFriendly: boolean;
+  /** P7/P0-3 一次性提示（瞬态，不入 share 载荷 / 不入情景存档 / resetEpoch 语义不变）：
+   *  旧链接或外来载荷携带正名前的支取策略名 inflation_uplift、解码端已并入 fixed 时置位；
+   *  关闭提示或切换策略即清除 */
+  strategyLegacyNotice: boolean;
+  clearStrategyLegacyNotice: () => void;
   /** 业务输入重置纪元：损坏分享链接回落默认时递增，组件以 key 重挂载刷新
    *  Arco InputNumber 在用户编辑后不跟随受控值的内部态（见验收 P1-2/Q3-2） */
   resetEpoch: number;
@@ -164,6 +169,7 @@ function businessDefaults() {
     pensionMonthsSynced: true,
     monteCarloReturnMode: "normal" as MonteCarloReturnMode,
     monteCarloSeriesId: "csi300" as IndexId,
+    strategyLegacyNotice: false,
   };
 }
 
@@ -240,6 +246,7 @@ export const useCalculatorStore = create<CalculatorState>()((set, get) => ({
   setPensionMonthsSynced: (v) => set({ pensionMonthsSynced: v }),
   setMonteCarloReturnMode: (v) => set({ monteCarloReturnMode: v }),
   setMonteCarloSeriesId: (v) => set({ monteCarloSeriesId: v }),
+  clearStrategyLegacyNotice: () => set({ strategyLegacyNotice: false }),
   setCurrency: (patch) =>
     set((state) => {
       const currency = { ...state.currency, ...patch };
@@ -263,23 +270,26 @@ export const useCalculatorStore = create<CalculatorState>()((set, get) => ({
       return { theme: next };
     }),
   applyShareState: (hash) => {
-    const shared = decodeShareState(hash);
-    if (!shared) return false;
+    // P7：decodeShareState 返回 DecodeResult { state, strategyNormalizedFromLegacy }——
+    // state 为恢复切片；规范化信号仅置瞬态标志（不入载荷 / 不入存档、resetEpoch 不变）
+    const decoded = decodeShareState(hash);
+    if (!decoded) return false;
     set({
-      baselineInputs: shared.baseline,
+      baselineInputs: decoded.state.baseline,
       activePresetId: "custom", // 画像 id 非业务输入，不随链接恢复
-      reverseInputs: shared.reverse,
-      loanInputs: shared.loan,
-      rentalInputs: shared.rental,
-      monteCarloInputs: shared.monteCarlo,
-      monteCarloReturnMode: shared.monteCarloReturnMode,
-      monteCarloSeriesId: shared.monteCarloSeriesId,
-      taxInputs: shared.tax,
-      accumulationInputs: shared.accumulation,
+      reverseInputs: decoded.state.reverse,
+      loanInputs: decoded.state.loan,
+      rentalInputs: decoded.state.rental,
+      monteCarloInputs: decoded.state.monteCarlo,
+      monteCarloReturnMode: decoded.state.monteCarloReturnMode,
+      monteCarloSeriesId: decoded.state.monteCarloSeriesId,
+      taxInputs: decoded.state.tax,
+      accumulationInputs: decoded.state.accumulation,
       accumulationTargetSynced: false, // 目标值以链接携带的原值呈现，不联动
-      progressInputs: { currentAssets: shared.progressCurrentAssets },
-      pensionInputs: shared.pension,
+      progressInputs: { currentAssets: decoded.state.progressCurrentAssets },
+      pensionInputs: decoded.state.pension,
       pensionMonthsSynced: false,
+      strategyLegacyNotice: decoded.strategyNormalizedFromLegacy,
     });
     return true;
   },

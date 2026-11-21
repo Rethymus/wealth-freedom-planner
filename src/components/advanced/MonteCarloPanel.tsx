@@ -92,6 +92,10 @@ export default function MonteCarloPanel() {
   const returnMode = useCalculatorStore((s) => s.monteCarloReturnMode);
   const setReturnMode = useCalculatorStore((s) => s.setMonteCarloReturnMode);
   const seriesId = useCalculatorStore((s) => s.monteCarloSeriesId);
+  // P7/P0-3：旧链接/外来载荷「通胀上调」正名并入 fixed 后的一次性提示（瞬态，
+  // 不入 share 载荷 / 不入情景存档 / resetEpoch 语义不变）；关闭或切换策略即清除
+  const strategyLegacyNotice = useCalculatorStore((s) => s.strategyLegacyNotice);
+  const clearStrategyLegacyNotice = useCalculatorStore((s) => s.clearStrategyLegacyNotice);
   const setSeriesId = useCalculatorStore((s) => s.setMonteCarloSeriesId);
   const displayCode = useCalculatorStore((s) => s.currency.display);
   const colorBlindFriendly = useCalculatorStore((s) => s.colorBlindFriendly);
@@ -132,6 +136,8 @@ export default function MonteCarloPanel() {
   // ---------------------------------------------------------------------------
   const handleStrategyChange = (value: string) => {
     const strategy = value as WithdrawalStrategy;
+    // P7/P0-3：切换策略即清除「正名并入」一次性提示（随策略注生命周期走）
+    if (strategyLegacyNotice) clearStrategyLegacyNotice();
     if (strategy === "threshold" && !inputs.threshold) {
       setInputs({ strategy, threshold: { ...MONTE_CARLO_STRATEGY_DEFAULTS.threshold } });
     } else if (strategy === "percent" && !inputs.percent) {
@@ -912,6 +918,22 @@ export default function MonteCarloPanel() {
             {t("mc.strategyNoteShort")}
             <FieldTip text={`${t("mc.strategyNote1")} ${t("mc.strategyNote2")}`} />
           </Text>
+          {/* P7/P0-3（修订轮二 R4）：解码端把历史/外来载荷的 inflation_uplift 并入
+              fixed 后的一次性提示——仅规范化标志在位时出现，关闭按钮或切换策略即清除 */}
+          {strategyLegacyNotice ? (
+            <Text type="secondary" className="wf-panel-note">
+              {t("share.strategyLegacyNotice")}{" "}
+              <Button
+                type="text"
+                size="small"
+                className="wf-pressable"
+                aria-label={t("share.strategyLegacyNotice")}
+                onClick={clearStrategyLegacyNotice}
+              >
+                {"✕"}
+              </Button>
+            </Text>
+          ) : null}
           {chartData.length > 0 ? (
             <div
               className="wf-mc-chart"

@@ -87,7 +87,7 @@ pub struct MonteCarloInput {
     /// 随机种子
     #[serde(with = "rust_decimal::serde::arbitrary_precision")]
     seed: Decimal,
-    /// 支取策略（缺省 = "fixed" 现状口径；三枚举之一，见 withdrawal.rs）
+    /// 支取策略（缺省 = "fixed" 现状口径；fixed / inflation_uplift / threshold / percent 四枚举之一——inflation_uplift 为 P7/P0-3 正名、与 fixed 同一数值路径，见 withdrawal.rs）
     strategy: Option<String>,
     /// 阈值带调整型参数（strategy = "threshold" 时必填）
     threshold: Option<ThresholdParamsInput>,
@@ -243,7 +243,8 @@ fn compute(input: &str) -> Result<MonteCarloOutput, String> {
             cum_infl *= 1.0 + infl; // cum_infl_t = ∏(1 + 通胀样本)（含当年；纯簿记，不触随机流）
 
             // 当年支取额按策略分支（bridge.ts §2.2）：
-            // - fixed（缺省）：保持 P1 逐字节口径——年支出按当年通胀上行；
+            // - fixed（缺省；正名 inflation_uplift——按通胀样本逐年上行、等价固定实际支出，
+            //   非名义恒定支出，P7/P0-3）：保持 P1 逐字节口径——年支出按当年通胀上行；
             //   不得再换算「实际增长」(1+r)/(1+i)−1（与支出上行并用会双重计通胀）
             match &strategy {
                 Strategy::Fixed => {

@@ -47,7 +47,9 @@ pub(crate) struct PercentParams {
 /// 解析后的支取策略（输入 JSON 的 strategy/threshold/percent 三字段经校验后的产物）
 #[derive(Debug)]
 pub(crate) enum Strategy {
-    /// 固定名义（缺省口径；不消费 threshold/percent 任何新字段）
+    /// 通胀上调（正名 inflation_uplift；历史别名 fixed——语义 = 按通胀样本逐年上行、
+    /// 即等价固定实际购买力支出，**非名义恒定支出**；缺省口径；不消费
+    /// threshold/percent 任何新字段。P7/P0-3 正名裁定见 bridge.ts §e）
     Fixed,
     Threshold(ThresholdParams),
     Percent(PercentParams),
@@ -111,7 +113,9 @@ pub(crate) fn resolve_strategy(
 ) -> Result<Strategy, String> {
     match strategy {
         None => Ok(Strategy::Fixed),
-        Some(s) if s == "fixed" => Ok(Strategy::Fixed),
+        // "fixed" 保留为兼容别名（输入等价 → Strategy::Fixed，数值路径零改动）；
+        // "inflation_uplift" 为正名（P7/P0-3）——同一 Strategy::Fixed，等价输入
+        Some(s) if s == "fixed" || s == "inflation_uplift" => Ok(Strategy::Fixed),
         Some(s) if s == "threshold" => {
             let tp = threshold.ok_or("strategy = threshold 时 threshold 参数必填")?;
             check_pct_range("超带阈值", tp.exceed_pct, Decimal::ZERO, Decimal::from(100))?;
@@ -146,7 +150,7 @@ pub(crate) fn resolve_strategy(
                 cap: pp.cap_pct_of_initial_real.to_f64().unwrap_or(0.0) / 100.0,
             }))
         }
-        Some(_) => Err("支取策略须为 fixed / threshold / percent 之一".to_string()),
+        Some(_) => Err("支取策略须为 fixed / inflation_uplift / threshold / percent 之一".to_string()),
     }
 }
 
@@ -489,6 +493,14 @@ mod tests {
         });
         let m = resolve_strategy(&Some("fixed".into()), mounted.clone(), None, a, s).unwrap();
         assert!(matches!(m, Strategy::Fixed), "fixed 不消费 threshold 参数");
+        // P7/P0-3 正名：inflation_uplift 与 fixed 等价映射同一 Strategy::Fixed
+        // （输入等价 → 数值路径零改动；缺省与两别名三次调用输出逐字节一致由
+        // 集成 mc_fixed_semantics_after_rename 锁定）
+        let m = resolve_strategy(&Some("inflation_uplift".into()), mounted.clone(), None, a, s).unwrap();
+        assert!(
+            matches!(m, Strategy::Fixed),
+            "inflation_uplift（正名）→ Strategy::Fixed"
+        );
         // 枚举外 → 报错
         assert!(resolve_strategy(&Some("other".into()), None, None, a, s).is_err());
         // threshold：缺参 / 资产或支出为 0 → 报错

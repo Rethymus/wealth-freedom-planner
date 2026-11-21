@@ -84,7 +84,7 @@ pub struct BootstrapInput {
     /// 随机种子
     #[serde(with = "rust_decimal::serde::arbitrary_precision")]
     seed: Decimal,
-    /// 支取策略（缺省 = "fixed" 现状口径；三枚举之一，见 withdrawal.rs）
+    /// 支取策略（缺省 = "fixed" 现状口径；fixed / inflation_uplift / threshold / percent 四枚举之一——inflation_uplift 为 P7/P0-3 正名、与 fixed 同一数值路径，见 withdrawal.rs）
     strategy: Option<String>,
     /// 阈值带调整型参数（strategy = "threshold" 时必填）
     threshold: Option<ThresholdParamsInput>,

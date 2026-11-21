@@ -77,10 +77,27 @@ export interface BaselineOutput {
    */
   multiplier: number;
   /**
+   * 精确乘数（P7/E 费雪口径，两位小数）= round2(12 × (1 + inflationPct/100)
+   *   ÷ ((nominalReturnPct − inflationPct)/100))，
+   * 代数恒等于 12 ÷ ((1+r)/(1+i) − 1)（Decimal 域无中间舍入）。
+   * 计算一律用精确式，近似式 r≈r_nom−π 仅作教学口径注（research §4.2：
+   * 并行展示、不做选项切换）；实际回报率 ≤ 0 时为 0。默认参数下 = 489.6。
+   */
+  multiplierExact: number;
+  /**
    * 目标本金（元）= monthlyExpense × multiplier
    *   + childCount × costPerChild + healthReserve + majorInvestment。
    */
   criticalValue: number;
+  /**
+   * 精确口径目标本金（元，两位小数）= round2(monthlyExpense × multiplierExact
+   *   + childCount × costPerChild + healthReserve + majorInvestment)
+   * （先舍入后相乘，与 480 口径同形；附加项聚合在核心侧完成，前端不复算——
+   * 单一事实来源，audit §3.3）；实际回报率 ≤ 0 时为 0。
+   * 默认参数下 = 1,663,904.00（比 480 口径高 28,704.00——通胀 > 0 时教学口径
+   * 系统性低估所需本金）。480 全部字段不动、仍为主输出。
+   */
+  criticalValueExact: number;
   /** 回显输入的月开销（元/月） */
   monthlyExpense: number;
   /** "" 表示成功；实际回报率 ≤ 0 时为非空中文错误 */
@@ -92,6 +109,10 @@ export interface BaselineOutput {
 // - multiplier = 12 ÷ (realReturnPct / 100)；
 // - criticalValue = monthlyExpense × multiplier
 //     + childCount × costPerChild + healthReserve + majorInvestment；
+// - multiplierExact（P7/E）= round2(12 × (1 + inflationPct/100) ÷ (实际回报率/100))
+//     ——代数恒等于 12 ÷ ((1+r)/(1+i) − 1)，Decimal 域无中间舍入；
+// - criticalValueExact = round2(monthlyExpense × multiplierExact + 同一组附加项)
+//     （先舍入后相乘，与 480 口径同形）；
 // - 实际回报率 ≤ 0：error 非空，multiplier = 0，criticalValue = 0；
 //   realReturnPct 仍返回计算值，monthlyExpense 回显输入。
 
@@ -256,7 +277,11 @@ export interface ReverseEstimateOutput {
 // ---------------------------------------------------------------------------
 
 /** 蒙特卡洛支取策略（退休耗尽模拟的支取规则；缺省 "fixed" = 既有口径，向后逐字节兼容） */
-export type WithdrawalStrategy = "fixed" | "threshold" | "percent";
+export type WithdrawalStrategy = "fixed" | "inflation_uplift" | "threshold" | "percent";
+// "inflation_uplift"（P7/P0-3 正名）：语义 = 按通胀样本逐年上行、等价固定实际购买力支出；
+// "fixed" 保留为兼容别名（输入等价 → Strategy::Fixed，数值路径零改动）；
+// 字段缺省语义不变；输入层（UI Radio value / store）永不产出 "inflation_uplift"，
+// 该值仅在解码端规范化为 "fixed"（share.ts §2.4 解码映射裁定）。
 
 /** 阈值带调整型参数（strategy = "threshold" 时必填；全部字段必填，无隐式缺省） */
 export interface ThresholdStrategyParams {
@@ -467,6 +492,11 @@ export interface AccumulationInput {
   paths: number;
   /** 随机种子（同 seed 同输入 → 输出完全可复现） */
   seed: number;
+  /**
+   * 达标后接支取模拟的存续年数 N（0–200 整数；缺省/0 = 关闭，P7/P0-2）。
+   * 仅驱动新增输出 sustainedProbability，与既有全部输出字段解耦（见下方双指标口径）。
+   */
+  sustainYears?: number;
 }
 
 /** 期末资产分位数（元，全部路径，type-7 线性插值） */
@@ -482,6 +512,12 @@ export interface AccumulationFinalPercentiles {
 export interface AccumulationOutput {
   /** 达成财富自由的路径占比（0–1，6 位小数） */
   fiProbability: number;
+  /**
+   * 持续成功率（P7/P0-2，0–1，6 位小数）＝「首触达标且达标后 N 年同路径支取存续」
+   * 的路径占比。sustainYears = 0（含缺省）恒为 0.0——哨兵 = 未度量；是否展示由
+   * 输入侧 sustainYears > 0 决定（Rust 不引入 -1 特判）。
+   */
+  sustainedProbability: number;
   /** 首达年限第 5 百分位（年，仅在达成样本内取；无达成样本 = -1） */
   yearsP5: number;
   /** 首达年限第 25 百分位（年；无达成样本 = -1） */
@@ -512,6 +548,33 @@ export interface AccumulationOutput {
 //   初始（t = 0）即判定：currentAssets ≥ targetValue 记首达年限 0；
 //   首达即记录年限（整数年），之后继续模拟至 years 结束（路径图需要全程曲线）；
 // - fiProbability = 达成路径占比（6 位小数）；
+// - 持续成功率（P7/P0-2，两段式独立派生流拓扑——修订轮二 R1 裁定，取代
+//   audit §3.2 的逐路径交错读法与「同流两遍扫描」变体）：
+//     · pass1（积累段）：与上列现状完全同构（单循环逐路径消费 2×years 个样本、
+//       先回报后通胀），样本顺序与数量与 P7 前流逐字节一致，且与 sustainYears
+//       取值无条件解耦；每路径在首触时刻快照 A*（t*=0 → currentAssets；t*≥1 →
+//       第 t* 年末资产）与 cumInfl*（未达标路径不记录）；
+//     · pass2（支取段）：仅对达标路径执行——每条达标路径 p 使用独立派生流
+//       `StdRng::seed_from_u64(seed ^ ((p+1) × 0x9E37_79B9_7F4A_7C15))`（黄金比例
+//       常数乘法混合，SplitMix64 同族；派生种子只依赖 (seed, p)，不依赖 years /
+//       paths 总数 / N），自 A* 起支取：spend_k = 12 × monthlyExpense × cumInfl*
+//       × ∏_{j=1..k}(1+π_j)（第 1 年即含第 1 个支取年通胀样本，与 run_monte_carlo
+//       同语义）；A_k = A_{k−1} × (1+r_k) − spend_k；任一年末 A_k ≤ 0 → 该路径
+//       不存续并提前终止抽样（耗尽即终止同款语义；流隔离下提前终止不波及其他
+//       路径）；未达标路径零支取抽样（无丢弃消费）。防御钳制两段同款。
+//   · 可复现性三不变（§1 铁律的增量条款）：
+//       (a) pass1 抽样顺序不变——2×years×paths 个样本顺序数量与现状一致；
+//       (b) sustainYears 缺省或 0 → 不进入 pass2，输出与现状逐字节一致；
+//       (c) sustainYears > 0 时既有字段与 =0 同 seed 逐字节一致（pass1 与 N
+//           解耦是拓扑性质、无条件成立）——由真实量级 σ 的锁定测试
+//           accumulation_sustained_invariant_same_seed 保证可侦测（σ=1e-9 退化
+//           输入下交错拓扑也平凡通过，不可作锁定测试）；
+//   · 取舍如实登记：「资产路径延续、随机流隔离」——支取样本与积累样本在流层面
+//       解耦；ChaCha 流不同位置样本独立同分布，派生流与同流顺延统计无差别，
+//       差别纯在工程结构（无条件兼容 / 样本位置稳定 / 无丢弃消费三条工程理由）。
+//       拓扑字面以本注释钉死（测试锁不变量与数值锚点，不锁拓扑字面）；
+//   · sustainedProbability = 存续路径数 ÷ paths（6 位小数）；sustainYears = 0
+//       （含缺省）→ 不进入 pass2、恒为 0.0（哨兵 = 未度量）。
 // - 年限分位（type-7 线性插值、两位小数）只在达成样本内取；无达成样本五个分位均为 -1；
 // - σ ≤ 0 或 years ≤ 0 返回 error；
 // - 抽样顺序与种子确定性与 run_monte_carlo 完全一致：路径外层、年份内层，
@@ -561,6 +624,13 @@ export interface PensionInput extends BaselineInput {
   currentAge: number;
   /** 预期退休年龄（40–75，整数，须大于当前年龄） */
   retireAge: number;
+  /**
+   * 想停止工作的年龄（P7/P0-1 时间口径字段；16–75，整数）。缺省 = retireAge →
+   * bridgeYears = 0（现状口径与 README 锚点视图零漂移）。与 retireAge 的语义区分：
+   * retireAge 驱动养老金金额（校验、计发月数联动、yearsToRetire），本字段只驱动
+   * 桥接两字段，不参与任何金额计算——金额与时间解耦（audit §3.1）。
+   */
+  targetRetireAge?: number;
   /** 预期截至退休的累计缴费年限（0–50，整数） */
   contribYears: number;
   /** 平均缴费基数指数（小数形式，[0, 10]；1.0 = 按社平工资 100% 缴费） */
@@ -577,6 +647,24 @@ export interface PensionInput extends BaselineInput {
 export interface PensionOutput {
   /** 距退休年限 = retireAge − currentAge（整数） */
   yearsToRetire: number;
+  /**
+   * 停工 → 起领桥接期年数 = max(0, retireAge − max(targetRetireAge, currentAge))
+   * （整数；解析/校验失败安全值 0）。targetRetireAge ≤ currentAge（已停工）→
+   * 桥接 = yearsToRetire；不与 retireAge 做大小约束（停工晚于起领即无桥接期，
+   * 非输入错误）。业务错误分支（实际回报率 ≤ 0）仍返回计算值——时间字段照
+   * yearsToRetire 回显先例。
+   */
+  bridgeYears: number;
+  /**
+   * 桥接期需备资金（元，两位小数）＝ bridgeYears > 0 时
+   * round2(monthlyExpense × multiplier)——纯生活费口径；一次性附加项（育儿/健康/
+   * 重大投入）单次计入「领取后」adjustedCriticalValue（修订轮二 R5 归属裁定），
+   * 不在桥接段重复计入——两段相加 = 停工后真实总需。bridgeYears = 0 或实际
+   * 回报率 ≤ 0 时 = 0；解析/校验失败安全值 0。
+   * （有意保守的取舍：有限年限支取本可用年金因子，保留乘数口径对桥接段偏保守
+   * /多备——取舍随本注释与面板口径注明示，登记为已知偏差，不阻塞。）
+   */
+  bridgeFundingNeeded: number;
   /** 基础养老金（元/月）=（社平工资 + 社平工资 × 缴费基数指数）÷ 2 × 缴费年限 × 1% */
   basicPensionMonthly: number;
   /** 个人账户养老金（元/月）= 个人账户余额估计 ÷ 计发月数 */
@@ -615,6 +703,31 @@ export interface PensionOutput {
 //   恒等式 adjustedCriticalValue == calculate_baseline(同附加项,
 //   monthlyExpense = adjustedMonthlyExpense).criticalValue 由测试锁定；
 // - 本函数为纯金额精确运算（无随机抽样），全程 rust_decimal。
+// - 桥接期（P7/P0-1，两段口径）：养老金自 retireAge 起才进入现金流——停工 → 起领
+//   之间为无工资且无养老金的桥接段（成熟做法：FireCalc/ProjectionLab/FI Calc 的
+//   「未来收入流自起始年进入现金流」，research-retirement-models §3）：
+//     · 段 1（桥接期，targetRetireAge → retireAge）：无工资、无养老金，开销 =
+//       monthlyExpense 全额；需备资金 = round2(monthlyExpense × multiplier)——
+//       沿用同一 480 乘数口径（先 round2 后相乘），纯生活费口径、不含一次性附加项
+//       （附加项单次计入段 2）；
+//     · 段 2（retireAge 之后）：养老金覆盖 → adjustedMonthlyExpense /
+//       adjustedCriticalValue（现状字段语义不变——adjusted × multiplier + 附加项，
+//       公式零改动、P-A 锚点 271,025.60 零漂移，展示标注「领取后」）；
+//   · 附加项单次计入归属裁定（修订轮二 R5，取代上版「双重计入 + 口径注明示」）：
+//       健康/子女/重大投入三类一次性附加项归属段 2——理由：(i) 存量锚点零漂移
+//       （段 2 附加项语义是 P-A 锚点与 pension_adjusted_critical_matches_baseline
+//       恒等式的载体）；(ii) 语义正确（附加项与起领时点无关、无论桥接期长短都必须
+//       持有，天然属于「停工后总备资」的一次性项）；(iii) 被否决变体（附加项归桥接
+//       段）需改现状公式 → P-A 锚点漂移 + 恒等式破坏三重回归代价不成比例。
+//       恒等式变化登记：bridgeFundingNeeded 不恒等于 calculate_baseline.criticalValue
+//       （上版声明废止）；新锁定断言 = bridgeFundingNeeded == round2(monthlyExpense
+//       × multiplier)（同一 pension 输出乘数，T1）；两段相加 = 真实总需（T1 例
+//       1,435,200.00 + 271,025.60 = 1,706,225.60，node 复算）；
+//   · 校验：to_u32_int("停止工作年龄", v, 16, 75)，插在「退休年龄」与「缴费年限」
+//       之间（p1-spec §3.3 校验顺序同步）；缺省（Option = None）不触发、取 retireAge；
+//   · 错误分支形状：业务错误（实际回报率 ≤ 0）→ bridgeYears 仍返回计算值（同
+//       yearsToRetire 回显先例）、bridgeFundingNeeded = 0；解析/校验失败 error_output
+//       → 两字段 0。
 
 // ---------------------------------------------------------------------------
 // j. simulate_sequence —— 确定性序列模拟（序列风险对照，无随机）

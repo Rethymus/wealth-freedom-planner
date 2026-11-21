@@ -66,8 +66,11 @@ async function computeColumn(
   yearUnit: string,
 ): Promise<CompareCol> {
   const invalid: CompareCol = { id: entry.id, name: entry.name, valid: false, failed: false, values: [] };
-  const shared: ShareState | null = decodeShareState(entry.payload);
-  if (!shared) return invalid;
+  // P7：decodeShareState 返回 DecodeResult（state + 策略正名规范化信号）；
+  // 对比列复算只消费切片本体，规范化信号由「载入」路径经 store 置一次性提示
+  const decoded = decodeShareState(entry.payload);
+  if (!decoded) return invalid;
+  const shared = decoded.state;
   const [baselineR, rentalR, pensionR, taxR, reverseR] = await Promise.all([
     calcBaseline(shared.baseline),
     calcRental(shared.rental),

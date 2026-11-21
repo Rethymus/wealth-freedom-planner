@@ -96,11 +96,16 @@ const en = {
     multiplierLine: "480 multiplier = 12 ÷ real return rate: ",
     ruleOrigin:
       "Once you have saved a principal of “monthly expense × multiplier”, investment returns alone (net of inflation) can cover your monthly expenses. With the default parameters (nominal return {{nominal}}, inflation {{inflation}}), the real return rate is {{real}} and the corresponding multiplier is {{multiplier}} — hence the name “480 Rule”.",
+    multiplierExactLabel: "Exact multiplier (Fisher basis)",
+    criticalExactLabel: "Exact-basis reference line",
+    fisherNote:
+      "The real return rate uses the exact Fisher relation (1+r_nom)/(1+π)−1; the approximation r≈r_nom−π is for teaching comparison only, and the gap between the two is ≈ π × the real return rate.",
   },
   presets: {
     custom: "Custom",
     tagTitle: "Spending mix ({{total}} yuan/month in total)",
-    note: "Compiled for tier-1 city terms; edit freely",
+    note:
+      "“Safe monthly spending” = investable assets × real return rate ÷ 12 (perpetual withdrawal basis: only returns are spent, principal is untouched); “Return leverage years” = 12 ÷ real return rate (= 480 multiplier ÷ 100), not the years until the assets run out — at the withdrawal level above, the assets never run out (this holds within the model’s assumptions; real-world sequence risk can break it — see the tip).",
     appliedHint: "Applied the “{{name}}” profile parameters",
     cancelHint: "Click again to cancel this profile; basic parameters will fall back to their defaults",
     cancelled: "Cancelled the “{{name}}” profile; basic parameters fell back to their defaults",
@@ -224,7 +229,15 @@ const en = {
     retireAgeTooltip:
       "The age at which you expect to retire; the months divisor is linked by default to the lookup table (age 60 = 139, age 55 = 170, age 50 = 195 months), and editing “Months divisor” by hand breaks the link.",
     retireAgeDelayNote:
-      "From 2025-01-01 the statutory retirement age is being raised in gradual steps (male workers step up to age 63); enter your own expectation — this tool makes no policy determination.",
+      "Official basis: male workers step up to 63 and female workers (original 55 / 50) to 58 / 55, fully in place by 2039; flexible early / late retirement of up to 3 years each; minimum contribution years reach 20 from 2039 — full details in the “Age you plan to stop working” tip.",
+    targetRetireAge: "Age you plan to stop working",
+    targetRetireAgeTooltip:
+      "The age at which you plan to stop working (not the pension-claiming age). Under the statutory gradual retirement-age reform effective 2025-01-01 (docs/research-retirement-models.md §1; Measures released 2024-09-13): male workers step up from 60 to 63 and female workers (original 55) from 55 to 58 — one month later per 4-month birth cohort, capped at 36 months; female workers (original 50) step up from 50 to 55 — one month per 2-month cohort, capped at 60 months; fully in place by 2039. After meeting the minimum contribution years you may retire up to 3 years early (never below the original statutory age) or, by employer agreement, up to 3 years late (Art. 3); the minimum contribution years rise by 6 months each year from 2030, reaching 20 years in 2039 (Art. 2). The span between stopping work and claiming is the bridge period, which must be funded at full monthly expense.",
+    bridgeTitle: "Bridge period (stopping work → claiming)",
+    bridgeYearsLabel: "Bridge period (years)",
+    bridgeFundingLabel: "Bridge period funding needed",
+    bridgeNote:
+      "The bridge period runs from the age you stop working to the age the pension starts (no salary, no pension); fund it at 480-multiplier × full monthly expense. One-off reserves (health / children / major outlays) are already counted once in the “after claiming” reference line below and are not double-counted here — the two segments together are the true total need. The multiplier basis is conservative for a finite withdrawal horizon (it overspares).",
     contribYears: "Contribution years (through retirement)",
     contribYearsTooltip:
       "Your estimated cumulative contribution years by retirement (years already paid included); convert deemed contribution years yourself before entering them.",
@@ -250,7 +263,7 @@ const en = {
     monthsUsed: "Months divisor",
     monthsUnit: "months",
     adjustedTitle:
-      "Adjusted reference line (monthly expense net of the pension-covered portion)",
+      "Adjusted reference line (after pension payments start)",
     adjustedExpense: "Adjusted monthly expense",
     adjustedCritical: "Adjusted financial-freedom reference line",
     coverage: "Pension coverage ratio (monthly pension ÷ monthly expense)",
@@ -289,7 +302,7 @@ const en = {
     sustainableMonthly: "Safe monthly spending",
     leverageYears: "Return leverage years",
     leverageTooltip:
-      "Definition: 12 ÷ real return rate (in percentage points) = 480 multiplier ÷ 100; it measures how strongly the return rate leverages asset longevity. It does not mean “the assets will only last N years” — if you withdraw at the critical-principal level (i.e. the “safe monthly spending” amount), actual returns exactly cover all spending and the assets never run out.",
+      "Definition: 12 ÷ real return rate (in percentage points) = 480 multiplier ÷ 100; it measures how strongly the return rate leverages asset longevity. It does not mean “the assets will only last N years” — if you withdraw at the critical-principal level (i.e. the “safe monthly spending” amount), actual returns exactly cover all spending and the assets never run out (this holds within the model’s assumptions; real-world sequence risk can break this conclusion).",
     note: "“Safe monthly spending” = investable assets × real return rate ÷ 12 (perpetual withdrawal basis: only returns are spent, principal is untouched); “Return leverage years” = 12 ÷ real return rate (= 480 multiplier ÷ 100), not the years until the assets run out — at the withdrawal level above, the assets never run out.",
     exampleLegend: "Worked examples (video-demonstration basis)",
     exampleA: "Example A: 6M − 1 child 700k − health 500k",
@@ -300,6 +313,8 @@ const en = {
       "Both worked examples come from the original video's demonstration (illustrative, not official documents): the video derives the target by straight division, “net investable amount ÷ 480 months”; this tool computes on the perpetual withdrawal basis (investable assets × real return rate ÷ 12), and under the default return assumptions (4.5% − 2.0%, i.e. 2.5% real) the two bases agree numerically.",
     exampleBNote:
       "For Example B the original video claimed a result of about 9,000 yuan/month (including an extra discount of about 10%, whose source could not be reconstructed); on the same basis this tool faithfully reports 10,000 yuan/month and is not adjusted down to 9,000.",
+    perpetuityWarning:
+      "The perpetual basis holds within the model’s assumptions (returns always positive, spending rising with the model); real-world sequence risk can break it — cf. Morningstar 2026: a 30-year horizon with a 90% success rate and 30%–50% equity portfolios gives a 3.9% starting safe withdrawal rate (fixed-real-spending baseline, excluding pensions and other external income; the yearly figures have drifted between 3.3% and 4.0% with market assumptions). That figure is based on U.S. market assumptions and is not a guarantee in any environment.",
   },
   loan: {
     principal: "Loan amount",
@@ -509,7 +524,8 @@ const en = {
     chartNoteBootstrap:
       "The horizontal axis is years and the vertical axis is in 10k CNY units; the chart shows {{count}} representative sampled paths (thin light lines) and the year-by-year median (thick line). Return samples are drawn with replacement (i.i.d., ignoring year order) from the selected index's annual series. Same seed + same inputs → fully reproducible results (guaranteed by contract).",
     strategy: "Withdrawal strategy",
-    strategyFixed: "Fixed nominal",
+    strategyFixed:
+      "Fixed real spending (default)",
     strategyThreshold: "Threshold-band adjustment",
     strategyPercent: "Percentage of balance",
     thresholdExceedPct: "Over-band threshold",
@@ -535,9 +551,10 @@ const en = {
     withdrawalP5: "Final-year withdrawal, 5th percentile (pessimistic)",
     withdrawalMedian: "Final-year withdrawal, median",
     withdrawalP95: "Final-year withdrawal, 95th percentile (optimistic)",
-    strategyNoteShort: "Threshold band uses the literature's optimal ±20% / ±10%; percentage of balance never depletes by construction — purchasing-power risk shows in final-year withdrawals (see the tip).",
+    strategyNoteShort:
+      "The default and “fixed” both uplift spending with inflation (equivalent to fixed real spending); the legacy name “Fixed nominal” is retired. The threshold band uses the literature’s optimal ±20% / ±10%; percentage-of-balance never depletes by construction — purchasing-power risk shows in final-year withdrawals (see the tip).",
     strategyNote1:
-      "Threshold band: the literature's optimal parameters are ±20% / ±10% with no cuts in the final 15 years (tighter thresholds or larger cuts do not further improve success rates). Percentage of balance: the balance is amortized in real terms out to the planning horizon, so depletion is ruled out by construction — purchasing-power risk shows up in the final-year withdrawal percentiles.",
+      "Naming: the default and “fixed” strategies both uplift spending by the inflation sample each year (equivalent to fixed real purchasing power); the legacy name “Fixed nominal” is retired and the numbers never changed. Threshold band: the literature’s optimal parameters are ±20% / ±10% with no cuts in the final 15 years (tighter thresholds or larger cuts do not further improve success rates). Percentage of balance: the balance is amortized in real terms out to the planning horizon, so depletion is ruled out by construction — purchasing-power risk shows up in the final-year withdrawal percentiles.",
     strategyNote2:
       " Arithmetic anchor: with assets down 25%, the same withdrawal amount pushes the withdrawal rate from 4.00% up to 5.33% — this rebound of the withdrawal rate after bad years is at the core of how sequence risk transmits.",
     chartAria:
@@ -563,6 +580,11 @@ const en = {
     fiLabel: "Probability of reaching financial freedom",
     fiHint:
       "Share of paths whose assets at any year-end are ≥ that year's target (the target rises with inflation)",
+    sustainYears: "Sustainability check years",
+    sustainYearsTooltip:
+      "After the target is reached, simulate N more years of withdrawing the full monthly expense (rising with inflation) and test survival; 0 = off. Reaching the target once ≠ staying wealthy: sequence risk can wreck the plan right after the goal is hit — the sustained success rate counts only paths that reach the target AND survive N years of withdrawals.",
+    sustainedLabel: "Sustained success probability",
+    sustainedHint: "Share of paths that reach the target and survive {{years}} years of withdrawals; {{years}} = 0 means not measured",
     yearsTitle:
       "First-hit year distribution (integer years, reaching paths only; “—” means no path reaches the target)",
     finalTitle: "End-of-period asset distribution (all paths)",
@@ -729,13 +751,14 @@ const en = {
     copyShort: "Copy link",
     copiedShort: "Copied",
     copyTooltip:
-      "Encodes all of your current business inputs (UI preferences such as theme / language / currency excluded) into the link; anyone who opens the pasted link gets the exact same parameter set.",
+      "Encodes all of your current business inputs (UI preferences such as theme / language / currency excluded) into the link; anyone who opens the pasted link gets the exact same parameter set. The link content is reversible encoding (encoding ≠ encryption): anyone holding the link can read every business input — do not carry numbers you would not share.",
     copied: "Share link copied to the clipboard",
     copyFailed:
       "Copy failed: please update the app or browser and try again",
     restored: "All business inputs restored from the share link",
     restoreIgnored:
       "The share link content could not be recognized (ignored; default parameters are shown)",
+    strategyLegacyNotice: "The legacy “inflation uplift” withdrawal basis in the old link has been merged into Fixed real spending (the two are numerically identical)",
   },
   a11y: {
     skipToContent: "Skip to main content",

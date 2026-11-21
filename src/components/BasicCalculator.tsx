@@ -487,6 +487,10 @@ function FreedomGauge({ ratio, pct, tokens, ariaLabel, size = 72, resetEpoch, re
 function BreakdownTable(props: {
   expense: string;
   multiplier: string;
+  /** P7/E 精确乘数（费雪口径，两位小数——并行展示，无口径切换控件） */
+  exactMultiplier: string;
+  /** P7/E 精确口径参考线（元，经 money() 币种换算） */
+  exactCritical: string;
   children: number;
   childTotal: string;
   health: string;
@@ -511,12 +515,16 @@ function BreakdownTable(props: {
       tableLayout={isWorkbench ? "fixed" : "auto"}
       data={[
         { label: t("basic.rowMultiplier"), value: `${props.expense} × ${props.multiplier}` },
+        // P7/E 费雪双口径并列两行（480 教学口径仍为主输出；research §4.2 并行展示、
+        // 无口径切换控件；数值全部来自 wasm 输出，前端零复算——单一事实来源）
+        { label: t("basic.multiplierExactLabel"), value: props.exactMultiplier },
         ...(props.children > 0
           ? [{ label: t("basic.rowChildren", { children: props.children }), value: props.childTotal }]
           : []),
         { label: t("basic.rowHealth"), value: props.health },
         { label: t("basic.rowMajor"), value: props.major },
         { label: t("basic.rowTotal"), value: props.total },
+        { label: t("basic.criticalExactLabel"), value: props.exactCritical },
       ]}
     />
   );
@@ -881,12 +889,17 @@ export default function BasicCalculator() {
                         <BreakdownTable
                           expense={money(baseline.monthlyExpense)}
                           multiplier={formatMultiplier(data.multiplier)}
+                          exactMultiplier={formatMultiplier(data.multiplierExact)}
+                          exactCritical={money(data.criticalValueExact)}
                           children={baseline.childCount}
                           childTotal={money(baseline.childCount * baseline.costPerChild)}
                           health={money(baseline.healthReserve)}
                           major={money(baseline.majorInvestment)}
                           total={money(data.criticalValue)}
                         />
+                      <Text type="secondary" className="wf-panel-note">
+                        {t("basic.fisherNote")}
+                      </Text>
                       </div>
                     ) : null}
                   </>
@@ -898,12 +911,17 @@ export default function BasicCalculator() {
                     <BreakdownTable
                       expense={money(baseline.monthlyExpense)}
                       multiplier={formatMultiplier(data.multiplier)}
+                      exactMultiplier={formatMultiplier(data.multiplierExact)}
+                      exactCritical={money(data.criticalValueExact)}
                       children={baseline.childCount}
                       childTotal={money(baseline.childCount * baseline.costPerChild)}
                       health={money(baseline.healthReserve)}
                       major={money(baseline.majorInvestment)}
                       total={money(data.criticalValue)}
                     />
+                    <Text type="secondary" className="wf-panel-note">
+                      {t("basic.fisherNote")}
+                    </Text>
                   </div>
                 )
               ) : null}

@@ -157,6 +157,9 @@ function parseBaseline(obj: Record<string, unknown>): FinanceResult<BaselineOutp
     realReturnPct: num(obj, "realReturnPct", "calculate_baseline"),
     multiplier: num(obj, "multiplier", "calculate_baseline"),
     criticalValue: num(obj, "criticalValue", "calculate_baseline"),
+      // P7/E 费雪双口径（并行展示；480 教学口径仍为主输出）
+      multiplierExact: num(obj, "multiplierExact", "calculate_baseline"),
+      criticalValueExact: num(obj, "criticalValueExact", "calculate_baseline"),
     monthlyExpense: num(obj, "monthlyExpense", "calculate_baseline"),
     error: err ?? "",
   };
@@ -323,6 +326,8 @@ function parseAccumulation(obj: Record<string, unknown>): FinanceResult<Accumula
   const finalRec = finalRaw as Record<string, unknown>;
   const data: AccumulationOutput = {
     fiProbability: num(obj, "fiProbability", "simulate_accumulation"),
+      // P7/P0-2 双指标：首触口径不动；存续口径新字段（sustainYears = 0 时恒 0.0 哨兵）
+      sustainedProbability: num(obj, "sustainedProbability", "simulate_accumulation"),
     yearsP5: num(obj, "yearsP5", "simulate_accumulation"),
     yearsP25: num(obj, "yearsP25", "simulate_accumulation"),
     yearsMedian: num(obj, "yearsMedian", "simulate_accumulation"),
@@ -354,6 +359,9 @@ function parsePension(obj: Record<string, unknown>): FinanceResult<PensionOutput
   const err = businessError(obj);
   const data: PensionOutput = {
     yearsToRetire: num(obj, "yearsToRetire", "estimate_pension"),
+      // P7/P0-1 桥接两字段（时间口径；纯生活费口径附加项归段 2——bridge.ts §i）
+      bridgeYears: num(obj, "bridgeYears", "estimate_pension"),
+      bridgeFundingNeeded: num(obj, "bridgeFundingNeeded", "estimate_pension"),
     basicPensionMonthly: num(obj, "basicPensionMonthly", "estimate_pension"),
     accountPensionMonthly: num(obj, "accountPensionMonthly", "estimate_pension"),
     pensionMonthly: num(obj, "pensionMonthly", "estimate_pension"),

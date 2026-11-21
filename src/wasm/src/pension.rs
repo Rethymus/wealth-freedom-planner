@@ -14,10 +14,23 @@
 //!   calculate_baseline 同口径：round2(12 ÷ 实际回报率小数)，先舍入后相乘）。
 //!   恒等式 adjustedCriticalValue == calculate_baseline(同附加项,
 //!   monthlyExpense = adjustedMonthlyExpense).criticalValue 由集成测试锁定。
+//! - 桥接期（P7/P0-1，时间口径）：养老金自 retire_age 起才进入现金流——停工 → 起领
+//!   之间为无工资且无养老金的桥接段。bridgeYears = max(0, retireAge −
+//!   max(targetRetireAge, currentAge))；bridgeFundingNeeded = bridgeYears > 0 时
+//!   round2(monthlyExpense × 乘数)——纯生活费口径；一次性附加项（育儿/健康/重大投入）
+//!   单次计入「领取后」adjustedCriticalValue（修订轮二 R5 归属裁定），两段相加 = 停工后
+//!   真实总需。targetRetireAge 缺省（None）取 retire_age → bridgeYears = 0，现状口径
+//!   与 P-A 锚点零漂移。有限年限支取本可用年金因子，保留乘数口径对桥接段偏保守
+//!   （多备），取舍随 bridge.ts §i 与面板口径注明示。
 //!
 //! 实际回报率 ≤ 0 分支：与 calculate_baseline 同文案同分支形状 —— error =
 //! 「通胀率需低于名义回报率」，金额/乘数类字段全部 0；yearsToRetire 仍返回
-//! 计算值（对应 baseline 分支回显 monthlyExpense 的同形处理）。
+//! 计算值（对应 baseline 分支回显 monthlyExpense 的同形处理）；bridgeYears 同为
+//! 时间字段、照回显先例返回计算值，bridgeFundingNeeded 依赖乘数 → 0。
+//!
+//! 校验顺序（docs/p1-spec.md §3.3）：… current_age → retire_age（含 > current_age）→
+//! target_retire_age（存在时 16–75 整数，缺省不触发）→ contrib_years → …（插入位在
+//! 「退休年龄」与「缴费年限」之间，P7 落点）。
 //!
 //! 精度声明：本函数为纯金额精确运算（无随机抽样），全程 rust_decimal；
 //! 输出金额统一 round2（四舍五入 MidpointAwayFromZero）。
@@ -59,6 +72,11 @@ pub struct PensionInput {
     /// 预期退休年龄（40–75，整数，须大于当前年龄）
     #[serde(with = "rust_decimal::serde::arbitrary_precision")]
     retire_age: Decimal,
+    /// 想停止工作的年龄（16–75，整数；缺省 = retire_age → 桥接期 0，现状口径零漂移）。
+    /// 时间口径字段：仅驱动 bridge_years / bridge_funding_needed，不影响任何养老金金额
+    /// （金额仍全部由 retire_age 经计发月数联动承载——金额与时间解耦，P7/P0-1）。
+    #[serde(default, with = "rust_decimal::serde::arbitrary_precision_option")]
+    target_retire_age: Option<Decimal>,
     /// 预期截至退休的累计缴费年限（0–50，整数）
     #[serde(with = "rust_decimal::serde::arbitrary_precision")]
     contrib_years: Decimal,
@@ -81,6 +99,15 @@ pub struct PensionInput {
 pub struct PensionOutput {
     /// 距退休年限 = retireAge − currentAge（整数）
     years_to_retire: u32,
+    /// 停工 → 起领的桥接期年数 = max(0, retireAge − max(targetRetireAge, currentAge))（整数；
+    /// 解析/校验失败安全值 0；业务错误（实际回报 ≤ 0）仍返回计算值，同 years_to_retire 回显先例）
+    bridge_years: u32,
+    /// 桥接期需备资金（元，两位小数）＝ bridge_years > 0 时 round2(monthlyExpense × multiplier)
+    /// ——纯生活费口径；一次性附加项（育儿/健康/重大投入）单次计入段 2
+    /// adjustedCriticalValue，不在桥接段重复计入（修订轮二 R5 归属裁定）；两段相加 = 真实总需。
+    /// bridge_years = 0 或实际回报 ≤ 0 时 = 0；解析/校验失败安全值 0
+    #[serde(with = "rust_decimal::serde::arbitrary_precision")]
+    bridge_funding_needed: Decimal,
     /// 基础养老金（元/月，两位小数）
     #[serde(with = "rust_decimal::serde::arbitrary_precision")]
     basic_pension_monthly: Decimal,
@@ -113,10 +140,12 @@ pub fn handle(input: &str) -> String {
     }
 }
 
-/// 错误/异常时的安全输出形状：years_to_retire: 0、其余数值字段全部 0。
+/// 错误/异常时的安全输出形状：years_to_retire: 0、bridge 两字段 0、其余数值字段全部 0。
 pub fn error_output(msg: &str) -> String {
     serde_json::to_string(&PensionOutput {
         years_to_retire: 0,
+        bridge_years: 0,
+        bridge_funding_needed: Decimal::ZERO,
         basic_pension_monthly: Decimal::ZERO,
         account_pension_monthly: Decimal::ZERO,
         pension_monthly: Decimal::ZERO,
@@ -127,7 +156,7 @@ pub fn error_output(msg: &str) -> String {
         error: msg.to_string(),
     })
     .unwrap_or_else(|_| {
-        "{\"yearsToRetire\":0,\"basicPensionMonthly\":0,\"accountPensionMonthly\":0,\"pensionMonthly\":0,\"coverageRatio\":0,\"adjustedMonthlyExpense\":0,\"adjustedCriticalValue\":0,\"multiplier\":0,\"error\":\"内部错误\"}"
+        "{\"yearsToRetire\":0,\"bridgeYears\":0,\"bridgeFundingNeeded\":0,\"basicPensionMonthly\":0,\"accountPensionMonthly\":0,\"pensionMonthly\":0,\"coverageRatio\":0,\"adjustedMonthlyExpense\":0,\"adjustedCriticalValue\":0,\"multiplier\":0,\"error\":\"内部错误\"}"
             .to_string()
     })
 }
@@ -150,6 +179,12 @@ fn compute(input: &str) -> Result<PensionOutput, String> {
     let current_age = to_u32_int("当前年龄", inp.current_age, 16, 70)?;
     let retire_age = to_u32_int("退休年龄", inp.retire_age, 40, 75)?;
     ensure(retire_age > current_age, "退休年龄须大于当前年龄")?;
+    // 停止工作年龄（P7/P0-1）：插在「退休年龄须大于当前年龄」与「缴费年限」之间
+    // （docs/p1-spec.md §3.3 校验顺序同步）；缺省（None）不触发该校验、取 retire_age
+    let target_retire_age = match inp.target_retire_age {
+        Some(v) => Some(to_u32_int("停止工作年龄", v, 16, 75)?),
+        None => None,
+    };
     let contrib_years = to_u32_int("缴费年限", inp.contrib_years, 0, 50)?;
     ensure(
         inp.contrib_index >= Decimal::ZERO && inp.contrib_index <= Decimal::from(10),
@@ -161,11 +196,23 @@ fn compute(input: &str) -> Result<PensionOutput, String> {
 
     let years_to_retire = retire_age - current_age;
 
+    // 桥接期时间口径（P7/P0-1）：bridge_years = max(0, retire_age − max(target, current_age))。
+    // saturating 语义已由 u32 减法承载：target ≤ current_age（已停工）→ 桥接 = years_to_retire；
+    // target ≥ retire_age → 桥接 = 0（缺省 target = retire_age 同式得 0，现状口径零漂移）。
+    // 不与 retire_age 做大小约束（停工晚于退休即无桥接期，不是输入错误）。
+    let bridge_years = retire_age.saturating_sub(
+        target_retire_age.unwrap_or(retire_age).max(current_age),
+    );
+
     // 实际回报率与乘数：与 calculate_baseline 逐字同口径（先 round2 再参与后续乘法）
     let real = inp.nominal_return_pct - inp.inflation_pct;
     if real <= Decimal::ZERO {
         return Ok(PensionOutput {
             years_to_retire,
+            // 时间字段与金额无关：业务错误分支仍返回计算值（years_to_retire 回显同例）；
+            // 桥接备资依赖乘数（乘数为 0）→ 安全值 0
+            bridge_years,
+            bridge_funding_needed: Decimal::ZERO,
             basic_pension_monthly: Decimal::ZERO,
             account_pension_monthly: Decimal::ZERO,
             pension_monthly: Decimal::ZERO,
@@ -240,8 +287,25 @@ fn compute(input: &str) -> Result<PensionOutput, String> {
             .ok_or("数值溢出")?,
     );
 
+    // 桥接期备资（段 1，纯生活费口径）：round2(monthlyExpense × multiplier)，附加项
+    // 不重复计入——育儿/健康/重大投入单次计入段 2 adjustedCriticalValue（修订轮二 R5
+    // 归属裁定：附加项与起领时点无关、天然属于「停工后总备资」的一次性项）；段 1 沿用
+    // 同一 480 乘数口径（对桥接段偏保守/多备，有限年限支取本可用年金因子，取舍随
+    // bridge.ts §i 口径注明示）。bridge_years = 0（含缺省 target = retire_age）→ 0。
+    let bridge_funding_needed = if bridge_years > 0 {
+        round2(
+            inp.monthly_expense
+                .checked_mul(multiplier)
+                .ok_or("数值溢出：请检查月开销与乘数规模")?,
+        )
+    } else {
+        Decimal::ZERO
+    };
+
     Ok(PensionOutput {
         years_to_retire,
+        bridge_years,
+        bridge_funding_needed,
         basic_pension_monthly: basic,
         account_pension_monthly: account,
         pension_monthly,

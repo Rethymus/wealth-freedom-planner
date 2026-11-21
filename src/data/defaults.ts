@@ -72,6 +72,10 @@ export const LIMITS: InputLimits = {
    *  「> −100」校验报错兜底（现有 LIMITS.percent 的 min = 0.01 禁止负值，无法承载
    *  契约允许的 (−100, …] 域） */
   strategyRealReturnPct: { min: -100, max: 100, step: 0.1, precision: 1 },
+  /** 想停止工作的年龄（P7/P0-1 桥接口径；契约 [16, 75] 整数） */
+  targetRetireAge: { min: 16, max: 75, step: 1, precision: 0 },
+  /** 存续验证年数（P7/P0-2；契约 [0, 200] 整数，0 = 关闭） */
+  sustainYears: { min: 0, max: 200, step: 1, precision: 0 },
 };
 
 /** 反向估算面板默认输入（占位：childReserve 沿用 1 孩成本，totalAssets 为示例值） */
@@ -164,6 +168,9 @@ export const PROGRESS_DEFAULTS: ProgressInputs = { currentAssets: 0 };
 export const PENSION_DEFAULTS: PensionInputs = {
   currentAge: 30,
   retireAge: 60,
+  // 想停止工作的年龄（P7/P0-1）：缺省 = retireAge → 默认视图 bridgeYears = 0，
+  // README.md:41/86 锚点视图不漂移；停工早于退休时面板出现桥接块（两段口径）
+  targetRetireAge: 60,
   contribYears: 30,
   contribIndex: 0.6, // 多数省份缴费基数下限口径（≈ 按社平 60% 缴费）
   accountBalance: 50000,
@@ -185,6 +192,9 @@ export const ACCUMULATION_DEFAULTS: AccumulationInput = {
   years: 40,
   paths: 5000,
   seed: 42,
+  // 存续验证年数（P7/P0-2）：默认 0 = 关闭（fiProbability 口径与现状逐字节一致，
+  // 零默认行为变化；> 0 时面板并列展示持续成功率）
+  sustainYears: 0,
 };
 
 /** 币种列表（ISO 4217，占位最小集合，待数据研究员确认扩充） */
@@ -200,11 +210,21 @@ export const CURRENCIES: Currency[] = [
 /** 离线汇率快照（占位：仅含基准币种自身；真实快照由数据研究员填充） */
 export const FX_RATE_SNAPSHOT: FxRateSnapshot = {
   base: "CNY",
-  rates: { CNY: 1 },
-  ratesUpdatedAt: "", // 空 = 尚未填充真实汇率数据
-  snapshotAt: "", // 空 = 尚未生成快照
-  source: "pending", // 待数据研究员填充来源
-  note: "占位快照：除 CNY 外汇率待填充；填充后须同步更新 ratesUpdatedAt / snapshotAt。",
+  // 离线快照真值（P7/F 工程快赢）：open.er-api.com 公开端点实拉核验，
+  // 接口数据时点 2026-11-20（time_last_update_utc: Fri, 20 Nov 2026 00:02:32 +0000），
+  // 本会话（实施日 2026-11-21）重拉核对；仅收录 CURRENCIES 六币种
+  rates: {
+    CNY: 1,
+    USD: 0.149433,
+    EUR: 0.136198,
+    GBP: 0.113982,
+    JPY: 23.877343,
+    HKD: 1.172212,
+  },
+  ratesUpdatedAt: "Fri, 20 Nov 2026 00:02:32 +0000",
+  snapshotAt: "2026-11-21",
+  source: "open.er-api.com",
+  note: "离线快照：实时获取失败或超时时回退使用；数值随实施时点冻结，刷新汇率可获取实时值。",
 };
 
 /** 动效时长数值表（ms）。THEME / THEME_DARK 中 CSS 字符串值由此派生，禁止两处手工各写一份 */

@@ -72,7 +72,10 @@ fn tax_input(gross: f64, deduction: i64) -> String {
 #[test]
 fn baseline_known_values_480_rule() {
     // 月开销 2990、名义 4.5、通胀 2.0 → 实际回报率 2.5%、乘数 480；
-    // 1 孩 × 200,000，无预留外项 → 临界值 = 480×2990 + 200000 = 1,635,200
+    // 1 孩 × 200,000，无预留外项 → 临界值 = 480×2990 + 200000 = 1,635,200。
+    // P7/T7 费雪双口径（期望值独立推导，node 复算登记 docs/p7-spec.md §3.7）：
+    //   精确乘数 = 12×(1.02)/0.025 = 489.6（精确）；
+    //   精确临界值 = 2990×489.6 + 200000 = 1,663,904.00（比 480 口径高 28,704.00）
     let out = calculate_baseline(
         r#"{"monthlyExpense":2990,"childCount":1,"costPerChild":200000,"healthReserve":0,"majorInvestment":0,"nominalReturnPct":4.5,"inflationPct":2.0}"#,
     );
@@ -82,6 +85,14 @@ fn baseline_known_values_480_rule() {
     assert_close(num(&v, "multiplier"), 480.0, 1e-12, "multiplier");
     assert_close(num(&v, "criticalValue"), 1_635_200.0, 1e-9, "criticalValue");
     assert_close(num(&v, "monthlyExpense"), 2990.0, 1e-12, "monthlyExpense 回显");
+    // 精确口径并行（480 教学口径仍为主输出，上四条锚点零漂移）
+    assert_close(num(&v, "multiplierExact"), 489.6, 1e-9, "精确乘数 = 12×1.02/0.025");
+    assert_close(
+        num(&v, "criticalValueExact"),
+        1_663_904.00,
+        1e-6,
+        "精确临界值 = 2990×489.6 + 200000",
+    );
 }
 
 #[test]
@@ -108,6 +119,9 @@ fn baseline_error_when_real_return_not_positive() {
     assert_close(num(&v, "realReturnPct"), -2.5, 1e-12, "realReturnPct 仍返回计算值");
     assert_eq!(num(&v, "multiplier"), 0.0);
     assert_eq!(num(&v, "criticalValue"), 0.0);
+    // P7/E：费雪精确口径两新字段在错误分支同为安全值 0（与 multiplier/criticalValue 同形）
+    assert_eq!(num(&v, "multiplierExact"), 0.0, "错误分支精确乘数 = 0");
+    assert_eq!(num(&v, "criticalValueExact"), 0.0, "错误分支精确临界值 = 0");
     assert_close(num(&v, "monthlyExpense"), 2990.0, 1e-12, "月开销回显");
 
     // 恰好为 0（名义 = 通胀）同样进入 error 分支
@@ -921,6 +935,126 @@ fn accumulation_validation_errors() {
 }
 
 // ---------------------------------------------------------------------------
+// 10b. P7/P0-2 存续验证（sustainYears / sustainedProbability；docs/p7-spec.md §3.4–§3.10。
+//     期望值全部由公式独立推导并经 node 复算登记，未以实现输出为真值）
+// ---------------------------------------------------------------------------
+
+/// 在 acc_input 基础上追加 sustainYears 键（acc_input 载荷无嵌套对象，尾花括号唯一）
+fn acc_input_s(base: String, sustain_years: u64) -> String {
+    let mut s = base;
+    assert!(s.ends_with('}'));
+    s.pop();
+    s.push_str(&format!(r#","sustainYears":{}}}"#, sustain_years));
+    s
+}
+
+/// T4（新增 `accumulation_sustained_fail_overdraw`，修订轮 P2-8 改名）：
+/// 名实口径——σ = 1e-9 下无任何暴跌样本，本用例覆盖「首触达标但支取率超高」的
+/// 确定性超额支取耗尽机制；真 σ 的「达标后回落」叙事由 T4-b 与 T8 承载。
+/// 独立推导（node 复算，docs/p7-spec.md §3.4）：月储蓄 0 → 第 1 年末 110,000 ≥ 105,000
+/// （i = 0 目标恒定）→ 首达年 1，A* = 110,000、cumInfl* ≈ 1；支取年支 24,000
+/// （支取率 24,000/110,000 ≈ 21.8% ≫ r = 10%）：W1 97,000 → W2 82,700 → W3 66,970
+/// → W4 49,667 → W5 30,633.70 → W6 9,697.07 → W7 = −13,333.22 ≤ 0 → 第 7 个支取年
+/// 耗尽 ≤ N = 10 → 全体路径不存续 → sustainedProbability = 0.0。
+/// （登记：audit §4 T4 行「r=2% 推导」与其声明输入 r 10±1e-9% 矛盾，系笔误；
+/// 本实现按声明输入 r = 10% 推导为唯一登记口径。）
+#[test]
+fn accumulation_sustained_fail_overdraw() {
+    let base = acc_input(100000.0, 2000.0, 2000.0, 105000.0, 10.0, 1e-9, 0.0, 1e-9, 2.0, 20.0, 7);
+    let v = jv(&simulate_accumulation(&acc_input_s(base, 10)));
+    assert_eq!(txt(&v, "error"), "");
+    assert_close(num(&v, "fiProbability"), 1.0, 1e-12, "全部路径第 1 年首触达标");
+    for k in ["yearsP5", "yearsP25", "yearsMedian", "yearsP75", "yearsP95"] {
+        assert_close(num(&v, k), 1.0, 1e-12, "{k} = 1（首达年恒 1）");
+    }
+    assert_close(num(&v, "sustainedProbability"), 0.0, 1e-12, "21.8% 支取率第 7 支取年确定性耗尽");
+}
+
+/// T4-b（新增 `accumulation_sustained_at_most_fi`，修订轮 F8 增 / 修订轮二 R8 定型）：
+/// 真 σ「达标后遭遇负收益序列」压力口径——月支出 12,000 → 达标时首年支取率
+/// ≈ 144,000 ÷ 1,635,200 ≈ 8.8% 名义 ≫ r 均值 4.5%，真实波动 σ = 12% 下负收益序列
+/// 与高支取率叠加，使大量达标路径在 N = 10 内耗尽（crash-after-FI 机制真实驱动）。
+/// 真 σ 下正态样本无界、无法构造与实现无关的必然耗尽/必然存续数值锚点，故断言取
+/// 逻辑必然关系式：sustainedProbability 的分子（达标且存续路径数）是 fiProbability
+/// 分子（达标路径数）的子集——「未达标路径一律不计存续」，与 seed/实现输出无关。
+#[test]
+fn accumulation_sustained_at_most_fi() {
+    let base = acc_input(500000.0, 20000.0, 12000.0, 1635200.0, 4.5, 12.0, 2.0, 1.0, 40.0, 200.0, 42);
+    let v = jv(&simulate_accumulation(&acc_input_s(base, 10)));
+    assert_eq!(txt(&v, "error"), "");
+    let fi = num(&v, "fiProbability");
+    let sus = num(&v, "sustainedProbability");
+    assert!((0.0..=1.0).contains(&fi), "fi ∈ [0,1]：{fi}");
+    assert!((0.0..=1.0).contains(&sus), "sustained ∈ [0,1]：{sus}");
+    assert!(sus <= fi, "存续数 ≤ 达成数（子集关系，逻辑必然）：{sus} ≤ {fi}");
+}
+
+/// T5（新增 `accumulation_sustained_horizon_30_vs_40`）：
+/// 独立推导（node 复算 + 闭式）：t = 0 达标（1,000,000 ≥ 500,000）→ fi = 1.0、
+/// A* = 1,000,000、cumInfl* = 1；支取自 A₀ = 1,000,000、年支 60,000、r = 5%：
+/// 闭式 A_k = 1,200,000 − 200,000×1.05^k；A₃₆ = +41,636.77 > 0、A₃₇ = −16,281.39 ≤ 0
+/// → 第 37 个支取年耗尽 → N = 30 全存续（A₃₀ = 335,611.52）、N = 40 全不存续。
+#[test]
+fn accumulation_sustained_horizon_30_vs_40() {
+    let base = acc_input(1000000.0, 5000.0, 5000.0, 500000.0, 5.0, 1e-9, 0.0, 1e-9, 1.0, 20.0, 3);
+    let v30 = jv(&simulate_accumulation(&acc_input_s(base.clone(), 30)));
+    assert_eq!(txt(&v30, "error"), "");
+    assert_close(num(&v30, "fiProbability"), 1.0, 1e-12, "t=0 即达标");
+    assert_close(num(&v30, "sustainedProbability"), 1.0, 1e-12, "第 37 支取年才耗尽 → 30 年全存续");
+    let v40 = jv(&simulate_accumulation(&acc_input_s(base, 40)));
+    assert_eq!(txt(&v40, "error"), "");
+    assert_close(num(&v40, "fiProbability"), 1.0, 1e-12, "fi 与 N 无关");
+    assert_close(num(&v40, "sustainedProbability"), 0.0, 1e-12, "40 > 37 → 全不存续");
+}
+
+/// T8 新增不变量（新增 `accumulation_sustained_invariant_same_seed`，修订轮二 R1 的
+/// 锁定测试）：同输入同 seed，sustainYears > 0 时既有输出字段（fiProbability /
+/// 年限分位 / 期末分位 / samplePaths / neverReachedShare）与 sustainYears = 0 逐字节
+/// 一致——两段式独立派生流拓扑下 pass1 与 N 无条件解耦。输入必须真实量级 σ
+/// （r 4.5±12% / i 2±1% / 40 年 / 200 路径 / seed 42）：若实施为逐路径交错拓扑
+/// （支取样本插入两路径之间），路径 ≥1 的积累样本整体后移、真实 σ 下统计必然漂移，
+/// 本测试即失败——σ = 1e-9 退化输入下交错拓扑也平凡通过，不可作锁定测试。
+#[test]
+fn accumulation_sustained_invariant_same_seed() {
+    let off = jv(&simulate_accumulation(&acc_input(
+        500000.0, 8000.0, 2990.0, 1635200.0, 4.5, 12.0, 2.0, 1.0, 40.0, 200.0, 42,
+    )));
+    let on = jv(&simulate_accumulation(&acc_input_s(
+        acc_input(500000.0, 8000.0, 2990.0, 1635200.0, 4.5, 12.0, 2.0, 1.0, 40.0, 200.0, 42),
+        10,
+    )));
+    assert_eq!(txt(&off, "error"), "");
+    assert_eq!(txt(&on, "error"), "");
+    // 非 0 哨兵 sanity：sustainYears = 10 下 sustainedProbability 必须被真实度量
+    // （0.0 合法——该输入支取率 35,880×cumInfl*/A* 极低，存续率高；此处仅断言字段
+    // 参与比较前的哨兵语义区分：=0 运行恒 0.0）
+    assert_close(num(&off, "sustainedProbability"), 0.0, 0.0, "sustainYears = 0 → 哨兵 0.0");
+    // 既有字段逐字节一致：除 sustainedProbability 外整对象深相等（删除哨兵键后比较）
+    let mut a = off.clone();
+    let mut b = on.clone();
+    assert!(a.as_object_mut().unwrap().remove("sustainedProbability").is_some());
+    assert!(b.as_object_mut().unwrap().remove("sustainedProbability").is_some());
+    assert_eq!(a, b, "sustainYears > 0 不得扰动任何既有字段（R1 拓扑锁定）");
+    // 真 σ 下 fi 非平凡（0 < fi < 1 的通道概率极高且非本测试断言对象——保留
+    // fiProbability 自身既有回归，不在此处锁数值）
+}
+
+/// T10（新增 `accumulation_sustained_survive_realistic`）：
+/// 独立推导（node 复算）：t = 0 达标（2,000,000 ≥ 1,635,200）→ fi = 1.0、
+/// yearsMedian = 0（integration.rs:858 同型先例）；首年支取率 = 35,880×1.02
+/// ÷ 2,000,000 = 1.83% 名义 ≪ 4.5% 名义回报（spend₁ = 36,597.60 < 年度回报 90,000）
+/// → 资产单调增长；30 年末 ≈ 4,659,509.54、全程最低 2,053,402.40 > 0 → 全存续。
+#[test]
+fn accumulation_sustained_survive_realistic() {
+    let base = acc_input(2000000.0, 8000.0, 2990.0, 1635200.0, 4.5, 1e-9, 2.0, 1e-9, 5.0, 20.0, 5);
+    let v = jv(&simulate_accumulation(&acc_input_s(base, 30)));
+    assert_eq!(txt(&v, "error"), "");
+    assert_close(num(&v, "fiProbability"), 1.0, 1e-12, "t=0 即达标");
+    assert_close(num(&v, "yearsMedian"), 0.0, 1e-12, "首达年限 0");
+    assert_close(num(&v, "sustainedProbability"), 1.0, 1e-12, "1.83% 支取率 30 年全存续");
+}
+
+// ---------------------------------------------------------------------------
 // 11. estimate_pension
 // ---------------------------------------------------------------------------
 
@@ -930,8 +1064,24 @@ fn pension_input(
     expense: f64, children: f64, cost: f64, health: f64, major: f64,
     nominal: f64, inflation: f64, current_age: f64, retire_age: f64,
 ) -> String {
+    pension_input_t(None, wage, idx, years, balance, months, expense, children, cost, health, major, nominal, inflation, current_age, retire_age)
+}
+
+/// 带 targetRetireAge（P7/P0-1）的构造器：target = None 时省略键（serde 缺省路径），
+/// Some(v) 时携带该键；其余字段与 pension_input 逐字一致。
+#[allow(clippy::too_many_arguments)]
+fn pension_input_t(
+    target: Option<f64>,
+    wage: f64, idx: f64, years: f64, balance: f64, months: f64,
+    expense: f64, children: f64, cost: f64, health: f64, major: f64,
+    nominal: f64, inflation: f64, current_age: f64, retire_age: f64,
+) -> String {
+    let target_field = match target {
+        Some(t) => format!(r#""targetRetireAge":{t},"#),
+        None => String::new(),
+    };
     format!(
-        r#"{{"monthlyExpense":{expense},"childCount":{children},"costPerChild":{cost},"healthReserve":{health},"majorInvestment":{major},"nominalReturnPct":{nominal},"inflationPct":{inflation},"currentAge":{current_age},"retireAge":{retire_age},"contribYears":{years},"contribIndex":{idx},"accountBalance":{balance},"avgMonthlyWage":{wage},"monthsDivisor":{months}}}"#
+        r#"{{"monthlyExpense":{expense},"childCount":{children},"costPerChild":{cost},"healthReserve":{health},"majorInvestment":{major},"nominalReturnPct":{nominal},"inflationPct":{inflation},"currentAge":{current_age},"retireAge":{retire_age},{target_field}"contribYears":{years},"contribIndex":{idx},"accountBalance":{balance},"avgMonthlyWage":{wage},"monthsDivisor":{months}}}"#
     )
 }
 
@@ -952,6 +1102,12 @@ fn pension_known_values_default_caliber() {
     assert_close(num(&v, "adjustedMonthlyExpense"), 147.97, 1e-9, "调整后月开销");
     assert_close(num(&v, "multiplier"), 480.0, 1e-12, "乘数与 baseline 同口径");
     assert_close(num(&v, "adjustedCriticalValue"), 271_025.60, 1e-6, "调整后参考线");
+    // P7/T2 缺省分支：输入不携带 targetRetireAge（serde Option 缺省 None）→
+    // bridgeYears = 0、bridgeFundingNeeded = 0（现状口径零漂移，P-A 锚点视图不变）
+    assert_eq!(num(&v, "bridgeYears"), 0.0, "缺省 targetRetireAge → 桥接 0 年");
+    assert_eq!(num(&v, "bridgeFundingNeeded"), 0.0, "缺省 targetRetireAge → 桥接备资 0");
+    // 养老金乘数恒 480 教学口径：pension 不在本轮加费雪精确字段（p7-spec §3.7 末行）
+    assert!(v.get("multiplierExact").is_none(), "pension 输出无精确乘数字段");
 }
 
 #[test]
@@ -998,7 +1154,11 @@ fn pension_coverage_above_one_not_capped() {
 
 #[test]
 fn pension_error_when_real_return_not_positive() {
-    let out = estimate_pension(&pension_input(
+    // T3（P7）：同 T1 输入但 nominal 2.0 / inflation 4.5 + targetRetireAge 30 →
+    // 业务错误分支：yearsToRetire 30、bridgeYears 30 保留（时间字段照回显先例），
+    // bridgeFundingNeeded 0（依赖乘数），金额/乘数全 0
+    let out = estimate_pension(&pension_input_t(
+        Some(30.0),
         10343.0, 0.6, 30.0, 50000.0, 139.0, 2990.0, 0.0, 580000.0, 200000.0, 0.0,
         2.0, 4.5, 30.0, 60.0,
     ));
@@ -1007,6 +1167,11 @@ fn pension_error_when_real_return_not_positive() {
     assert_eq!(num(&v, "multiplier"), 0.0);
     assert_eq!(num(&v, "pensionMonthly"), 0.0);
     assert_eq!(num(&v, "adjustedCriticalValue"), 0.0);
+    // 独立推导（docs/p7-spec.md §3.3）：real = 2.0 − 4.5 = −2.5 ≤ 0 → 错误分支；
+    // bridgeYears 与金额无关（时间字段）→ 按回显先例保留计算值 60 − max(30, 30) = 30
+    assert_eq!(num(&v, "yearsToRetire"), 30.0, "yearsToRetire 回显");
+    assert_eq!(num(&v, "bridgeYears"), 30.0, "bridgeYears 时间字段保留（回显先例）");
+    assert_eq!(num(&v, "bridgeFundingNeeded"), 0.0, "业务错误分支桥接备资 = 0");
 }
 
 #[test]
@@ -1026,12 +1191,91 @@ fn pension_validation_errors() {
         (pension_input(10343.0, 0.6, 30.0, 50000.0, 139.0, 2990.0, 0.0, 580000.0, 200000.0, 0.0, 4.5, 2.0, 15.0, 60.0), "当前年龄"),
         // 月开销为负
         (pension_input(10343.0, 0.6, 30.0, 50000.0, 139.0, -100.0, 0.0, 580000.0, 200000.0, 0.0, 4.5, 2.0, 30.0, 60.0), "月开销"),
+        // P7/P0-1：targetRetireAge 越界（< 16 / > 75 / 非整数）→「停止工作年龄」
+        (pension_input_t(Some(15.0), 10343.0, 0.6, 30.0, 50000.0, 139.0, 2990.0, 0.0, 580000.0, 200000.0, 0.0, 4.5, 2.0, 30.0, 60.0), "停止工作年龄"),
+        (pension_input_t(Some(76.0), 10343.0, 0.6, 30.0, 50000.0, 139.0, 2990.0, 0.0, 580000.0, 200000.0, 0.0, 4.5, 2.0, 30.0, 60.0), "停止工作年龄"),
+        (pension_input_t(Some(30.5), 10343.0, 0.6, 30.0, 50000.0, 139.0, 2990.0, 0.0, 580000.0, 200000.0, 0.0, 4.5, 2.0, 30.0, 60.0), "停止工作年龄"),
     ] {
         let v = jv(&estimate_pension(&input));
         let err = txt(&v, "error");
         assert!(!err.is_empty(), "应返回错误：{input}");
         assert!(err.contains(keyword), "错误信息应含「{keyword}」：{err}");
         assert_eq!(num(&v, "pensionMonthly"), 0.0, "错误安全值");
+    }
+}
+
+// P7/P0-1 桥接期（T1/T2，docs/p7-spec.md §3.1/§3.2；期望值独立推导 + node 复算）
+#[test]
+fn pension_bridge_period_fields() {
+    // —— T1 提前退休桥接 ——
+    // 输入 = README.md:86 面板 ⑦ 默认 + targetRetireAge 30（推导登记 §3.1）：
+    //   乘数 = round2(12 ÷ 0.025) = 480（P-A 锚点视图）；
+    //   基础养老金 = round2(10343×1.6÷2×30÷100) = 2,482.32；
+    //   个人账户 = round2(50000÷139) = 359.71；月养老金 = 2,842.03；
+    //   覆盖率 = round2(2842.03÷2990) = 0.95；调整后月开销 = 2990 − 2842.03 = 147.97；
+    //   调整后参考线 = 147.97×480 + 200000 = 271,025.60（P-A 锚点零漂移）；
+    //   bridgeYears = 60 − max(30, 30) = 30；
+    //   bridgeFundingNeeded = round2(2990×480) = 1,435,200.00（纯生活费口径——
+    //   附加项单次计入段 2，修订轮二 R5 归属裁定）；
+    //   两段相加 = 1,435,200.00 + 271,025.60 = 1,706,225.60 = 停工后真实总需
+    //   （健康预留 200,000 单次计入段 2；锁定断言 = bridgeFundingNeeded ==
+    //   round2(monthlyExpense × multiplier)，同一 pension 输出乘数）
+    let out = estimate_pension(&pension_input_t(
+        Some(30.0),
+        10343.0, 0.6, 30.0, 50000.0, 139.0, 2990.0, 0.0, 580000.0, 200000.0, 0.0,
+        4.5, 2.0, 30.0, 60.0,
+    ));
+    let v = jv(&out);
+    assert_eq!(txt(&v, "error"), "");
+    // 金额/覆盖率锚点（P-A）零漂移：养老金金额与停工年龄解耦
+    assert_eq!(num(&v, "yearsToRetire"), 30.0, "yearsToRetire");
+    assert_close(num(&v, "basicPensionMonthly"), 2_482.32, 1e-9, "基础养老金（P-A）");
+    assert_close(num(&v, "accountPensionMonthly"), 359.71, 1e-9, "个人账户（P-A）");
+    assert_close(num(&v, "pensionMonthly"), 2_842.03, 1e-9, "月养老金（P-A）");
+    assert_close(num(&v, "coverageRatio"), 0.95, 1e-9, "覆盖率（P-A）");
+    assert_close(num(&v, "adjustedMonthlyExpense"), 147.97, 1e-9, "调整后月开销（P-A）");
+    assert_close(num(&v, "adjustedCriticalValue"), 271_025.60, 1e-6, "调整后参考线（P-A，段 2）");
+    assert_close(num(&v, "multiplier"), 480.0, 1e-12, "乘数（P-A）");
+    // 桥接两字段（时间口径）
+    assert_eq!(num(&v, "bridgeYears"), 30.0, "桥接年数 = 60 − max(30, 30)");
+    assert_close(
+        num(&v, "bridgeFundingNeeded"),
+        1_435_200.00,
+        1e-6,
+        "桥接备资 = round2(2990×480)，纯生活费口径（附加项归段 2）",
+    );
+    // 锁定断言：bridgeFundingNeeded == round2(monthlyExpense × multiplier)（§2.1 新恒等式）
+    let m = num(&v, "multiplier"); // 输出乘数即 480.0
+    let expect = ((2990.0 * m * 100.0).round()) / 100.0; // round2 半分远离零（正数域等价）
+    assert_close(num(&v, "bridgeFundingNeeded"), expect, 1e-6, "恒等式 round2(expense×multiplier)");
+    // 两段相加 = 真实总需（R5：附加项单次计入）
+    let total = num(&v, "bridgeFundingNeeded") + num(&v, "adjustedCriticalValue");
+    assert_close(total, 1_706_225.60, 1e-6, "段 1 + 段 2 = 停工后真实总需");
+
+    // —— T2 无桥接（同输入只改 targetRetireAge 60）——
+    // 独立推导：停工年龄 ≥ 起领年龄 → 桥接期不存在；验收锚点 ①：只改 targetRetireAge
+    // 30 → 60 时，六字段（basic/account/pensionMonthly/coverage/adjusted/adjustedCritical）
+    // 逐字节不变（养老金金额与停工年龄解耦）
+    let out2 = estimate_pension(&pension_input_t(
+        Some(60.0),
+        10343.0, 0.6, 30.0, 50000.0, 139.0, 2990.0, 0.0, 580000.0, 200000.0, 0.0,
+        4.5, 2.0, 30.0, 60.0,
+    ));
+    let v2 = jv(&out2);
+    assert_eq!(txt(&v2, "error"), "");
+    assert_eq!(num(&v2, "bridgeYears"), 0.0, "target ≥ retire → 桥接 0 年");
+    assert_eq!(num(&v2, "bridgeFundingNeeded"), 0.0, "无桥接 → 备资 0");
+    for k in [
+        "yearsToRetire",
+        "basicPensionMonthly",
+        "accountPensionMonthly",
+        "pensionMonthly",
+        "coverageRatio",
+        "adjustedMonthlyExpense",
+        "adjustedCriticalValue",
+        "multiplier",
+    ] {
+        assert_eq!(num(&v, k), num(&v2, k), "只改 targetRetireAge → {k} 不变（解耦验收①）");
     }
 }
 
@@ -1272,7 +1516,11 @@ fn mc_threshold_directional() {
     // 枚举外 → error
     let bad_enum = jv(&run_monte_carlo(&mc_default_input(r#","strategy":"other""#)));
     assert!(
-        txt(&bad_enum, "error").contains("fixed / threshold / percent"),
+        // P7/P0-3 正名：错误文案四枚举化（fixed / inflation_uplift / threshold / percent）；
+        // 文案变更随枚举别名落地（修订登记：上版「该文案无测试断言」实测有此子串断言，
+        // 期望随文案更新——见 mc_fixed_semantics_after_rename 推导注）
+        txt(&bad_enum, "error")
+            .contains("fixed / inflation_uplift / threshold / percent"),
         "枚举外：{}",
         txt(&bad_enum, "error")
     );
@@ -1375,6 +1623,37 @@ fn mc_withdrawal_output_shape() {
             );
         }
     }
+}
+
+/// T6（新增 `mc_fixed_semantics_after_rename`，P7/P0-3）：
+/// 三次调用（strategy 缺省 / "fixed" / "inflation_uplift"）输出逐字节一致——
+/// 解析层把正名与历史别名映射到同一 Strategy::Fixed，数值路径零改动。
+/// 独立推导（node 复算，docs/p7-spec.md §3.6）：spend₁ = 50,000×1.02 = 51,000；
+/// A₁ = 1,050,000 − 51,000 = 999,000；spend₂ = 52,020；A₂ = 999,000×1.05 − 52,020
+/// = 996,930。反面锁定：若语义是「名义恒定支出」（spend 恒 50,000）则
+/// A₁ = 1,000,000 ≠ 999,000——首年值即排除该误读（audit 原反例 A₂ = 998,950 系
+/// 「首年已上调、次年冻结」的混合口径，登记为推导修正；结论同为 ≠ 断言值）。
+#[test]
+fn mc_fixed_semantics_after_rename() {
+    let base = r#"{"currentAssets":1000000,"annualSpend":50000,"nominalReturnMeanPct":5,"nominalReturnStdPct":1e-9,"inflationMeanPct":2,"inflationStdPct":1e-9,"years":2,"paths":1,"seed":11}"#;
+    let absent = run_monte_carlo(base);
+    let fixed = run_monte_carlo(
+        r#"{"currentAssets":1000000,"annualSpend":50000,"nominalReturnMeanPct":5,"nominalReturnStdPct":1e-9,"inflationMeanPct":2,"inflationStdPct":1e-9,"years":2,"paths":1,"seed":11,"strategy":"fixed"}"#,
+    );
+    let uplift = run_monte_carlo(
+        r#"{"currentAssets":1000000,"annualSpend":50000,"nominalReturnMeanPct":5,"nominalReturnStdPct":1e-9,"inflationMeanPct":2,"inflationStdPct":1e-9,"years":2,"paths":1,"seed":11,"strategy":"inflation_uplift"}"#,
+    );
+    assert_eq!(absent, fixed, "缺省与显式 fixed 逐字节一致");
+    assert_eq!(absent, uplift, "正名 inflation_uplift 与 fixed 逐字节一致（别名等价）");
+
+    let v = jv(&absent);
+    assert_eq!(txt(&v, "error"), "");
+    let paths = v.get("samplePaths").unwrap().as_array().unwrap();
+    let row0: Vec<f64> = paths[0].as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
+    assert_eq!(row0.as_slice(), &[999_000.00, 996_930.00], "通胀上行口径 A₁/A₂ 闭式锁定");
+    let wds = v.get("sampleWithdrawalPaths").unwrap().as_array().unwrap();
+    let w0: Vec<f64> = wds[0].as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
+    assert_eq!(w0.as_slice(), &[51_000.00, 52_020.00], "spend_t = annualSpend × cum_infl_t");
 }
 
 #[test]

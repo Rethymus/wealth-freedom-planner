@@ -188,9 +188,12 @@ export default function ReversePanel() {
         />
       ) : null}
       {error ? <Alert type="error" style={{ marginTop: 8 }} content={error} /> : null}
-      {/* P5 §5：口径注保留 1 行（其余两条算例注已下沉算例图例 FieldTip） */}
+      {/* P5 §5：口径注保留 1 行（其余两条算例注已下沉算例图例 FieldTip）；
+          P7/D 永续警示：Morningstar 2026 安全支取率参照全文归 tooltip（§8.2 模板句，
+          note 本体已带「模型假设内成立 / 序列风险可破坏」限定） */}
       <Text type="secondary" className="wf-panel-note">
         {t("reverse.note")}
+        <FieldTip text={t("reverse.perpetuityWarning")} />
       </Text>
     </div>
   );

@@ -29,12 +29,18 @@ import type { PensionInputs } from "../data/pensionParams";
 import type { IndexId, MonteCarloReturnMode } from "../data/indexSeries";
 
 /** 分享链接版本（切片形状或字段语义变更时递增；解码端仅接受当前版本）。
+ * v4：pension 切片新增 targetRetireAge、accumulation 切片新增 sustainYears
+ *   （P7/P0-1 / P0-2 修复）；v3 及更早链接与情景库存档一次性失效，需重新生成/
+ *   重存——延续 v1→v2、v2→v3 既有决策（见下文先例）；另：解码端把外来/未来载荷的
+ *   "inflation_uplift"（P0-3 支取策略正名）规范化为 "fixed"（语义相同、并入即可，
+ *   DecodeResult.strategyNormalizedFromLegacy 携带一次性提示信号——映射而非拒绝，
+ *   避免恢复后 store 持有 UI 枚举外值）；
  * v3：monteCarlo 切片新增 strategy / threshold / percent 字段（P2 支取策略，docs/p2-spec.md §4.1）；
  * v2 及更早链接按既有「损坏回落默认 + 提示」口径处理（发布影响：v3 上线后全部存量 v2 及更早
  * 链接一次性失效，需重新生成分享链接——延续 v1 → v2 升级的既有决策，见本注释先例）；
  * v2：pension.monthsDivisor 编码值改为「联动态取面板所见表值」（effectiveMonthsDivisor
  * 口径），发送方所见与接收方所得一致；v1 链接按损坏处理（静默回落默认 + 提示） */
-export const SHARE_LINK_VERSION = 3;
+export const SHARE_LINK_VERSION = 4;
 
 /** hash 前缀（#s=<payload>） */
 const HASH_PREFIX = "#s=";
@@ -105,7 +111,15 @@ export function encodeShareState(state: ShareState): string {
 }
 
 /** 解析完整 hash（或裸载荷）→ 分享切片；任何不符返回 null */
-export function decodeShareState(hash: string): ShareState | null {
+/** decodeShareState 的返回：state = 恢复切片；strategyNormalizedFromLegacy =
+ * 「载荷携带了历史/未来的支取策略名 inflation_uplift、已并入固定实际支出」
+ * 一次性提示信号（不入 share 载荷、不入情景存档、resetEpoch 语义不变） */
+export interface DecodeResult {
+  state: ShareState;
+  strategyNormalizedFromLegacy: boolean;
+}
+
+export function decodeShareState(hash: string): DecodeResult | null {
   const raw = hash.startsWith(HASH_PREFIX) ? hash.slice(HASH_PREFIX.length) : hash;
   if (raw === "" || raw.length > MAX_PAYLOAD_CHARS) return null;
   const json = fromBase64Url(raw);
@@ -143,9 +157,18 @@ export function decodeShareState(hash: string): ShareState | null {
     ["currentAssets", "annualSpend", "nominalReturnMeanPct", "nominalReturnStdPct", "inflationMeanPct", "inflationStdPct", "years", "paths", "seed"],
   );
   // 支取策略（v3 新增）：缺省按 "fixed"；非三枚举之一 → 整体损坏返回 null（§4.1 逐字）
+  // 支取策略（v3 起新增）：缺省按 "fixed"；P7/P0-3 解码端规范化——外来/未来载荷的
+  // "inflation_uplift"（正名）映射为 "fixed"（语义相同、并入即可；映射而非拒绝、
+  // 非原样保留：避免恢复后 store 持有 UI 枚举外值——Radio 无选中态、策略注按错误
+  // 分支渲染）。编码端 store 永不产出该值（Radio value 恒 "fixed"），合法往返
+  // 不受影响；规范化发生时经 DecodeResult.strategyNormalizedFromLegacy 上报一次性提示。
   const strategyRaw = mcObj["strategy"];
-  const strategy: WithdrawalStrategy = strategyRaw === undefined ? "fixed" : (strategyRaw as WithdrawalStrategy);
-  if (strategy !== "fixed" && strategy !== "threshold" && strategy !== "percent") {
+  let strategy: WithdrawalStrategy = strategyRaw === undefined ? "fixed" : (strategyRaw as WithdrawalStrategy);
+  let strategyNormalizedFromLegacy = false;
+  if (strategy === "inflation_uplift") {
+    strategy = "fixed";
+    strategyNormalizedFromLegacy = true;
+  } else if (strategy !== "fixed" && strategy !== "threshold" && strategy !== "percent") {
     return null;
   }
   let threshold: ThresholdStrategyParams | undefined;
@@ -209,12 +232,12 @@ export function decodeShareState(hash: string): ShareState | null {
   const bandsRaw = taxObj?.["bands"];
   const accumulation = numSlice(
     sliceOf(obj, "accumulation") ?? {},
-    ["currentAssets", "monthlyIncome", "monthlyExpense", "targetValue", "nominalReturnMeanPct", "nominalReturnStdPct", "inflationMeanPct", "inflationStdPct", "years", "paths", "seed"],
+    ["currentAssets", "monthlyIncome", "monthlyExpense", "targetValue", "nominalReturnMeanPct", "nominalReturnStdPct", "inflationMeanPct", "inflationStdPct", "years", "paths", "seed", "sustainYears"], // v4：+sustainYears（缺任一键 → 整体 null，禁止部分恢复）
   );
   const progress = obj["progressCurrentAssets"];
   const pension = numSlice(
     sliceOf(obj, "pension") ?? {},
-    ["currentAge", "retireAge", "contribYears", "contribIndex", "accountBalance", "avgMonthlyWage", "monthsDivisor"],
+    ["currentAge", "retireAge", "targetRetireAge", "contribYears", "contribIndex", "accountBalance", "avgMonthlyWage", "monthsDivisor"], // v4：+targetRetireAge（同上）
   );
 
   if (!baseline || !reverse || !loanNums || !rental || !monteCarloNums || !taxNums || !accumulation || !pension) {
@@ -234,7 +257,7 @@ export function decodeShareState(hash: string): ShareState | null {
     bands.push({ lower, rate });
   }
 
-  return {
+  const state: ShareState = {
     baseline: baseline as unknown as BaselineInput,
     reverse: reverse as unknown as ReverseEstimateInput,
     loan: { ...(loanNums as unknown as { principal: number; annualRatePct: number; years: number }), method },
@@ -247,6 +270,7 @@ export function decodeShareState(hash: string): ShareState | null {
     progressCurrentAssets: progress,
     pension: pension as unknown as PensionInputs,
   };
+  return { state, strategyNormalizedFromLegacy };
 }
 
 /** 由载荷构造完整分享 URL */
