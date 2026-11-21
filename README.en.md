@@ -150,7 +150,7 @@ The advanced estimates section uses a **segmented-control + per-group tabs** nav
 
 ## ✨ Features
 
-The interface follows a written design language — “Quiet Ledger” (静水账房, [docs/design-language.md](docs/design-language.md)): numerals set in tabular figures, hierarchy carried by hairline rules, the progress ring doubling as a gauge scale, and exactly one celebratory motion — a single pulse when the 100% mark is reached.
+The interface follows a written design language — “Quiet Ledger” (静水账房, [docs/design-language.md](docs/design-language.md)): numerals set in tabular figures, hierarchy carried by hairline rules, the progress ring doubling as a gauge scale, and exactly one celebratory motion — a single pulse when the 100% mark is reached. This round's interaction upgrade keeps the same voice: output-card value changes carry a one-time tint fade to show what changed, the six panel headline numbers converge asymptotically, all five charts gain hover read-outs, and theme switching transitions as a circular reveal — every motion still degrades instantly under the system's reduced-motion preference.
 
 | Feature | Status | Notes |
 | --- | :-: | --- |
