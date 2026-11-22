@@ -40,7 +40,7 @@ Real return rate = nominal return rate − inflation rate   (defaults: 4.5% − 
 
 With the default inputs (monthly expense 2,990 yuan, organized from the official urban per-capita consumer spending statistics), the reference line is about **1.635 million CNY** (parallel reference: the exact Fisher-basis multiplier is 489.6 → about 1.664 million CNY; both calibers are shown side by side in the panel). Any input change re-computes instantly.
 
-The advanced estimates section uses a **segmented-control + per-group tabs** navigation (nine sub-panels grouped into three segments: Life planning / Housing & loans / Analysis tools; a single on-screen focus, with running simulation results and form inputs preserved across group switches, and arrow keys roaming within a group's tabs) and adds: reverse estimation, a loan calculator, buy-and-rent-out analysis, Monte Carlo simulation (return mode: normal parameters or historical bootstrap; withdrawal strategy: fixed real spending (default) / threshold-band adjustment / percentage of balance, with a deterministic sequence-risk comparison built into the panel), public-pension estimation, tax estimation with a multi-currency check, the work-years simulation (which can also back-solve the required monthly saving for a target horizon), and the multi-scenario comparison (a browser-local scenario library with side-by-side key-metric comparison); the base output card expands into a "Monthly-expense sensitivity" section (reference lines at ±10% / ±20% / ±30%), and "Copy share link" encodes all business inputs into the URL — opening the link restores the same parameter set. The app installs to the desktop / home screen as a PWA and works offline once installed — all computation still stays local.
+The app defaults to a **four-task navigation** — a switcher bar at the top of the content area with exactly five entries: Freedom target (How much do I need?) / Life timeline (When can I afford to retire?) / Risk lab (Can my plan survive change?) / Rationale archive (Why is it calculated this way?), plus Pro mode (direct access to the original nine panels). Keyboard support covers ←/→ roaming with Enter/Space activation, digit keys 1–4/5, and `?task=…` deep links (Pro mode accepts `?task=pro&panel=<panel key>` to land on any of the nine panels); explicit switches persist the route preference locally, so a reload stays on the same task. The original **segmented-control + per-group tabs** navigation (nine sub-panels grouped into three segments: Life planning / Housing & loans / Analysis tools) is preserved intact as Pro mode: a single on-screen focus, running simulation results and form inputs preserved across group switches, arrow keys roaming within a group's tabs — semantics unchanged. It adds: reverse estimation, a loan calculator, buy-and-rent-out analysis, Monte Carlo simulation (return mode: normal parameters or historical bootstrap; withdrawal strategy: fixed real spending (default) / threshold-band adjustment / percentage of balance, with a deterministic sequence-risk comparison built into the panel), public-pension estimation, tax estimation with a multi-currency check, the work-years simulation (which can also back-solve the required monthly saving for a target horizon), and the multi-scenario comparison (a browser-local scenario library with side-by-side key-metric comparison); the base output card expands into a "Monthly-expense sensitivity" section (reference lines at ±10% / ±20% / ±30%), and "Copy share link" encodes all business inputs into the URL — opening the link restores the same parameter set. The app installs to the desktop / home screen as a PWA and works offline once installed — all computation still stays local.
 
 ## 📸 Demo
 
@@ -48,17 +48,17 @@ The advanced estimates section uses a **segmented-control + per-group tabs** nav
 
 <div align="center">
 
-### Desktop two-column workbench · Reading on the left, tools on the right
+### Freedom target · Four-task navigation default view (reading on the left, tools on the right)
 
 ![Desktop two-column workbench](docs/assets/en/demo-workbench.png)
 
-*Desktop two-column layout (active at ≥1200 px viewports; single column below the breakpoint): the left column keeps the "480 Rule" baseline output card — the large critical value, the detailed breakdown (with the parallel exact Fisher-basis rows: exact multiplier 489.6 / exact-basis reference line ¥1,663,904) and the monthly-expense-sensitivity entry (the ruler art at the upper right is the empty state before assets are filled in; it becomes the progress ring afterwards); the right column hosts "Advanced estimates and formula rationale", navigated by a segmented control (Life planning / Housing & loans / Analysis tools) plus in-group tabs, currently on Reverse estimation with its worked examples and the ¥1,220,000 / ¥2,541.67 / 4.8 years result rows*
+*Four-task navigation default view: the switcher bar at the top of the content area holds exactly five entries — Freedom target / Life timeline / Risk lab / Rationale archive as primary tasks plus Pro mode as the secondary entry (direct access to the original nine panels); the active "Freedom target" page is two-column (container tier ≥1024, single column below): the left column keeps the "480 Rule" baseline output card — the large critical value, the detailed breakdown (with the parallel exact Fisher-basis rows: exact multiplier 489.6 / exact-basis reference line ¥1,663,904) and the monthly-expense-sensitivity entry (the ruler art at the upper right is the empty state before assets are filled in; it becomes the progress ring afterwards); the right column hosts the reverse-estimation cross-tool card (demo inputs: total existing assets 2.0M / children's reserve 580k / health reserve 200k → investable assets ¥1,220,000, safe monthly spending ¥2,541.67, return leverage years 4.8 years, with the worked-example buttons)*
 
-### Workbench flow · Two-column linkage and state kept across panels
+### Task-switching capture · State kept across tasks
 
 ![Workbench flow demo](docs/assets/en/demo-workbench-flow.gif)
 
-*Typing in the left column (monthly expense → 3,500): the large critical value settles at ¥1,880,000 with an asymptotic roll of ~360 ms, the breakdown updates to ¥3,500 × 480 and the parallel exact Fisher-basis line to ¥1,913,600; on the right, the Public pension panel takes "Age you plan to stop working = 55" and the bridge card reports 5 years / ¥1,680,000 (= 3,500 × 480 on the full living-expense basis, following the left column's expense), with the "Adjusted reference line (after pension payments start)" moving to ¥657.97 / ¥515,825.6; the Work-years simulation then runs (sustainability check years 10) and yields the dual-metric card — a 99.5% probability of reaching the goal alongside a 99.5% sustained success probability — the two columns scroll independently and no state is lost across panel switches*
+*Four-task switching capture (212 frames): on "Freedom target", monthly expense is changed to 5,000 → the reference line moves to ¥2,600,000 (breakdown ¥5,000 × 480, exact Fisher-basis line ¥2,648,000) and the progress ring lights up ("Existing assets are about 115.4% of the reference line"); switching to "Risk lab" runs the Monte Carlo (seed 42) → asset depletion probability 94.4%, median terminal value ¥0, 95th percentile ¥64,936.61, initial withdrawal rate 7.18%; a visit to "Pro mode" shows the original three-segment shell (Life planning / Housing & loans / Analysis tools) intact; switching back to "Risk lab" the results are still there, and back on "Freedom target" the inputs, figures and ring are untouched — no state is lost across task switches (panels are hidden, not unmounted)*
 
 ### Basic calculation · Live recomputation while typing
 
@@ -298,18 +298,21 @@ What this project **cannot do today, or simplifies on purpose** — please read 
 │   ├── check-size.mjs         # size gate (dist total / largest .wasm; limits overridable via env vars)
 │   └── deploy.sh              # GitHub Pages deploy (gh-pages branch)
 ├── src
-│   ├── App.tsx                # page shell (topbar / calculators / disclaimer) + theme token injection & switching
+│   ├── App.tsx                # page shell (topbar / task area / disclaimer) + theme token injection + task routing
 │   ├── main.tsx               # entry: async bootstrap of WASM init
 │   ├── components
-│   │   ├── BasicCalculator.tsx    # basic mode (480 Rule baseline, default first screen)
-│   │   ├── AdvancedPanel.tsx      # advanced estimates (9 sub-panels in a Collapse)
+│   │   ├── BasicCalculator.tsx    # basic mode (480 Rule baseline, Freedom-target page L1/L2 body)
+│   │   ├── AdvancedPanel.tsx      # Pro mode (original 9 sub-panels in a Collapse shell, ?task=pro direct link)
+│   │   ├── TaskSwitcher.tsx       # four-task switcher bar (role=tablist + roving tabindex)
+│   │   ├── TaskPages.tsx          # Life-timeline page shell (five segments, hidden-not-unmounted)
 │   │   ├── advanced/…             # reverse / loan / rent-out / monte carlo / tax+multi-currency / work-years / pension / scenarios / formula rationale
 │   │   └── fields.tsx / hooks.ts  # form fields; useFinanceCall & motion hooks
 │   ├── i18n                   # react-i18next init + three locale files (zh-CN / zh-Hant / en)
 │   ├── services
 │   │   ├── finance.ts         # WASM call adapter (never throws; failures become structured errors)
 │   │   ├── format.ts          # number/currency formatting
-│   │   └── rates.ts           # rate fetching (URL safety check + offline snapshot fallback)
+│   │   ├── rates.ts           # rate fetching (URL safety check + offline snapshot fallback)
+│   │   └── routeState.ts      # task routing (?task= deep-link parsing + wf-route persistence; query channel orthogonal to the share hash)
 │   ├── store/useCalculatorStore.ts
 │   ├── data                   # types / defaults (incl. both theme token groups) / taxTables / rentParams / regional
 │   ├── styles/global.css      # token / material / dark-override / motion sections
