@@ -17,7 +17,7 @@
  * 色盲友好开关提供达标替代组）：浅色 rise #00B42A / fall #F53F3F 对白底。
  * 深色组无豁免（双口径强制 ≥4.5）。
  *
- * 23 组对（research-a11y §6.4 实测值逐一复现；卡底为 rgba 材质底对页底精确合成，
+ * 23 组基线对（research-a11y §6.4 实测值逐一复现；卡底为 rgba 材质底对页底精确合成，
  * 消除研究静态复测用近似卡底的 ≤0.09 口径差）：
  *   浅色：正文 / 次 / 三级 对 白；涨 / 跌 对 白（豁免）；白 对 主色（主按钮文字）；
  *         色盲友好涨（蓝）对 白；色盲友好涨（蓝）对浅色卡合成底；
@@ -27,6 +27,10 @@
  *   深色：正文 / 次 / 三级 对 深色卡合成底；提亮主色对页底（≥3 焦点环口径）；
  *         涨 / 跌 对 卡合成底；色盲友好涨 / 跌 对 卡合成底；
  *         文字按钮提亮主色 / 跳链底色白字（验收 T2-2 / T2-3 增补）。
+ * WF-03 扩对（docs/wf03-spec.md §3/§9 C1；宪法 §5.1 准入第 3 步）：C-1 正文换值 /
+ *   C-2 画布换值复验 + C-3/C-4/C-5 强调色三族（新值 × 在役底全组合，跌破组合以
+ *   「约束禁用」豁免登记，语义=组件取值处不得取用，非在役豁免）+ C-6 区间底双主题
+ *   （底上元信息约束同前）；深材质最不利合成与区间底合成口径见常量区注释。
  *
  * 浏览器档（computed-style 走查口径，research-a11y §6.3 原文——在 dev 页控制台执行）：
  *   (() => {
@@ -99,17 +103,24 @@ function contrast(fg, bg) {
 // 令牌静态值（与 src/data/defaults.ts THEME / THEME_DARK、global.css :root 双块对账；
 // 改令牌须同步本清单——静态档审计以「登记值」为对象）
 // ---------------------------------------------------------------------------
-const LIGHT_PAGE = "#F8F7F3"; // V2（p6-spec §3）：画布暖白微偏，与 defaults.ts THEME.bgPage / global.css :root 同步
+const LIGHT_PAGE = "#F6F8F7"; // WF-03 C-2：画布改 Paper #F6F8F7（was V2 #F8F7F3），与 defaults.ts THEME.bgPage / global.css :root 同步
 const DARK_PAGE = "#17171A";
 const LIGHT_CARD_COMPOSITE = over(parseColor("rgba(255,255,255,0.72)"), parseColor(LIGHT_PAGE));
 const DARK_CARD_COMPOSITE = over(parseColor("rgba(35,35,36,0.92)"), parseColor(DARK_PAGE));
+// WF-03 扩对合成底：浅着色底（tint 8% 主色叠新画布）/ 深材质最不利（叠纯白，研究矩阵口径）/
+// 深区间底合成（rgba(8,127,120,0.16) 叠深页底与深卡底——后者为在役最亮底 = 最不利口径）
+const LIGHT_TINT_COMPOSITE = over(parseColor("rgba(74,111,165,0.08)"), parseColor(LIGHT_PAGE));
+const DARK_MATERIAL_WORST = over(parseColor("rgba(35,35,36,0.92)"), [255, 255, 255, 1]);
+const DARK_MINT_ON_PAGE = over(parseColor("rgba(8,127,120,0.16)"), parseColor(DARK_PAGE));
+const DARK_MINT_ON_CARD = over(parseColor("rgba(8,127,120,0.16)"), parseColor("#232324"));
 
 const rgb = (c) => parseColor(c).slice(0, 3).join(",");
 
 /** 审计对：fg / bg（bg 传合成结果或静态值）、阈值、豁免白名单、研究 §6.4 实测参考值 */
 const PAIRS = [
   // —— 浅色主题（11 组）——
-  { name: "浅 正文 #1D2129 / 白", fg: "#1D2129", bg: [255, 255, 255, 1], need: 4.5, ref: 16.13 },
+  // WF-03 C-1：正文换 #102331（白卡对由 16.13 更新为 16.07，研究矩阵 §2.2 在册）
+  { name: "浅 正文 #102331 / 白", fg: "#102331", bg: [255, 255, 255, 1], need: 4.5, ref: 16.07 },
   { name: "浅 次级 #646E7A / 白", fg: "#646E7A", bg: [255, 255, 255, 1], need: 4.5, ref: 5.18 },
   { name: "浅 三级 #4E5969 / 白", fg: "#4E5969", bg: [255, 255, 255, 1], need: 4.5, ref: 7.1 },
   { name: "浅 涨 #00B42A / 白（豁免白名单）", fg: "#00B42A", bg: [255, 255, 255, 1], need: 4.5, ref: 2.78, exempt: true },
@@ -122,8 +133,8 @@ const PAIRS = [
   { name: "浅 来源标签 #1D2129 / 绿染底 #E8FFEA", fg: "#1D2129", bg: "#E8FFEA", need: 4.5, ref: 15.3 },
   { name: "浅 来源标签 #1D2129 / 橙染底 #FFF7E8", fg: "#1D2129", bg: "#FFF7E8", need: 4.5, ref: 15.15 },
   // —— 验收 T3-1 / T3-2 增补：Descriptions 标签与空态说明改次级令牌后的页底实色对 ——
-  // V2（p6-spec §3）：页底改 #F8F7F3，ref 以脚本 rgba 合成底口径实测值回填 4.83
-  { name: "浅 描述标签/空态说明 #646E7A / 页底 #F8F7F3", fg: "#646E7A", bg: "#F8F7F3", need: 4.5, ref: 4.83 },
+  // WF-03 C-2：页底改 #F6F8F7，ref 以脚本 rgba 合成底口径实测值回填 4.86（原 V2 值 4.83）
+  { name: "浅 描述标签/空态说明 #646E7A / 页底 #F6F8F7", fg: "#646E7A", bg: "#F6F8F7", need: 4.5, ref: 4.86 },
   // —— 验收 T3-3 增补：离线快照橙 Tag 文字加深（orange-8）后的实色对 ——
   { name: "浅 离线快照 #AD4E00 / 橙染底 #FFF7E8", fg: "#AD4E00", bg: "#FFF7E8", need: 4.5, ref: 5.1 },
   // —— 深色主题（10 组，无豁免）——
@@ -139,6 +150,57 @@ const PAIRS = [
   // —— 验收 T2-2 / T2-3 增补：深色文字按钮提亮主色、跳链底色固定浅色品牌主色 ——
   { name: "深 文字按钮提亮主色 #7B9FD1 / 卡合成底", fg: "#7B9FD1", bg: DARK_CARD_COMPOSITE, need: 4.5, ref: 5.84 },
   { name: "深 白 / 跳链底 #4A6FA5", fg: "#FFFFFF", bg: "#4A6FA5", need: 4.5, ref: 5.11 },
+
+  // —— WF-03 扩对（宪法 §5.1 准入第 3 步；docs/wf03-spec.md §3 / §9 C1）——
+  // 口径：「新值 × 当轮在役底」全部组合；跌破组合为「底约束」登记（exempt + 约束名），
+  // 非在役组合不得取用（组件取值处约束见 src/data/types.ts 字段注与演进表 §8）。
+  // ref 全部为本会话 WCAG 2.1 实算（与脚本同式），研究登记值偏差 ≤0.05 系 C-2 换底后重算。
+  // —— C-1 新正文 × 在役浅底 ——
+  { name: "浅 正文 #102331 / 页底 #F6F8F7", fg: "#102331", bg: "#F6F8F7", need: 4.5, ref: 15.07 },
+  { name: "浅 正文 #102331 / 凹面 #F2F3F5", fg: "#102331", bg: "#F2F3F5", need: 4.5, ref: 14.47 },
+  { name: "浅 正文 #102331 / 着色底合成", fg: "#102331", bg: LIGHT_TINT_COMPOSITE, need: 4.5, ref: 13.64 },
+  { name: "浅 三级 #4E5969 / 页底 #F6F8F7（C-2 换底复验）", fg: "#4E5969", bg: "#F6F8F7", need: 4.5, ref: 6.66 },
+  // —— C-3 Signal Teal：浅值文字限画布/卡底；凹面与着色底禁文字（约束登记）——
+  { name: "浅 强调青绿 #087F78 / 页底（贴线）", fg: "#087F78", bg: "#F6F8F7", need: 4.5, ref: 4.56 },
+  { name: "浅 强调青绿 #087F78 / 白卡", fg: "#087F78", bg: [255, 255, 255, 1], need: 4.5, ref: 4.86 },
+  { name: "浅 强调青绿 #087F78 / 凹面（约束：禁文字）", fg: "#087F78", bg: "#F2F3F5", need: 4.5, ref: 4.38, exempt: true },
+  { name: "浅 强调青绿 #087F78 / 着色底合成（约束：禁文字）", fg: "#087F78", bg: LIGHT_TINT_COMPOSITE, need: 4.5, ref: 4.13, exempt: true },
+  { name: "浅 强调青绿 #087F78 / 深卡底（警示：深浅禁混用）", fg: "#087F78", bg: "#232324", need: 4.5, ref: 3.23, exempt: true },
+  // —— C-3 深值 #26AFA6：四面全过；材质面贴线复验 ——
+  { name: "深 强调青绿 #26AFA6 / 深页底", fg: "#26AFA6", bg: "#17171A", need: 4.5, ref: 6.61 },
+  { name: "深 强调青绿 #26AFA6 / 深凹面", fg: "#26AFA6", bg: "#1C1C1F", need: 4.5, ref: 6.29 },
+  { name: "深 强调青绿 #26AFA6 / 深卡底", fg: "#26AFA6", bg: "#232324", need: 4.5, ref: 5.81 },
+  { name: "深 强调青绿 #26AFA6 / 材质最不利合成（贴线）", fg: "#26AFA6", bg: DARK_MATERIAL_WORST, need: 4.5, ref: 4.56 },
+  // —— C-4 Copper：浅文字提字 #966028；图形原值 ≥3.0 口径；深值材质面限大字/图形 ——
+  { name: "浅 陶土文字 #966028 / 页底", fg: "#966028", bg: "#F6F8F7", need: 4.5, ref: 4.92 },
+  { name: "浅 陶土文字 #966028 / 白卡", fg: "#966028", bg: [255, 255, 255, 1], need: 4.5, ref: 5.25 },
+  { name: "浅 陶土文字 #966028 / 凹面", fg: "#966028", bg: "#F2F3F5", need: 4.5, ref: 4.73 },
+  { name: "浅 陶土文字 #966028 / 着色底合成（约束：禁文字）", fg: "#966028", bg: LIGHT_TINT_COMPOSITE, need: 4.5, ref: 4.45, exempt: true },
+  { name: "浅 陶土图形 #A56C32 / 白卡（图形 ≥3）", fg: "#A56C32", bg: [255, 255, 255, 1], need: 3, ref: 4.38 },
+  { name: "浅 陶土图形 #A56C32 / 页底（图形 ≥3）", fg: "#A56C32", bg: "#F6F8F7", need: 3, ref: 4.11 },
+  { name: "深 陶土 #C48A4F / 深页底", fg: "#C48A4F", bg: "#17171A", need: 4.5, ref: 6.04 },
+  { name: "深 陶土 #C48A4F / 深凹面", fg: "#C48A4F", bg: "#1C1C1F", need: 4.5, ref: 5.74 },
+  { name: "深 陶土 #C48A4F / 深卡底", fg: "#C48A4F", bg: "#232324", need: 4.5, ref: 5.31 },
+  { name: "深 陶土 #C48A4F / 材质最不利合成（限大字/图形 ≥3）", fg: "#C48A4F", bg: DARK_MATERIAL_WORST, need: 3, ref: 4.17 },
+  // —— C-5 Slate：浅文字提字 #5E7484；图形原值仅白卡；深值材质面限大字/图形 ——
+  { name: "浅 灰蓝文字 #5E7484 / 页底", fg: "#5E7484", bg: "#F6F8F7", need: 4.5, ref: 4.57 },
+  { name: "浅 灰蓝文字 #5E7484 / 白卡", fg: "#5E7484", bg: [255, 255, 255, 1], need: 4.5, ref: 4.88 },
+  { name: "浅 灰蓝文字 #5E7484 / 凹面（约束：禁文字）", fg: "#5E7484", bg: "#F2F3F5", need: 4.5, ref: 4.39, exempt: true },
+  { name: "浅 灰蓝文字 #5E7484 / 着色底合成（约束：禁文字）", fg: "#5E7484", bg: LIGHT_TINT_COMPOSITE, need: 4.5, ref: 4.14, exempt: true },
+  { name: "浅 灰蓝图形 #8195A3 / 白卡（图形 ≥3，限白卡）", fg: "#8195A3", bg: [255, 255, 255, 1], need: 3, ref: 3.11 },
+  { name: "浅 灰蓝图形 #8195A3 / 页底（约束：其余底全禁）", fg: "#8195A3", bg: "#F6F8F7", need: 3, ref: 2.91, exempt: true },
+  { name: "深 灰蓝 #8195A3 / 深页底", fg: "#8195A3", bg: "#17171A", need: 4.5, ref: 5.76 },
+  { name: "深 灰蓝 #8195A3 / 深凹面", fg: "#8195A3", bg: "#1C1C1F", need: 4.5, ref: 5.47 },
+  { name: "深 灰蓝 #8195A3 / 深卡底", fg: "#8195A3", bg: "#232324", need: 4.5, ref: 5.06 },
+  { name: "深 灰蓝 #8195A3 / 材质最不利合成（限大字/图形 ≥3）", fg: "#8195A3", bg: DARK_MATERIAL_WORST, need: 3, ref: 3.97 },
+  // —— C-6 Soft Mint 区间底：底上元信息改用正文/三级（浅）/正文/次级（深）；禁用组合约束登记 ——
+  { name: "浅 次级 #646E7A / 区间底 #DCEEE8（约束：禁次级，用正文/三级）", fg: "#646E7A", bg: "#DCEEE8", need: 4.5, ref: 4.3, exempt: true },
+  { name: "浅 三级 #4E5969 / 区间底 #DCEEE8", fg: "#4E5969", bg: "#DCEEE8", need: 4.5, ref: 5.9 },
+  { name: "浅 正文 #102331 / 区间底 #DCEEE8", fg: "#102331", bg: "#DCEEE8", need: 4.5, ref: 13.34 },
+  { name: "深 正文 #F2F3F5 / 区间底合成（卡底最不利）", fg: "#F2F3F5", bg: DARK_MINT_ON_CARD, need: 4.5, ref: 12.17 },
+  { name: "深 次级 #A6B0C3 / 区间底合成（卡底最不利）", fg: "#A6B0C3", bg: DARK_MINT_ON_CARD, need: 4.5, ref: 6.19 },
+  { name: "深 三级 #8F95A0 / 区间底合成（画布底）", fg: "#8F95A0", bg: DARK_MINT_ON_PAGE, need: 4.5, ref: 5.12 },
+  { name: "深 三级 #8F95A0 / 区间底合成（卡底最不利；约束：禁三级，用正文/次级）", fg: "#8F95A0", bg: DARK_MINT_ON_CARD, need: 4.5, ref: 4.49, exempt: true },
 ];
 
 let violations = 0;

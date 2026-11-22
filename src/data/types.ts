@@ -249,6 +249,18 @@ export interface ThemeTokens {
   riseColorBlind: string;
   /** 色盲友好模式下的下跌替代色 */
   fallColorBlind: string;
+  /** 强调青绿（交互与核心数据强调；WF-03 C-3 准入值。底约束：浅色文字限画布/卡底——
+   *  凹面与着色合成底禁作文字色（凹面 4.38、着色底合成 4.13 < 4.5，见 check:a11y 在册）；
+   *  深浅两值禁混用（浅值对深卡 3.23、深值对浅画布 2.55 级，双向禁用） */
+  accentTeal: string;
+  /** 陶土橙棕·文字用途（假设标注与提醒；WF-03 C-4 提字值。着色合成底禁文字 4.45 < 4.5） */
+  accentCopper: string;
+  /** 陶土橙棕·图形用途（描边/图形 ≥3.0 口径；WF-03 C-4 原值。文字用途必须改用 accentCopper） */
+  accentCopperGraphic: string;
+  /** 灰蓝·文字用途（辅助数据注记；WF-03 C-5 提字值。凹面与着色合成底禁文字 4.39/4.14 < 4.5） */
+  accentSlate: string;
+  /** 灰蓝·图形用途（限白卡图形 3.11 ≥3.0，其余底禁用；WF-03 C-5 原值。文字用途必须改用 accentSlate） */
+  accentSlateGraphic: string;
   /** 页面底色（body 背景与浏览器地址栏 theme-color 的浅色值挂此令牌；深色组与组件库深色一级底同值；CSS 名 --wf-bg-sunken） */
   bgPage: string;
   /** 面板凹面区底色（比卡底暗、比画布亮；CSS 名 --wf-bg-inset，docs/design-language.md §3.2 表面阶） */
@@ -257,6 +269,10 @@ export interface ThemeTokens {
   bgSurface: string;
   /** 着色底（核心参数实时区底色；替代对组件库主色阶 --primary-1 的浅色依赖；CSS 名 --wf-bg-tint） */
   tintBg: string;
+  /** 区间底·淡青薄荷（区间填充/差异年段高亮；WF-03 C-6。底约束：底上元信息文字改用
+   *  正文/三级色——浅值上次级文字 4.30 < 4.5（禁用）；深色为合成底（随底下画布联动），
+   *  三级文字在最不利合成底 4.49 贴线跌破，元信息同样改用正文/次级色（check:a11y 在册） */
+  bgMint: string;
   /** 图表网格线色（蒙特卡洛图；装饰层，不设文本对比度口径） */
   chartGrid: string;
   /** 图表刻度文字色（与三级文字同值但令牌解耦，便于独立调校） */

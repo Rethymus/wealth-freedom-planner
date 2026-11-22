@@ -245,21 +245,32 @@ export const PREFS_STORAGE_KEY = "wf-prefs";
  * 静态默认值，两处初始值必须一致防首帧闪变；深色镜像组见 THEME_DARK，同一 ThemeTokens 接口） */
 export const THEME: ThemeTokens = {
   primary: "#4A6FA5", // 主色
-  textPrimary: "#1D2129", // 正文深灰
-  textSecondary: "#646E7A", // 次级文字（浅色 5.18:1；改值依据 design-research A1，登记于 design-spec 5.3）
-  textTertiary: "#4E5969", // 三级文字（图表刻度文字等）
+  // WF-03 C-1（宪法 §5.1 准入）：正文换 Ink Navy #102331（浅色四底 13.56–16.07 全过，
+  // check:a11y 扩对在册）；深色画布用途挂起（配套深色表面三档提档族未定，另行准入）
+  textPrimary: "#102331", // 正文墨蓝（对画布 15.07 / 凹面 14.47 / 卡底 16.07）
+  textSecondary: "#646E7A", // 次级文字（对新画布 4.86:1 ≥ 4.5；改值依据 design-research A1，登记于 design-spec 5.3）
+  textTertiary: "#4E5969", // 三级文字（图表刻度文字等；对新画布 6.66:1）
   rise: "#00B42A", // 绿涨语义色
   fall: "#F53F3F", // 红跌语义色
   // 色盲友好替代色板（蓝/橙）：开启「色盲友好模式」时替换涨跌语义色
   riseColorBlind: "#0072B2",
   fallColorBlind: "#E69F00",
+  // —— Atlas 强调色三族（WF-03 C-3/C-4/C-5 准入值；底约束见 types.ts 字段注） ——
+  accentTeal: "#087F78", // 青绿强调：文字限画布/卡底（4.56 贴线 / 4.86）；凹面 4.38、着色底 4.13 禁文字
+  accentCopper: "#966028", // 陶土橙棕文字提字：4.92 / 4.73 / 5.25；着色底合成 4.45 禁文字
+  accentCopperGraphic: "#A56C32", // 陶土橙棕图形原值：仅 ≥3.0 图形口径（白卡 4.38 / 画布 4.11）
+  accentSlate: "#5E7484", // 灰蓝文字提字：4.57 / 4.88；凹面 4.39、着色底 4.14 禁文字
+  accentSlateGraphic: "#8195A3", // 灰蓝图形原值：仅白卡图形 3.11，其余底全禁
   // —— 表面阶（body 背景与实时区底色改挂令牌，解除硬编码与组件库色阶依赖；
   //    CSS 名映射：bgPage→--wf-bg-sunken / bgInset→--wf-bg-inset / bgSurface→--wf-bg-surface / tintBg→--wf-bg-tint）
-  //    V2（p6-spec §3）：画布暖白微偏 #F8F7F3——次级文字对新画布 4.83:1 ≥ 4.5 达标 ——
-  bgPage: "#F8F7F3",
+  //    WF-03 C-2（宪法 §5.1 准入，与 C-1 成对评审）：画布改 Paper #F6F8F7——
+  //    现浅文字三档对新画布 15.07 / 4.86 / 6.66 全过（check:a11y 扩对在册） ——
+  bgPage: "#F6F8F7",
   bgInset: "#F2F3F5",
   bgSurface: "#FFFFFF",
   tintBg: "rgba(74,111,165,0.08)",
+  // 区间底（WF-03 C-6）：淡青薄荷 #DCEEE8——底上元信息禁次级色（4.30 < 4.5），用正文/三级色
+  bgMint: "#DCEEE8",
   // —— 图表（蒙特卡洛网格线 / 刻度文字，废除组件内硬编码浅色值） ——
   chartGrid: "#E5E6EB",
   chartTick: "#4E5969",
@@ -309,12 +320,22 @@ export const THEME_DARK: ThemeTokens = {
   // 色盲友好替代色板深色值（涨实测 6.88:1 / 最不利 5.34:1；跌 7.05:1 / 5.47:1，与浅色同值）
   riseColorBlind: "#56B4E9",
   fallColorBlind: "#E69F00",
+  // —— Atlas 强调色三族深色值（WF-03 C-3/C-4/C-5 准入值；与浅色值禁混用，双向在册） ——
+  accentTeal: "#26AFA6", // 提亮青绿：深色四面文字全过（6.61/6.29/5.81/材质合成 4.56 贴线）
+  accentCopper: "#C48A4F", // 提亮陶土：实底三面文字全过（6.04/5.74/5.31）；材质面限大字/图形（4.17 ≥3.0）
+  accentCopperGraphic: "#C48A4F", // 深色单值：与文字用途同值
+  accentSlate: "#8195A3", // 原值直用：深色三面文字全过（5.76/5.47/5.06）；材质面限大字/图形（3.97 ≥3.0）
+  accentSlateGraphic: "#8195A3", // 深色单值：与文字用途同值
   // —— 表面阶（深色「越高越亮」：sunken 最暗画布 < inset 凹面 < surface 平面卡底 < 材质浮层；
   //    页面底与组件库深色一级底同值，实底表面层叠口径一致） ——
   bgPage: "#17171A",
   bgInset: "#1C1C1F",
   bgSurface: "#232324",
   tintBg: "rgba(123,159,209,0.12)", // 合成底：正文 11.77:1、涨色 5.59:1、跌色 5.71:1
+  // 区间底（WF-03 C-6 深值）：半透明合成底（叠在役深底后在役正文/次级 12.17/6.19 最不利口径全过；
+  // 三级文字在最不利合成底 4.49 跌破 → 元信息禁三级色，用正文/次级，check:a11y 在册）。
+  // 合成值随最终深色画布定稿复验（C-1 深画布用途挂起中，定稿后重算）
+  bgMint: "rgba(8,127,120,0.16)",
   // —— 图表（网格线为装饰层，不设 4.5 口径；刻度文字对合成卡底 5.28:1） ——
   chartGrid: "#3D3F46",
   chartTick: "#8F95A0",

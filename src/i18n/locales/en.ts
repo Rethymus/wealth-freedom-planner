@@ -156,6 +156,28 @@ const en = {
     insightsTitle: "Formula rationale",
     insightsDesc: "Where 480 comes from: derivation, assumptions and sources",
   },
+  atlas: {
+    // WF-03 four-task navigation (docs/wf03-spec.md §6; 13 keys × 3 locales, identical key structure)
+    nav: {
+      label: "Task navigation",
+      freedom: "Freedom target",
+      freedomDesc: "How much do I need?",
+      life: "Life timeline",
+      lifeDesc: "When can I afford to retire?",
+      risk: "Risk lab",
+      riskDesc: "Can my plan survive change?",
+      principles: "Rationale archive",
+      principlesDesc: "Why is it calculated this way?",
+    },
+    pro: {
+      label: "Pro mode",
+      desc: "Direct access to the original nine panels",
+      backLabel: "Back to task navigation",
+    },
+    migrate: {
+      notice: "The default view now uses the four-task navigation; the original nine panels live in Pro mode.",
+    },
+  },
   insights: {
     formulaTitle: "Formula derivation",
     formulaShort: "Assets = monthly expense × 12 ÷ real return rate (480 under the default parameters); see the tip for the full derivation.",

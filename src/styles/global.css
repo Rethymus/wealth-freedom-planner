@@ -16,10 +16,11 @@
 /* ============================== 令牌区 ============================== */
 /* 静态层与主题组浅色默认值清单口径见设计规范 2.10；运行时由 App.tsx 将当前主题组值注入
    documentElement 覆盖（组件库弹层挂在页面骨架之外，注入点在 documentElement 才对其生效）。
-   主题组键（文字分级 / 主色 / 语义色 / 表面阶 sunken·inset·surface / 着色底 / 图表 /
-   环线描边 / 材质 / 发丝线三键 / 阴影 / 焦点环）随主题换值；
-   间距 / 圆角 / 字阶（display·title·body·caption 四级）/ 顶栏几何 / 动效时长与曲线为静态层，
-   两主题共用。字阶与表面阶命名迁移映射见 docs/p5-spec.md §2（旧名零残留由孤儿门禁保证） */
+   主题组键（文字分级 / 主色 / 语义色 / Atlas 强调色三族 accent-* / 表面阶 sunken·inset·surface /
+   着色底 / 区间底 mint / 图表 / 环线描边 / 材质 / 发丝线三键 / 阴影 / 焦点环）随主题换值；
+   间距 / 圆角 / 字阶（display·title·body·caption 四级 + Atlas 候选字阶三键）/ 顶栏几何 /
+   动效时长与曲线为静态层，两主题共用。字阶与表面阶命名迁移映射见 docs/p5-spec.md §2
+   （旧名零残留由孤儿门禁保证）；Atlas 新键准入记录见 docs/atlas-tokens-evolution.md §8 */
 :root {
   /* —— 间距（8pt） —— */
   --wf-space-1: 4px; /* 半档：密集表单标签与控件的行距 */
@@ -41,11 +42,25 @@
   --wf-text-title: 20px; /* 面板级主数与大节标题：与 display 保持 1:2 从属比 */
   --wf-text-body: 14px; /* 正文、字段标签、Descriptions 值（默认档；金额下限由本档达标） */
   --wf-text-caption: 12px; /* 口径注、图表刻度、hint、图例（说明性文字） */
+  /* —— Atlas 候选字阶（WF-03 T-1/T-2/T-3 准入键；静态层两主题同值不入对账，brief 带内取值；
+        T-4/T-5/T-6 默认现值不施工） —— */
+  --wf-text-num-display: 48px; /* T-1 数字主标题：自由刻度 L1 读数 ≥1024 容器档启用（每屏仍至多一处） */
+  --wf-text-reading: 16px; /* T-2 阅读正文（行高 1.6 配套）：原理档案阅读列启用 */
+  --wf-text-page-title: 32px; /* T-3 页面标题：四任务页页头启用 */
 
   /* —— 文字分级色（主题组） —— */
-  --wf-text: #1D2129; /* 正文：禁用纯黑 */
-  --wf-text-secondary: #646E7A; /* 字段提示等（浅色 5.18:1；改值依据 design-research A1，登记于 design-spec 5.3） */
-  --wf-text-tertiary: #4E5969; /* 图表刻度等 */
+  /* WF-03 C-1（宪法 §5.1 准入）：正文换墨蓝 #102331——浅色四底 13.56–16.07 全过（check:a11y
+     扩对在册）；深色画布用途挂起（配套深色表面三档提档族未定稿，另行准入） */
+  --wf-text: #102331; /* 正文：禁用纯黑（对画布 15.07 / 凹面 14.47 / 卡底 16.07） */
+  --wf-text-secondary: #646E7A; /* 字段提示等（对新画布 4.86:1；改值依据 design-research A1，登记于 design-spec 5.3） */
+  --wf-text-tertiary: #4E5969; /* 图表刻度等（对新画布 6.66:1） */
+
+  /* —— Atlas 强调色三族（WF-03 C-3/C-4/C-5 准入键；底约束入组件取值处，见 types.ts 注） —— */
+  --wf-accent-teal: #087F78; /* 文字限画布/卡底（4.56 贴线/4.86）；凹面 4.38、着色底合成 4.13 禁文字；深浅两值禁混用 */
+  --wf-accent-copper: #966028; /* 文字提字（4.92/4.73/5.25）；着色底合成 4.45 禁文字 */
+  --wf-accent-copper-graphic: #A56C32; /* 图形原值：仅 ≥3.0 图形口径（白卡 4.38/画布 4.11） */
+  --wf-accent-slate: #5E7484; /* 文字提字（4.57/4.88）；凹面 4.39、着色底合成 4.14 禁文字 */
+  --wf-accent-slate-graphic: #8195A3; /* 图形原值：仅白卡图形 3.11，其余底全禁 */
 
   /* —— 色彩（主题组） —— */
   --wf-primary: #4A6FA5;
@@ -54,12 +69,13 @@
 
   /* —— 表面阶（主题组，docs/design-language.md §3.2）：分层背景四档 sunken（页面画布）
      → inset（面板凹面区）→ surface（平面卡底）→ 材质层；着色底承载 hover / 着色表面半档。
-     V2（p6-spec §3）：画布自冷灰蓝白向暖白偏移一档（取色温不取色相）；次级文字对新
-     画布 4.83:1 ≥ 4.5 达标（check-a11y 同步改值） —— */
-  --wf-bg-sunken: #F8F7F3;
+     WF-03 C-2（宪法 §5.1 准入，与 C-1 成对评审）：画布改微绿调纸白 #F6F8F7——现浅文字
+     三档对新画布 15.07 / 4.86 / 6.66 全过（check:a11y 扩对在册） —— */
+  --wf-bg-sunken: #F6F8F7;
   --wf-bg-inset: #F2F3F5;
   --wf-bg-surface: #FFFFFF;
   --wf-bg-tint: rgba(74,111,165,0.08);
+  --wf-bg-mint: #DCEEE8; /* 区间底（WF-03 C-6）：底上元信息禁次级色（4.30 < 4.5），用正文/三级色 */
 
   /* —— 图表（主题组；蒙特卡洛网格线 / 刻度文字，组件内一律经解析函数取值） —— */
   --wf-chart-grid: #E5E6EB;
@@ -319,11 +335,22 @@ body {
   --wf-rise: #27C346; /* 涨色：常态 6.79:1 / 最不利 5.27:1 */
   --wf-fall: #F98D86; /* 跌色：常态 6.95:1 / 最不利 5.39:1 */
 
+  /* —— Atlas 强调色三族深色值（WF-03 C-3/C-4/C-5；与浅色值禁混用，双向 check:a11y 在册） —— */
+  --wf-accent-teal: #26AFA6; /* 提亮青绿：四面文字全过（6.61/6.29/5.81/材质合成 4.56 贴线） */
+  --wf-accent-copper: #C48A4F; /* 提亮陶土：实底三面文字全过；材质面限大字/图形（4.17 ≥3.0） */
+  --wf-accent-copper-graphic: #C48A4F; /* 深色单值：与文字用途同值 */
+  --wf-accent-slate: #8195A3; /* 原值直用：三面文字全过（5.76/5.47/5.06）；材质面限大字/图形（3.97 ≥3.0） */
+  --wf-accent-slate-graphic: #8195A3; /* 深色单值：与文字用途同值 */
+
   /* —— 表面阶（深色「越高越亮」排布：sunken 最暗画布 < inset 凹面 < surface 平面卡底 < 材质浮层） —— */
   --wf-bg-sunken: #17171A; /* 最暗底（画布），与组件库深色一级底同值 */
   --wf-bg-inset: #1C1C1F; /* 比卡底暗、比画布亮（凹面） */
   --wf-bg-surface: #232324; /* 平面卡底 */
   --wf-bg-tint: rgba(123,159,209,0.12); /* 着色底：合成底正文 11.77:1、涨色 5.59:1、跌色 5.71:1 */
+  /* 区间底（WF-03 C-6 深值）：半透明合成底——在役深底最不利合成上正文/次级 12.17/6.19 全过；
+     三级文字 4.49 跌破 → 元信息禁三级色（用正文/次级）。合成值随深色画布定稿复验
+     （C-1 深画布用途挂起中） */
+  --wf-bg-mint: rgba(8,127,120,0.16);
 
   /* —— 图表 —— */
   --wf-chart-grid: #3D3F46; /* 对合成卡底 1.51:1（网格为装饰层，不设 4.5 口径；较浅色略提保证可感知） */
@@ -463,15 +490,196 @@ body {
   font-weight: 500;
 }
 
-/* ⑨ 双栏工作台（≥1200 桌面，工效裁定：终结单列长滚动）：
-   左栏「我的数字」（输出卡 + 基础参数）sticky 常驻 + 视口内自滚动；
-   右栏工作区（高级导航 + 面板）随滚动。<1200 维持单列（移动优先形态）。 */
-@media (min-width: 1200px) {
-  .wf-workbench {
+/* ============================== WF-03 Atlas 任务区 ============================== */
+/* docs/wf03-spec.md §2：任务切换条 + 任务页容器。容器查询渐进启用（routing §4）：
+   inline-size 命名容器挂锚点/页根，带内样式一律 min-width 书写，@supports not 回退
+   等值视口媒体查询（视口五档与 768 唯一硬断点不变，容器值与回退值逐条等值）；
+   容器单位（cqw 等）不引入；嵌套仅一层（切换条锚点与各任务页根互为兄弟，pro 区
+   不启用容器查询——S1–S26 零回退红线）；壳层永不容器化；hooks.ts 视口钩继续服务
+   组件库 layout 逻辑（双轨并存，判定域不同）。 */
+
+/* 一次性迁移说明（atlas.migrate.notice）：会话级显隐（App 会话态，不入盘） */
+.atlas-migrate {
+  margin-bottom: 12px;
+}
+
+/* 任务切换条锚点：切换后滚动复位落点（scroll-margin 派生自顶栏高度，A9 同口径）。
+   atlas-switch 查询容器挂锚点而非切换条自身——容器查询不能查询容器元素本身 */
+.atlas-switch-anchor {
+  scroll-margin-top: calc(var(--wf-topbar-h, 56px) + 12px);
+  container-type: inline-size;
+  container-name: atlas-switch;
+}
+
+/* 切换条基线（<768）：任务四项 2×2 + 专业模式整行次行（次级样式）；≥768 单行 5 项
+   由容器查询承载（下方）。恰 5 项（同屏独立选项 ≤5 纪律，原型 §0.6） */
+.atlas-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.atlas-switch-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  background: var(--wf-bg-surface);
+  border: 1px solid var(--wf-hairline-card);
+  border-radius: var(--wf-radius-m);
+  color: var(--wf-text);
+  font-family: inherit;
+  font-size: var(--wf-text-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.atlas-switch-tab-label {
+  font-weight: 500;
+}
+
+.atlas-switch-tab-desc {
+  font-size: var(--wf-text-caption);
+  color: var(--wf-text-tertiary);
+}
+
+/* 专业模式次级样式：素底 + 次级文字（「四任务为主、专业模式为直达通道」层级阅读，
+   routing §1.2）；活动态恢复卡底并接主色（同四任务活动态口径） */
+.atlas-switch-tab-pro {
+  background: transparent;
+  color: var(--wf-text-secondary);
+}
+
+.atlas-switch-tab-pro .atlas-switch-tab-label {
+  font-weight: 400;
+}
+
+.atlas-switch-tab-pro.atlas-switch-tab-active {
+  background: var(--wf-bg-surface);
+  color: var(--wf-primary);
+}
+
+.atlas-switch-tab-active {
+  border-color: var(--wf-primary);
+  color: var(--wf-primary);
+}
+
+.atlas-switch-tab:focus-visible {
+  outline: none;
+  box-shadow: var(--wf-focus-ring);
+}
+
+/* ≥768 单行 5 项（容器查询）；发丝线分隔专业模式次行项（hairline 令牌，1px） */
+@container atlas-switch (min-width: 768px) {
+  .atlas-switch {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .atlas-switch-tab-pro {
+    position: relative;
+  }
+
+  .atlas-switch-tab-pro::before {
+    content: "";
+    position: absolute;
+    left: -4px; /* 8px 栏距中线 */
+    top: 4px;
+    bottom: 4px;
+    width: 1px;
+    background: var(--wf-hairline-card);
+  }
+}
+
+/* @supports 等值回退：不支持容器查询的环境按同值视口媒体查询走同一形态 */
+@supports not (container-type: inline-size) {
+  @media (min-width: 768px) {
+    .atlas-switch {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .atlas-switch-tab-pro {
+      position: relative;
+    }
+
+    .atlas-switch-tab-pro::before {
+      content: "";
+      position: absolute;
+      left: -4px;
+      top: 4px;
+      bottom: 4px;
+      width: 1px;
+      background: var(--wf-hairline-card);
+    }
+  }
+}
+
+/* 任务页容器基线：hidden 非卸载（§5.5 切换不卸载）；切换淡入 = base 档标准曲线
+   透明度-only（§2.1；退场即时——hidden 即时移除，宪法 §3.5 退场比进入快）。
+   新增动画类登记：atlas-page-in（animation 承载，reduced-motion 由兜底块全停） */
+.atlas-page {
+  margin-top: 16px;
+}
+
+.atlas-page:not([hidden]) {
+  animation: atlas-page-in var(--wf-dur-base) var(--wf-ease-standard) 1;
+}
+
+@keyframes atlas-page-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 页头标题（T-3 页面标题 32px 候选键启用处；四任务页，pro 页保留原 Card 标题） */
+.atlas-page-title {
+  margin: 0 0 12px;
+  font-size: var(--wf-text-page-title);
+  line-height: 1.25;
+  font-weight: bold;
+  color: var(--wf-text);
+}
+
+/* 工具卡/面板承载面（Surface 1 仪表工作区语义）：实底卡 + 发丝线 + 圆角；
+   阅读主体恒实底（brief §2.1 密集数字恒稳定不透明底） */
+.atlas-tool-card,
+.atlas-life-panel,
+.atlas-principles-body {
+  background: var(--wf-bg-surface);
+  border: 1px solid var(--wf-hairline-card);
+  border-radius: var(--wf-radius-m);
+  padding: 16px;
+}
+
+.atlas-tool-card + .atlas-tool-card {
+  margin-top: 16px;
+}
+
+/* —— 自由刻度页（容器查询首批；双栏语义自 wf-workbench 迁入，brief §四 容器 ≥1024） —— */
+.atlas-freedom {
+  container-type: inline-size;
+  container-name: freedom;
+}
+
+.atlas-freedom-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@container freedom (min-width: 1024px) {
+  .atlas-freedom-layout {
     display: grid;
     grid-template-columns: 400px minmax(0, 1fr);
     gap: 16px;
     align-items: start;
+  }
+
+  .atlas-freedom-layout .atlas-page-title {
+    grid-column: 1 / -1;
   }
 
   .wf-workbench-primary {
@@ -481,11 +689,98 @@ body {
     overflow-y: auto;
   }
 
-  /* 左栏自身已 sticky 常驻，输出卡的内部吸附在此形态下冗余（双重吸附会
-     互相打架），桌面双栏下退化为静态；<1200 单列保持吸附行为不变 */
+  /* 左栏自身已 sticky 常驻，输出卡的内部吸附在此形态下冗余（双重吸附互相打架），
+     双栏下退化为静态；单列保持吸附行为不变（D9 三态：吸附/紧凑档/双栏退化） */
   .wf-workbench-primary .wf-output-sticky {
     position: static;
   }
+
+  /* V1（第 1 轮视觉验收 P0）配套：左栏 ~400px 窄于桌面 nowrap 假设，en 长 label
+     允许换行防溢出（双栏形态专用；单列容器宽不受影响） */
+  .wf-workbench-primary .arco-descriptions-item-label {
+    white-space: normal;
+  }
+
+  /* T-1 数字主标题 48px：自由刻度 L1 读数在 ≥1024 容器档启用（每屏仍至多一处）。
+     !important 压制内联样式（BasicCalculator hero fontSize 内联，wf03-spec §4.2
+     本体零触碰；与既有 D3「内联样式须 !important 压制」先例同口径） */
+  .atlas-freedom .wf-big-number {
+    font-size: var(--wf-text-num-display) !important;
+  }
+}
+
+/* @supports 等值回退：无容器查询环境 = 同值视口媒体查询（回退即双栏现状布局） */
+@supports not (container-type: inline-size) {
+  @media (min-width: 1024px) {
+    .atlas-freedom-layout {
+      display: grid;
+      grid-template-columns: 400px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .atlas-freedom-layout .atlas-page-title {
+      grid-column: 1 / -1;
+    }
+
+    .wf-workbench-primary {
+      position: sticky;
+      top: calc(var(--wf-topbar-h, 56px) + 16px);
+      max-height: calc(100vh - var(--wf-topbar-h, 56px) - 32px);
+      overflow-y: auto;
+    }
+
+    .wf-workbench-primary .wf-output-sticky {
+      position: static;
+    }
+
+    .wf-workbench-primary .arco-descriptions-item-label {
+      white-space: normal;
+    }
+
+    .atlas-freedom .wf-big-number {
+      font-size: var(--wf-text-num-display) !important;
+    }
+  }
+}
+
+/* —— 原理档案页（容器查询第二批；纯阅读页零状态风险）：阅读列 688px 居中
+   （brief §2.2 主阅读宽 640–760 带内取 8pt 倍数，原型 §4.1） —— */
+.atlas-principles {
+  container-type: inline-size;
+  container-name: principles;
+}
+
+@container principles (min-width: 768px) {
+  .atlas-principles-body {
+    max-width: 688px;
+    margin-inline: auto;
+  }
+}
+
+@supports not (container-type: inline-size) {
+  @media (min-width: 768px) {
+    .atlas-principles-body {
+      max-width: 688px;
+      margin-inline: auto;
+    }
+  }
+}
+
+/* T-2 阅读正文 16px（行高 1.6 配套）：原理档案阅读列启用；仅本页阅读段落，
+   不触及小节头/来源行/标签（caption 档不受影响）。对比度复用既有正文色对
+   （#102331 系 15.07 在册），无新增验算对 */
+.atlas-principles .wf-insights-body.arco-typography,
+.atlas-principles .wf-insights-body .arco-typography {
+  font-size: var(--wf-text-reading);
+  line-height: 1.6;
+}
+
+/* —— 专业模式页：维持现行视口断点与布局（不启用容器查询，S1–S26 零回退红线） —— */
+.atlas-pro-topbar {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 8px;
 }
 
 /* A1（p4-spec §7）：跳过链接——首 Tab 停留点（Layout 首子元素），获焦前视觉隐藏、
@@ -546,6 +841,11 @@ textarea,
 /* 触控目标 ≥44px：只在触屏或窄屏生效，桌面指针精度下维持现状紧凑尺寸 */
 @media (pointer: coarse), (max-width: 767.9px) {
   .arco-btn {
+    min-height: 44px;
+  }
+
+  /* WF-03 任务切换条项（新增控件一律挂包装或写 44 最小高，原型 §0.4） */
+  .atlas-switch-tab {
     min-height: 44px;
   }
 
@@ -665,7 +965,9 @@ textarea,
    S9 呼吸 / S14 段位涨色——四者均为 animation 承载，由上方兜底块的
    animation-duration/iteration-count 全停，transition 清单按既有惯例列过渡承载类；
    P6 新增动画类登记：S16 .wf-flash/.wf-flash-single（animation 承载，同由兜底块全停）。
-   S22 的 ::view-transition-* UA 自定义伪元素不被通配兜底命中，显式停用规则见 P6 区） */
+   S22 的 ::view-transition-* UA 自定义伪元素不被通配兜底命中，显式停用规则见 P6 区。
+   WF-03 新增动画类登记：.atlas-page（任务页切换淡入 atlas-page-in，animation 承载，
+   同由兜底块全停——切换淡入减弱动效下瞬时，wf03-spec §9 D3） */
 @media (prefers-reduced-motion: reduce) {
   .wf-output-card,
   .wf-field-tip,
@@ -876,13 +1178,9 @@ textarea,
 
 /* V1（第 1 轮视觉验收 P0）配套：双栏左栏容器 ~351px 窄于桌面档 nowrap 假设，en 长
    label（如 "Total (= financial freedom reference line)"）会把单列键值表撑出容器、
-   被 tabs 裁切层静默裁掉数值列。左栏内允许 label 换行防溢出——布局与 <768 档兜底
-   同口径（375 档 258px 纵排验收完好）；768–1199 单列形态容器宽不受本规则影响。 */
-@media (min-width: 1200px) {
-  .wf-workbench-primary .arco-descriptions-item-label {
-    white-space: normal;
-  }
-}
+   被裁切层静默裁掉数值列。左栏内允许 label 换行防溢出——规则已随 WF-03 双栏语义
+   迁入自由刻度页容器查询块与 @supports 等值回退块（阈值 1200→1024 容器档，
+   docs/wf03-spec.md §2.5）；单列形态容器宽不受该规则影响。 */
 
 /* 浅色 Descriptions / 表格标签色覆写（验收 T3-1，WCAG 1.4.3）：组件库默认标签灰
    #86909C 对页底 #F7F8FA 实测 3.05:1 < 4.5（14px 常规，全页 36 处同类：贷款摊销表 /

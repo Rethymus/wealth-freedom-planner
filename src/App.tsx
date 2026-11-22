@@ -2,7 +2,7 @@
  * 应用骨架：顶栏（币种切换 + 色盲友好配色开关 + 语言切换 + 主题切换）、基础计算（默认首屏）、
  * 高级估算（Collapse）、底部免责声明。全部界面文案经 react-i18next 三语化。
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Alert, Button, Layout, Message, Select, Switch, Typography } from "@arco-design/web-react";
 import { IconMoonFill, IconSunFill, IconThunderbolt } from "@arco-design/web-react/icon";
@@ -13,13 +13,31 @@ import type { ThemeMode } from "./data/defaults";
 import { persistLanguage, SUPPORTED_LANGS } from "./i18n";
 import type { SupportedLang } from "./i18n";
 import { formatNumber, formatTimestamp } from "./services/format";
+import { persistRoute, replaceUrlRoute, resolveInitialRoute } from "./services/routeState";
+import type { AtlasRoute, AtlasTaskId } from "./services/routeState";
 import { useCalculatorStore } from "./store/useCalculatorStore";
 import { useDisplayRate, usePrefersReducedMotion } from "./components/hooks";
 import BasicCalculator from "./components/BasicCalculator";
 import AdvancedPanel from "./components/AdvancedPanel";
+import TaskSwitcher from "./components/TaskSwitcher";
+import LifeTaskPage from "./components/TaskPages";
+import ReversePanel from "./components/advanced/ReversePanel";
+import MonteCarloPanel from "./components/advanced/MonteCarloPanel";
+import ScenarioPanel from "./components/advanced/ScenarioPanel";
+import InsightsPanel from "./components/advanced/InsightsPanel";
 
 const { Header, Content, Footer } = Layout;
 const { Text, Title } = Typography;
+
+/** 数字键分域（wf03-spec §2.4）：1–4 → 四任务；5 → 专业模式。task=pro 时任务键整组
+ *  不绑定——pro 内 1/2/3 仍归 S21 组切换（AdvancedPanel 原样）、5 为当前页无操作、
+ *  4 无绑定，既有键盘习惯零变化（发布阻断级口径）。 */
+const DIGIT_TASKS: Record<string, AtlasTaskId> = {
+  "1": "freedom",
+  "2": "life",
+  "3": "risk",
+  "4": "principles",
+};
 
 /** View Transitions 造型的最小结构类型（lib.dom 尚未收录 startViewTransition 的
  *  运行环境兼容写法；仅本函数使用，不污染全局） */
@@ -125,6 +143,90 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
     return () => window.removeEventListener("hashchange", handleHash);
   }, [applyShareState, resetBusinessInputs, t]);
 
+  /** WF-03 任务路由（§2.2/§2.3/§4.3）：首渲染前解析（useState 初始化器，禁 effect 后
+   *  解析——防任务闪变，readInitialTheme 先例）；显式切换动作统一走 selectTask——
+   *  wf-route 写盘与 replaceState 同文档改写均只在此发生，深链落地不写盘（URL 是
+   *  事实来源，§2.3）；lastTaskRef 记录进入 pro 前的任务供 Esc 返回（无历史回 freedom）。
+   *  分享 hash 与 query 路由两条通道互不触碰：本块不读写 location.hash（§2.2）。 */
+  const [route, setRoute] = useState<AtlasRoute & { explicit: boolean; canonical: boolean }>(
+    resolveInitialRoute,
+  );
+  const lastTaskRef = useRef<AtlasTaskId>("freedom");
+  /** 首展挂载集合（§5.5 lazyload 先例 AdvancedPanel.tsx:161）：任务页根（tabpanel 语义
+   *  载体）恒挂载，页内面板内容首次展现才挂载、此后常驻（hidden 非卸载——切走不卸载，
+   *  已运行模拟结果 / 表单输入零丢失） */
+  const [visitedTasks, setVisitedTasks] = useState<ReadonlySet<AtlasTaskId>>(
+    () => new Set([route.task]),
+  );
+  const selectTask = (task: AtlasTaskId) => {
+    if (route.task === task) return;
+    if (route.task !== "pro" && task === "pro") lastTaskRef.current = route.task;
+    const next: AtlasRoute = { task, panel: task === "pro" ? route.panel : null };
+    persistRoute(next); // 仅显式切换写盘（§2.3）
+    replaceUrlRoute(next); // 同文档改写不 pushState；hash 通道透传（§4.3）
+    setVisitedTasks((prev) => {
+      if (prev.has(task)) return prev;
+      const visited = new Set(prev);
+      visited.add(task);
+      return visited;
+    });
+    setRoute({ ...next, explicit: true, canonical: true });
+  };
+
+  /** 深链规范化：URL 显式携带参数但非 canonical 形态（越界值 / 冗余写法 / 多余参数序）
+   *  → 挂载即 replaceState 规范化，静默无提示（路由无数据损失，§4.3 与分享损坏警示分级）；
+   *  状态已在初始化器按同一解析链落位，本效果只修 URL 表现层，仅挂载跑一次。 */
+  useEffect(() => {
+    if (route.explicit && !route.canonical) {
+      replaceUrlRoute({ task: route.task, panel: route.panel });
+    }
+  }, []); // 仅挂载规范化一次（深链落地修 URL；切换动作已实时同步）
+
+  /** 切换反馈（§2.1）：滚动复位至切换条（.atlas-switch-anchor scroll-margin-top 令牌化，
+   *  顶栏不遮挡）+ 焦点移至新页根（tabpanel tabIndex=0 可聚焦，routing §1.3）；首挂载
+   *  不动作（prev 空哨兵）。滚动为瞬时——动效纪律约束动画属性，滚动复位属导航原语。 */
+  const prevTaskRef = useRef<AtlasTaskId | null>(null);
+  const switcherAnchorRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const prev = prevTaskRef.current;
+    prevTaskRef.current = route.task;
+    if (prev === null || prev === route.task) return;
+    switcherAnchorRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
+    document.getElementById(`atlas-${route.task}`)?.focus({ preventScroll: true });
+  }, [route.task]);
+
+  /** 数字键 1–4/5 分域 + Esc（§2.4）：S21 式显式输入豁免逐字沿用（INPUT/TEXTAREA/
+   *  SELECT/contenteditable 不派发，AdvancedPanel.tsx:100-107 判定原文）；修饰键组合
+   *  不劫持；task=pro 时任务键整组不绑定（冲突消解见 DIGIT_TASKS 注）；Esc 仅 pro
+   *  消费——返回最近所在任务，组件库弹层容器内不消费（弹层自身 Esc 语义优先）。 */
+  const handleAtlasKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const target = e.target as HTMLElement | null;
+    const typing =
+      target?.tagName === "INPUT" ||
+      target?.tagName === "TEXTAREA" ||
+      target?.tagName === "SELECT" ||
+      target?.isContentEditable === true;
+    if (typing) return;
+    if (e.key === "Escape") {
+      if (route.task !== "pro" || e.defaultPrevented) return;
+      if (target?.closest(".arco-select-popup, .arco-trigger-popup, .arco-modal, .arco-drawer")) return;
+      selectTask(lastTaskRef.current);
+      return;
+    }
+    if (route.task === "pro") return;
+    const digitTask = DIGIT_TASKS[e.key];
+    if (digitTask) {
+      selectTask(digitTask);
+    } else if (e.key === "5") {
+      selectTask("pro");
+    }
+  };
+
+  /** 一次性迁移说明（§8.5 ②）：默认视图换四任务导航的提示；显隐为会话级瞬态
+   *  （不入盘——wf-route §2.3「瞬态 UI 不入盘」同口径），关闭后本会话不再出现。 */
+  const [migrateNoticeVisible, setMigrateNoticeVisible] = useState(true);
+
   /** 动态层令牌注入 + 主题属性联动：取色统一经 resolveThemeTokens（按主题选组 + 涨跌语义色
    * 随「色盲友好」开关替换，全应用唯一主题取色入口）；写入 documentElement（组件库弹层挂在
    * body 下、位于页面骨架之外，注入点必须在 documentElement 才对其全局生效）。键名与
@@ -141,6 +243,12 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
       ["--wf-text-tertiary", tokens.textTertiary],
       ["--wf-rise", tokens.rise],
       ["--wf-fall", tokens.fall],
+      ["--wf-accent-teal", tokens.accentTeal],
+      ["--wf-accent-copper", tokens.accentCopper],
+      ["--wf-accent-copper-graphic", tokens.accentCopperGraphic],
+      ["--wf-accent-slate", tokens.accentSlate],
+      ["--wf-accent-slate-graphic", tokens.accentSlateGraphic],
+      ["--wf-bg-mint", tokens.bgMint],
       ["--wf-bg-sunken", tokens.bgPage],
       ["--wf-bg-inset", tokens.bgInset],
       ["--wf-bg-surface", tokens.bgSurface],
@@ -393,15 +501,115 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
         {displayCode !== "CNY" && !rateInfo.loading && rateInfo.rate === null ? (
           <Alert type="warning" style={{ marginBottom: 16 }} content={t("app.currencyFallback")} />
         ) : null}
-        {/* 双栏工作台（≥1200，工效裁定：终结桌面单列长滚动——左栏「我的数字」
-            常驻（输出卡 + 基础参数，sticky + 视口内自滚动），右栏工作区（高级
-            导航 + 面板）；<1200 维持单列（移动优先形态）。见 global.css §工作台。 */}
-        <div className="wf-workbench">
-          <div className="wf-workbench-primary">
-            <BasicCalculator />
+        {/* WF-03 Atlas 任务区（§2.2）：任务切换条 → 五个任务页容器（四任务 + 专业模式）。
+            切换条恰 5 项（四任务主行 + 专业模式次级）；任务页 hidden 非卸载（§5.5：
+            已运行模拟结果 / 表单输入切换零丢失），页内布局归原型 §1–§4、life/risk
+            本轮单列聚合承载（§2.5，容器查询归 WF-04）。壳层（Header/Footer/Content
+            maxWidth 1112）零改动。 */}
+        <div className="atlas-region" onKeyDown={handleAtlasKeyDown}>
+          <div className="atlas-switch-anchor" ref={switcherAnchorRef}>
+            {migrateNoticeVisible ? (
+              <Alert
+                type="info"
+                closable
+                className="atlas-migrate"
+                content={t("atlas.migrate.notice")}
+                onClose={() => setMigrateNoticeVisible(false)}
+              />
+            ) : null}
+            <TaskSwitcher active={route.task} onSelect={selectTask} />
           </div>
-          <div className="wf-workbench-secondary">
-            <AdvancedPanel />
+          {/* —— 自由刻度（默认落点）：L1/L2 基础公式 + L3 反向估算交叉工具卡（原型 §1.1；
+              双栏语义自 wf-workbench 迁入，容器查询首批 per §2.5） —— */}
+          <div
+            id="atlas-freedom"
+            role="tabpanel"
+            aria-labelledby="atlas-tab-freedom"
+            tabIndex={0}
+            hidden={route.task !== "freedom"}
+            className="atlas-page atlas-freedom"
+          >
+            <div className="atlas-freedom-layout">
+              <h2 className="atlas-page-title">{t("atlas.nav.freedom")}</h2>
+              {visitedTasks.has("freedom") ? (
+                <>
+                  <div className="wf-workbench-primary">
+                    <BasicCalculator />
+                  </div>
+                  <div className="wf-workbench-secondary">
+                    <section className="atlas-tool-card" aria-label={t("advanced.reverseTitle")}>
+                      <ReversePanel />
+                    </section>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+          {/* —— 人生轨迹：五组单列聚合承载（组件壳 LifeTaskPage，§1 表 2–5/7 行） —— */}
+          <div
+            id="atlas-life"
+            role="tabpanel"
+            aria-labelledby="atlas-tab-life"
+            tabIndex={0}
+            hidden={route.task !== "life"}
+            className="atlas-page atlas-life"
+          >
+            <h2 className="atlas-page-title">{t("atlas.nav.life")}</h2>
+            {visitedTasks.has("life") ? <LifeTaskPage /> : null}
+          </div>
+          {/* —— 风险实验室：主模拟 + 情景库单列聚合承载（§1 表 6/8 行，容器查询归 WF-04） —— */}
+          <div
+            id="atlas-risk"
+            role="tabpanel"
+            aria-labelledby="atlas-tab-risk"
+            tabIndex={0}
+            hidden={route.task !== "risk"}
+            className="atlas-page atlas-risk"
+          >
+            <h2 className="atlas-page-title">{t("atlas.nav.risk")}</h2>
+            {visitedTasks.has("risk") ? (
+              <>
+                <section className="atlas-tool-card" aria-label={t("advanced.mcTitle")}>
+                  <MonteCarloPanel />
+                </section>
+                <section className="atlas-tool-card" aria-label={t("advanced.scenarioTitle")}>
+                  <ScenarioPanel />
+                </section>
+              </>
+            ) : null}
+          </div>
+          {/* —— 原理档案：纯阅读页（InsightsPanel 整壳迁挂，insights.ts 数据源零改动） —— */}
+          <div
+            id="atlas-principles"
+            role="tabpanel"
+            aria-labelledby="atlas-tab-principles"
+            tabIndex={0}
+            hidden={route.task !== "principles"}
+            className="atlas-page atlas-principles"
+          >
+            <h2 className="atlas-page-title">{t("atlas.nav.principles")}</h2>
+            {visitedTasks.has("principles") ? (
+              <section className="atlas-principles-body">
+                <InsightsPanel />
+              </section>
+            ) : null}
+          </div>
+          {/* —— 专业模式：原三组九面板整壳（AdvancedPanel 本体零改，仅接受受控初始
+              面板供 `?task=pro&panel=<key>` 落位，§4.1/§4.3） —— */}
+          <div
+            id="atlas-pro"
+            role="tabpanel"
+            aria-labelledby="atlas-tab-pro"
+            tabIndex={0}
+            hidden={route.task !== "pro"}
+            className="atlas-page atlas-pro"
+          >
+            <div className="atlas-pro-topbar">
+              <Button size="small" onClick={() => selectTask(lastTaskRef.current)}>
+                {t("atlas.pro.backLabel")}
+              </Button>
+            </div>
+            {visitedTasks.has("pro") ? <AdvancedPanel initialPanelKey={route.panel} /> : null}
           </div>
         </div>
       </Content>

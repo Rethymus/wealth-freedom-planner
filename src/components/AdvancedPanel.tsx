@@ -80,11 +80,28 @@ const INITIAL_ACTIVE: Record<string, string> = Object.fromEntries(
   GROUPS.map((g) => [g.id, g.panels[0].key]),
 );
 
-export default function AdvancedPanel() {
+interface AdvancedPanelProps {
+  /** 深链 `?task=pro&panel=<key>` 落位（wf03-spec §4.1）：仅初始受控——key 命中
+   *  GROUPS 时以该组/该面板为初始选中，越界静默落默认（routing §3.2 分级）。
+   *  GROUPS 表与键盘逻辑零语义改动（§4.2 保全清单）。 */
+  initialPanelKey?: string | null;
+}
+
+/** 初始 key → 组/面板定位；越界返回 null（落默认首组首面板） */
+function resolveInitial(panelKey?: string | null): { groupId: string; panelKey: string } | null {
+  if (!panelKey) return null;
+  const group = GROUPS.find((g) => g.panels.some((p) => p.key === panelKey));
+  return group ? { groupId: group.id, panelKey } : null;
+}
+
+export default function AdvancedPanel({ initialPanelKey }: AdvancedPanelProps = {}) {
   const { t } = useTranslation();
-  const [groupId, setGroupId] = useState<string>(GROUPS[0].id);
+  const initial = resolveInitial(initialPanelKey);
+  const [groupId, setGroupId] = useState<string>(initial ? initial.groupId : GROUPS[0].id);
   /** 每组记忆最后激活标签：activeByGroup[id] = panelKey */
-  const [activeByGroup, setActiveByGroup] = useState<Record<string, string>>(INITIAL_ACTIVE);
+  const [activeByGroup, setActiveByGroup] = useState<Record<string, string>>(() =>
+    initial ? { ...INITIAL_ACTIVE, [initial.groupId]: initial.panelKey } : INITIAL_ACTIVE,
+  );
 
   const group = GROUPS.find((g) => g.id === groupId) ?? GROUPS[0];
 

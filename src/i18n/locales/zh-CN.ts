@@ -139,6 +139,29 @@ const zhCN = {
     insightsTitle: "公式原理",
     insightsDesc: "480 从哪里来：推导、假设与出处",
   },
+  atlas: {
+    // WF-03 四任务导航（docs/wf03-spec.md §6；13 键 ×3 语，键结构三语同构；
+    // nav.* 兼作切换条 role=tab 可见名与页头标题，desc 为副行披露）
+    nav: {
+      label: "任务导航",
+      freedom: "自由刻度",
+      freedomDesc: "我需要多少钱",
+      life: "人生轨迹",
+      lifeDesc: "我何时有机会退休",
+      risk: "风险实验室",
+      riskDesc: "我的计划承受得住变化吗",
+      principles: "原理档案",
+      principlesDesc: "为什么这样计算",
+    },
+    pro: {
+      label: "专业模式",
+      desc: "原九面板工具直达入口",
+      backLabel: "返回任务导航",
+    },
+    migrate: {
+      notice: "默认视图已换为四任务导航，原九面板收入专业模式",
+    },
+  },
   insights: {
     formulaTitle: "公式推导",
     formulaShort: "资产 = 月开销 × 12 ÷ 实际回报率（默认参数下乘数为 480）；推导与出处见提示。",
