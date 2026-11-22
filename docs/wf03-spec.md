@@ -136,7 +136,7 @@
 - [ ] `src/components/AdvancedPanel.tsx`：**整体保留为专业模式（pro）页本体**——三组九面板、组分段、横滚标签、lazyload＋hidden 非卸载、S20/S21、组记忆全部原样（:137-175）；仅外层接受受控初始组/面板（供 `?task=pro&panel=<key>` 落位，非受控改受控最小面）；本文件 GROUPS 表（:48-76）与键盘逻辑（:99-133）零语义改动。
 - [ ] 新建 `src/components/TaskSwitcher.tsx`（自研分段切换条，ADR D-B1「自研抽象」结论域）：5 项 role=tab 语义＋roving tabindex＋数字键分域＋发丝线分隔次级样式；样式挂既有令牌（`.wf-adv-seg` 语义先例 global.css:432），禁直写色值。
 - [ ] `src/styles/global.css`：①atlas-switch 容器定义＋切换条样式＋≤767.9 等值回退 MQ；②atlas-freedom/principles 容器（首批/第二批 per §2.5）；③任务切换淡入 240ms 透明度-only 规则（走 `--wf-dur-base`/`--wf-ease-standard` 既有令牌，禁裸字面量）；④§3 准入键的 global.css 双块行。**不动**：材质区、reduced-motion 兜底块、既有 S 项规则区（§8 锚点行号随新增行漂移属正常，语义锚点以类名为准）。
-- [ ] `src/i18n/locales/zh-CN.ts`：新增 atlas 块 12 键（§6）；**不删键**（advanced.groupPlan/groupHousing/groupAnalysis 在 pro 页仍被引用，AdvancedPanel.tsx:51,59,67）；`src/i18n/locales/en.ts`、`src/i18n/locales/zh-Hant.ts` 同步（§6 口径）。
+- [ ] `src/i18n/locales/zh-CN.ts`：新增 atlas 块 12 键（§6；实施终态 12+1 键——`atlas.nav.label` 增补，见偏差登记 #1）；**不删键**（advanced.groupPlan/groupHousing/groupAnalysis 在 pro 页仍被引用，AdvancedPanel.tsx:51,59,67）；`src/i18n/locales/en.ts`、`src/i18n/locales/zh-Hant.ts` 同步（§6 口径）。
 
 ### 4.2 本体不动白名单（零触碰声明，验收时 grep 反证）
 
@@ -165,7 +165,7 @@
 
 ---
 
-## §6 i18n 键清单（12 键 × 3 语 = 36 条）
+## §6 i18n 键清单（12+1 键 × 3 语 = 39 条；实施增补 `atlas.nav.label`——TaskSwitcher tablist aria-label 必需可访问名，见文末偏差登记 #1）
 
 基准：advanced 块现 22 键（zh-CN.ts:117-141 本会话直读）；键结构三语同构为既有契约。**零新增复用**：四任务页内面板标题/描述沿用既有 advanced.*Title/Desc 18 键（不搬块不改名）；损坏/正名提示沿用 share.restoreIgnored / share.strategyLegacyNotice（zh-CN.ts:679-680）；恢复成功沿用 share.restored；深链接定位不新增提示（routing §3.2 分级）。**不删键**：advanced 三组 label 在 pro 页仍被引用。
 
@@ -369,3 +369,10 @@ brief §一硬约束：**方案 B 导航（分段＋组内标签）由 Atlas IA 
 | 2 | §2.5 principles 容器「第二批」 | 已随本轮落地 | 提前；回退等值 `@supports` 同批 |
 | 3 | §7 预算（勘误后余量 25,854 B） | 实测净增 13,176 B / 余量 12,678 B | 预算内，未触降档 |
 | 4 | §4.1 AdvancedPanel「受控初始组/面板」 | 仅 `initialPanelKey` 单 prop 受控初始，运行时语义零改 | 最小面兑现 |
+
+### 六、WF-03.1 残留验收记录（IA 验收第 1 轮 4 条 low，主会话收口；全部 verified）
+
+1. **V1 §6 键数同步**——正文 12 键表述与实现 13 键不一致；偏差登记 #1 已如实记录（atlas.nav.label 为 tablist aria-label 必需键，三文件键集 node 抽取全等）。本轮同步 §6 标题与 §4.1 行（见上两处编辑），正文与偏差表闭合。
+2. **V2 禁词完整清单口径**——13 词面以门禁调用原件为准（scripts/check-naming.mjs + FORBIDDEN argv），九道门禁阶段已实跑全绿；验收员代表集复扫为补充取证（核心词面零命中；「弹性」3 命中系延迟退休政策原生术语，非禁词语义）。词面不回写文档的纪律不变。
+3. **V3 键盘物理注入**——键盘语义经 DOM keydown 派发全数验证通过（roving 移焦不激活/Enter-Space 激活/数字键分域/输入豁免/pro 1-2-3/Esc）；OS 级真实键盘注入为 IAB 环境限制（P4 起已知），button 原生 Enter 为浏览器默认行为——登记至 WF-05 响应式与无障碍验证轮的键盘矩阵。
+4. **V4 1024 边界截图**——≥1024 双栏已由 `@container freedom (min-width:1024px)` 规则 + 1200 实测截图证明在位；1024 边界值截图移交 WF-05（其矩阵按 brief §四 含 1024–1439 档）。
