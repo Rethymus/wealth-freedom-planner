@@ -69,7 +69,8 @@ export default function LifeTrajectoryCard() {
 
   return (
     <div>
-      <Text type="secondary">{t("life.caliberNote")}</Text>
+      {/* V-F1（P8.1）：卡头重复口径注已删——caliberNote 唯一承载为卡尾 12px caption
+          触发器（tooltip 挂全文 caliberTooltip），宪法 §3.1 口径注档位 + §1.3 反冗长 */}
 
       {/* 运行区：无按钮；防抖计算中在结果区头部显示小型旋转器（PensionPanel 同款） */}
       {loading ? <Spin size={14} /> : null}
@@ -165,7 +166,7 @@ export default function LifeTrajectoryCard() {
       ) : null}
 
       {/* 口径注全文 tooltip（§4.3）：双参数族拆分 + 桥接纯生活费 / r = i 边界 +
-          乘数族/行族分水岭 + 存续口径（资产 ≤ 0）——正文 caliberNote 已在卡头 */}
+          乘数族/行族分水岭 + 存续口径（资产 ≤ 0）——caliberNote 唯一承载在此（P8.1 V-F1） */}
       <Tooltip content={<div style={{ maxWidth: 420 }}>{t("life.caliberTooltip")}</div>}>
         <Text type="secondary" className="wf-panel-note" style={{ display: "inline-block", marginTop: 8 }}>
           {t("life.caliberNote")}

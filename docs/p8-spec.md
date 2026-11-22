@@ -349,7 +349,7 @@ export function deriveTimelineSummary(rows: YearRow[], args: TimelineArgs): {
 | `src/services/finance.ts` | 编排区 :420-534（runSequenceRolling / selectFateWindows / runSequenceReorder 先例） | 追加 LifecycleInput / YearRow / LifecycleOutput / LifecycleEventTag / YearSamples / SampleProvider 类型 ＋ `assembleTimeline` / `deriveTimelineSummary` 纯函数 ＋ `calcLifecycle` 编排（calcPension + calcAccumulation 并行 → 装配 → 汇总；§1.4 错误聚合） |
 | `src/components/LifeTrajectoryCard.tsx` | （新文件） | 读数卡组件：`useFinanceCall(() => calcLifecycle(inputs), [baselineInputs, accumulationInputs, pensionInputs, pensionMonthsSynced, loanInputs, rentalInputs])`；monthsDivisor 经 `effectiveMonthsDivisor(pensionInputs.retireAge, pensionInputs.monthsDivisor, pensionMonthsSynced)` 入链（store :314 同源函数调用，禁两处内联重推） |
 | `src/components/TaskPages.tsx` | LIFE_GROUPS 5 组（:30-36：accumulation/pension/loan/rental/tax） | 组数 5 → **6**：首组插入 `{ id: "trajectory", labelKey: "life.trajectoryTitle", node: <LifeTrajectoryCard /> }`（分段控件 Radio.Group 语义、hidden 非卸载、首展挂载语义全部不动） |
-| `src/i18n/locales/zh-CN.ts` / `zh-Hant.ts` / `en.ts` | 无 `life` 组 | 新增 `life` 组 14 键 ×3 语（§4.3） |
+| `src/i18n/locales/zh-CN.ts` / `zh-Hant.ts` / `en.ts` | 无 `life` 组 | 新增 `life` 组 14+2 键 ×3 语（§4.3 + 偏差登记 P8.1#2：`fiAtStart` 哨兵展示键与 `caliberTooltip` 全文拆分键为净增两项，`sameSeedRef` 并合抵消一项） |
 | `scripts/check-lifecycle.mjs` | （新文件） | §3 八条算例断言 + 计时（§3.8） |
 | `package.json` | scripts 8 条（:7-16） | + `"check:lifecycle": "node scripts/check-lifecycle.mjs"` |
 | **不动清单** | — | `src/wasm/src/*.rs`（全部）、`src/wasm/bridge.ts`、`src/store/useCalculatorStore.ts`、`src/data/defaults.ts`、`src/data/pensionParams.ts`、share.ts（v4 键清单零变化——引擎输入全部来自既有切片、随 v4 载荷自动携带）、scenarios.ts、既有 9 面板本体 |
@@ -511,3 +511,9 @@ export function deriveTimelineSummary(rows: YearRow[], args: TimelineArgs): {
 3. **尺寸余量 2,755 B（紧张）**：见 D-3——回收令与 §6.3 处置顺序在位，未触发（门禁绿）。
 4. **§0.2 排除项按裁定移交 WF-04**：时间透镜可视化、事件化施工（homePurchase / childBirth / healthPhase）、事件编辑器、life 容器查询；`loan`/`rental` 维持仅类型承载；随机模式性能维持不设断言。
 5. **实施会话双验收循环的轮次/finding 计数**：属工作流运行时状态、仓库无留痕，不虚报（p7-spec D-4 同口径）。
+
+### G. P8.1 残留收口（双验收第 1 轮 4 条 low，主会话收口；全部 verified）
+
+1. **V-F1 口径注重复 + 字阶双档**——卡头 `Text secondary`（14px body 档）与卡尾 `.wf-panel-note`（12px caption 档）渲染同一句 `caliberNote`，违宪法 §3.1（口径注归 caption 档）与 §1.3（反冗长）。修法：删卡头重复份，卡尾 12px 触发器（tooltip 挂全文 `caliberTooltip`）为唯一承载。改动：LifeTrajectoryCard.tsx 卡头行删除（其余字阶/间距/表面验收员实测全部合规）。
+2. **M-F1/V-F2 life 键 16 vs spec 14**——登记偏差：`fiAtStart`（§4.1 行 1 哨兵「期初已达标」的必需展示文案，§4.3 键表漏列）与 `caliberTooltip`（口径全文拆分为 tooltip，反冗长拆分）为净增两项，`sameSeedRef` 并合（survivalFi/survivalSustained 二合一，§4.3 注记允许）抵消一项；三语键集 check:share 断言通过；尺寸实测 1,951KB/2,000（余量 ~49KB），≈+120B 三语在 §6 预算内。**§4.3 表行已同步 14+2**。
+3. **M-F2 输入粒度 .60 差异（判定非缺陷）**——`LIMITS.amount precision:0`（P4 既有整数元口径）使算例① 输入 1,706,225.60 blur 圆整为 1,706,226 落 store；以 store 实际值重跑引擎得 A_60=10,282,870.71，与读数卡逐分一致——**断言⑦（读数卡=引擎输出）不受影响**。差异全部源自 spec 算例① 锚点取 README 两段相加（含 .60 分量）在整数元 UI 不可精确键入；输入粒度调整属产品变更非本轮范围，登记口径不改行为。
