@@ -380,7 +380,8 @@ export function deriveTimelineSummary(rows: YearRow[], args: TimelineArgs): {
 ### 4.4 useFinanceCall 调用点登记（起草会话 grep 实测；行号相对 p7-spec §5.5 已漂移，以本表为准）
 
 - **现状**：hook 调用 8 处——BasicCalculator.tsx:569、PensionPanel.tsx:62、AccumulationPanel.tsx:88 与 :132、RentalPanel.tsx:255、TaxPanel.tsx:107、LoanPanel.tsx:40、ReversePanel.tsx:55；直接 calc* 调用 11 处——BasicCalculator.tsx:704（敏感性逐档）、AccumulationPanel.tsx:134 / :155 / :168、MonteCarloPanel.tsx:182 与 :241、ScenarioPanel.tsx:75-79 五处。
-- **P8 增量 = +1**：LifeTrajectoryCard.tsx 的 `useFinanceCall(() => calcLifecycle(inputs), [六切片], { debounceMs: DEBOUNCE_MS })`——**唯一新增调用点**（有意变更，理由：新消费面）；既有 19 处零变化。防抖口径与既有面板一致（300 ms 默认）。
+- **P8 增量 = +1**：LifeTrajectoryCard.tsx 的 `useFinanceCall(() => calcLifecycle(inputs), [六切片], { debounceMs: DEBOUNCE_MS })`——**P8 +1 hook（口径精确化：原「唯一新增」自 WF-04 起更新为「P8 +1 hook / WF-04 +2 直接调用」，见下行登记）**（有意变更，理由：新消费面）；既有 19 处零变化。防抖口径与既有面板一致（300 ms 默认）。
+- **WF-04 增量 = +2 直接 `calcLifecycle`（非 hook，wf04-spec §4 条 5 登记回写）**：ScenarioPanel.tsx 叠影重算 300ms 防抖 effect 内 `Promise.all` 并行两调用（基准六切片 + decodeShareState 情景切片映射）——直接 calcLifecycle 消费 1 → 3 处、直接 calc* 调用 11 → 13 处；hook 调用维持 **9 处零变化**（grep 实证见 wf04-spec §6 条 3）。
 
 ---
 
