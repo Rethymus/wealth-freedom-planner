@@ -1932,3 +1932,23 @@ textarea,
   background: none;
   border-top: 2px dashed var(--wf-primary);
 }
+
+/* WF-05 触控命中面扩展（WCAG 2.2 AA 2.5.8 ≥24px 最低线）：Arco small 开关
+   （28×16）与 Alert 关闭按钮（12×14）本征命中面不足，伪元素不可见扩展至
+   ≥24×24；视觉零变化（伪元素无背景）。375 档实测记录见 docs/wf05-report.md */
+.arco-switch-small {
+  position: relative;
+}
+.arco-switch-small::after {
+  content: "";
+  position: absolute;
+  inset: -6px -8px;
+}
+.arco-alert-close-btn {
+  position: relative;
+}
+.arco-alert-close-btn::after {
+  content: "";
+  position: absolute;
+  inset: -7px -8px;
+}

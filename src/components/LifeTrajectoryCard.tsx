@@ -18,7 +18,7 @@ import { formatNumber } from "../services/format";
 import { effectiveMonthsDivisor } from "../data/pensionParams";
 import { useCalculatorStore } from "../store/useCalculatorStore";
 import LifeLensTrack from "./lens/LifeLensTrack";
-import { useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney } from "./hooks";
+import { useFinanceCall, useIsNarrowViewport, useMoney } from "./hooks";
 
 const { Text } = Typography;
 
@@ -35,7 +35,6 @@ export default function LifeTrajectoryCard() {
   const { money } = useMoney(displayCode);
   /** 窄视口 / workbench 下 Descriptions 布局与既有面板同构（PensionPanel 同参数） */
   const isNarrow = useIsNarrowViewport();
-  const isWorkbench = useIsWorkbenchViewport();
   /** 计发月数联动：与 PensionPanel / 分享链接同一口径函数（禁两处内联重推） */
   const effectiveMonths = effectiveMonthsDivisor(pension.monthsDivisor, pension.retireAge, monthsSynced);
 
@@ -86,8 +85,8 @@ export default function LifeTrajectoryCard() {
           size="small"
           style={{ marginTop: 8, opacity: loading ? 0.45 : 1 }}
           layout={isNarrow ? "vertical" : "horizontal"}
-          column={isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }}
-          tableLayout={isWorkbench ? "fixed" : "auto"}
+          column={1}
+          tableLayout={isNarrow ? "auto" : "fixed"}
           data={[
             {
               label: t("life.fiFirstYear"),
