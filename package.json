@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && node scripts/optimize-wasm.mjs && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "check:size": "node scripts/check-size.mjs",
     "check:currency": "node scripts/check-currency.mjs",
