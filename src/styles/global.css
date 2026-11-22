@@ -1759,3 +1759,176 @@ textarea,
 
 /* S26 分享按钮磁吸微行程：已按 §8 降档顺序整体裁撤（docs/p6-spec.md §8 降档顺序第 1 项；
    dist 原始字节门禁实测：P6 净增 9.2KB > 实余 7.3KB，门禁 2,000,000 不放宽） */
+
+/* ============================== WF-04 三巧思（docs/wf04-spec.md §1） ============================== */
+
+/* T1 时间透镜（§1-T1）：自研刻度轨 + 常驻读数面板。零动效设计——零过渡零动画，
+   reduced-motion 两模式行为一致、零降级分支；轨子元素 pointer-events 全关，指针事件
+   恒落于轨本体（offsetX 轨坐标系，零测量设计）；全部视觉值引用既有令牌，零新令牌键。
+   D2① 已裁 lensOpening/lensContribution 两字段（升级裁决强制回收义务） */
+.wf-lens-cap {
+  font-size: var(--wf-text-caption);
+  color: var(--wf-text-tertiary);
+}
+.wf-lens-track {
+  position: relative;
+  min-height: 44px; /* 命中高（research §1.1） */
+  padding: 0 var(--wf-space-4); /* 轨端内距 = 定位坐标系 inset */
+  cursor: pointer;
+  touch-action: pan-y; /* 纵向滑动归还页面滚动，横向拖动归透镜 */
+}
+.wf-lens-track > * {
+  pointer-events: none;
+}
+.wf-lens-track:focus-visible {
+  outline: none;
+}
+.wf-lens-track:focus-visible .wf-lens-thumb {
+  box-shadow: var(--wf-focus-ring); /* 双环现值既有焦点环，零新焦点样式 */
+}
+.wf-lens-line {
+  position: absolute;
+  left: var(--wf-space-4);
+  right: var(--wf-space-4);
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: var(--wf-hairline-card);
+}
+.wf-lens-thumb {
+  position: absolute;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--wf-radius-full);
+  background: var(--wf-primary);
+  border: 2px solid var(--wf-bg-surface);
+  transform: translate(-50%, -50%);
+}
+.wf-lens-dot,
+.wf-lens-dot-o,
+.wf-lens-bar {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.wf-lens-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--wf-radius-full);
+  background: var(--wf-primary);
+}
+.wf-lens-dot-o {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--wf-radius-full);
+  border: 2px solid var(--wf-primary);
+  background: var(--wf-bg-surface);
+}
+.wf-lens-bar {
+  width: 2px;
+  height: 20px;
+  background: var(--wf-fall);
+}
+/* 拖动反馈自始静态高亮（research §3.1）：选中年恰为里程碑时该点描边强调，静态无过渡 */
+.wf-lens-on {
+  box-shadow: 0 0 0 2px var(--wf-primary);
+}
+.wf-lens-ticks {
+  position: relative;
+  height: 16px;
+}
+.wf-lens-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-variant-numeric: tabular-nums;
+}
+.wf-lens-panel {
+  margin-top: var(--wf-space-4);
+  padding: var(--wf-space-3);
+  background: var(--wf-bg-surface);
+  border: 1px solid var(--wf-hairline-card);
+  border-radius: var(--wf-radius-m);
+}
+.wf-lens-reading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--wf-space-2);
+  flex-wrap: wrap;
+}
+.wf-lens-age {
+  font-size: var(--wf-text-title);
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+}
+.wf-lens-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--wf-space-2) var(--wf-space-4);
+  font-variant-numeric: tabular-nums; /* S3 度量字排（既有规则通道） */
+}
+@media (min-width: 768px) {
+  .wf-lens-fields {
+    grid-template-columns: 1fr 1fr; /* 2 列 ≥768 / 1 列 <768（research §1.4） */
+  }
+}
+.wf-lens-status {
+  display: block;
+  margin-top: var(--wf-space-2);
+}
+
+/* T2 公式解构（§1-T2）：token 静态交互行 + 字段静态描边。解构强调无动画（纯静态描边 +
+   label 加粗，置位/清除成对）——reduced-motion 零降级分支；描边复用焦点环现值
+   --wf-focus-ring（零新令牌键）；token 按压反馈挂既有 .wf-pressable（非新增动效） */
+.wf-anatomy {
+  margin-top: var(--wf-space-4);
+  font-size: var(--wf-text-caption);
+}
+.wf-anatomy-formula {
+  margin-left: var(--wf-space-2);
+}
+.wf-anatomy-token {
+  font: inherit;
+  color: var(--wf-text);
+  background: none;
+  border: 1px solid var(--wf-hairline-card);
+  border-radius: var(--wf-radius-s);
+  padding: 1px 6px;
+  margin: 0 1px;
+  cursor: pointer;
+}
+.wf-anatomy-token[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.5;
+}
+.wf-anatomy-on,
+.wf-anatomy-target {
+  box-shadow: var(--wf-focus-ring);
+  border-radius: var(--wf-radius-s);
+}
+.wf-anatomy-live {
+  margin-top: var(--wf-space-1);
+}
+
+/* T3 情景叠影（§1-T3）：图例。零新令牌键（线色经 resolveThemeTokens 解析值入 SVG 属性）；
+   D2③④ 降档：差异表与 Area 区间已裁（§6-4 首验 Area 未在 vendor chunk，+10,472B）——
+   S25 兜底由气泡 + ▲▼图例（含 depletedAt 复用标注）承担 */
+.wf-ov-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wf-space-2) var(--wf-space-4);
+  margin-top: var(--wf-space-2);
+}
+.wf-ov-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.wf-ov-dash {
+  height: 0;
+  background: none;
+  border-top: 2px dashed var(--wf-primary);
+}

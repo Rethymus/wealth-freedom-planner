@@ -100,6 +100,12 @@ const en = {
     criticalExactLabel: "Exact-basis reference line",
     fisherNote:
       "The real return rate uses the exact Fisher relation (1+r_nom)/(1+π)−1; the approximation r≈r_nom−π is for teaching comparison only, and the gap between the two is ≈ π × the real return rate.",
+    formulaRow: "480 rule formula breakdown",
+  },
+  anatomy: {
+    varNote: "{{sym}} = {{name}}: contributes {{term}} to the formula",
+    escHint: "Click or press Enter to lock a variable, Esc to release",
+    lockedAria: "Now breaking down: {{name}}",
   },
   presets: {
     custom: "Custom",
@@ -685,6 +691,11 @@ const en = {
     exportNote: "Computed locally · Not investment advice",
     exportDone: "Comparison image exported",
     exportFailed: "Failed to export the comparison image",
+    overlaySwitch: "Scenario overlay",
+    overlayLegendBase: "Baseline path",
+    overlayLegendScenario: "Scenario path",
+    overlayChartAria: "Baseline vs scenario “{{name}}” asset path overlay (x: age, y: closing assets)",
+    overlayEmpty: "Overlay unavailable — save a scenario above first",
   },
   tax: {
     countryLabel: "Country / region",
@@ -801,6 +812,11 @@ const en = {
       "Full basis: timeline living expense, saving base and growth rates take the work-years panel mean parameters; the multiplier and pension amounts take the basic card and pension panel bases respectively (identical by default, diverging once either panel is edited). Bridge funding is pure living expense (480 multiplier); one-off reserves for children, health and major outlays count once and are not split into rows. When real return ≤ 0 the 480-multiplier family takes the contract error branch while the yearly timeline stays well-defined at r = i — withdrawals degrade to a 40-year linear real drawdown (display-layer basis) and accumulation to constant-real saving. Survival is judged on assets ≤ 0 — first touch ≠ sustained, sustained ≠ never fell below target.",
     timelineLabel: "Event marks",
     pensionStartMark: "Pension starts",
+    lensLabel: "Time lens (drag or use arrow keys to inspect year by year)",
+    lensValueText: "Year {{year}}, age {{age}}, closing {{value}}",
+    lensWithdrawal: "Annual withdrawal",
+    lensClosing: "Closing assets",
+    lensAfterDepleted: "Depleted — all later years stay at 0",
   },
   a11y: {
     skipToContent: "Skip to main content",

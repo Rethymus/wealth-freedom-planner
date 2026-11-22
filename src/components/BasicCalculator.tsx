@@ -28,6 +28,8 @@ import type { PresetBreakdown, PresetId } from "../data/presets";
 import type { ThemeTokens } from "../data/types";
 import { useCalculatorStore } from "../store/useCalculatorStore";
 import { AmountField, FieldRow, IntField, PercentField } from "./fields";
+import FormulaAnatomyRow from "./FormulaAnatomyRow";
+import type { AnatomyVar } from "./FormulaAnatomyRow";
 import { EmptyRulerArt } from "./EmptyRuler";
 import { useAnimatedNumber, useFinanceCall, useFlashOnChange, useIsCompactViewport, useIsNarrowViewport, useIsWorkbenchViewport, useMoney, usePrefersReducedMotion } from "./hooks";
 
@@ -607,6 +609,15 @@ export default function BasicCalculator() {
    *  与登记语义一致 */
   const [multFlashOn, setMultFlashOn] = useState(false);
 
+  /** WF-04 T2 公式解构（docs/wf04-spec.md §1-T2）：锁定/预览为纯展示态（组件局部 state，
+   *  零 store 写入、零参数修改——§4 条 8）；hover 300ms 预览态与锁定态分离，
+   *  active = 预览 ?? 锁定（预览临时覆盖、离开回落锁定）；与 S16 共存按 §2-S16
+   *  三条款——公式行落 key={flashEpoch} 重挂域之外（不同 DOM 子树，①落点互斥），
+   *  落定重挂不扰动 token 焦点与锁定态 */
+  const [anatomyLocked, setAnatomyLocked] = useState<AnatomyVar | null>(null);
+  const [anatomyPreview, setAnatomyPreview] = useState<AnatomyVar | null>(null);
+  const anatomyActive = anatomyPreview ?? anatomyLocked;
+
   const data = result?.ok === true ? result.data : null;
   const serviceError = result && !result.ok ? result.error : null;
   // 大数字与语义色经主题解析函数取值（规范 6.2 #9）：组件不感知主题，
@@ -1004,6 +1015,7 @@ export default function BasicCalculator() {
             key={"me-" + resetKey}
             label={t("basic.monthlyExpense")}
             tooltip={t("basic.monthlyExpenseTooltip")}
+            highlighted={anatomyActive === "X"}
             value={baseline.monthlyExpense}
             onChange={(v) => setBaseline({ monthlyExpense: v })}
             prefix={symbol}
@@ -1035,6 +1047,7 @@ export default function BasicCalculator() {
                 key={"cc-" + resetKey}
                 label={t("basic.childCount")}
                 tooltip={t("basic.childCountTooltip")}
+                highlighted={anatomyActive === "N"}
                 value={baseline.childCount}
                 onChange={(v) => setBaseline({ childCount: v })}
                 hint={t("basic.childCountHint")}
@@ -1044,6 +1057,7 @@ export default function BasicCalculator() {
                 key={"kc-" + resetKey}
                 label={t("basic.childCost")}
                 tooltip={t("basic.childCostTooltip")}
+                highlighted={anatomyActive === "K"}
                 value={baseline.costPerChild}
                 onChange={(v) => setBaseline({ costPerChild: v })}
                 prefix={symbol}
@@ -1057,6 +1071,7 @@ export default function BasicCalculator() {
             key={"hr-" + resetKey}
             label={t("basic.healthReserve")}
             tooltip={t("basic.healthReserveTooltip")}
+            highlighted={anatomyActive === "H"}
             value={baseline.healthReserve}
             onChange={(v) => setBaseline({ healthReserve: v })}
             prefix={symbol}
@@ -1067,6 +1082,7 @@ export default function BasicCalculator() {
             key={"mi-" + resetKey}
             label={t("basic.majorInvestment")}
             tooltip={t("basic.majorInvestmentTooltip")}
+            highlighted={anatomyActive === "M"}
             value={baseline.majorInvestment}
             onChange={(v) => setBaseline({ majorInvestment: v })}
             prefix={symbol}
@@ -1131,6 +1147,19 @@ export default function BasicCalculator() {
             </div>
           </CollapseItem>
         </Collapse>
+
+        {/* WF-04 T2 公式解构（docs/wf04-spec.md §1-T2；锚点 = </Collapse> 之后、.wf-share-row
+            之前）：480 法则公式行变量 token → 目标输入字段静态描边 + label 加粗（高亮经
+            fields highlighted prop，置位/清除成对）。S16 共存：本行在 key={flashEpoch}
+            重挂域之外（输入卡尾部 vs 输出卡重挂域）——①落点互斥；S16 主色闪亮落输出卡、
+            解构静态描边落输入区字段——②分域共存；S16 防抖落定驱动、解构用户点击驱动且
+            纯静态——③时机错峰（§2-S16 表） */}
+        <FormulaAnatomyRow
+          locked={anatomyLocked}
+          planChildren={planChildren}
+          onLock={setAnatomyLocked}
+          onPreview={setAnatomyPreview}
+        />
 
         {/* ④ 场景分享：把全部业务输入编码进 URL hash（界面偏好不携带，docs/p1-spec.md §6）。
             切片装配已上移为 store.buildShareState（docs/p2-spec.md §4.3，场景库保存共用同一口径） */}

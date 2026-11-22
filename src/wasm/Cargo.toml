@@ -36,13 +36,23 @@ panic = "abort"
 strip = true
 
 # 跳过 wasm-pack 自带的 wasm-opt 后处理步骤（文档支持的官方配置项）。
-# 原因：wasm-pack 0.13.1 附带的 wasm-opt（2024-02 构建）默认特性集不含
+# 原因：wasm-pack 0.13.1 附带的 wasm-opt（binaryen v117）默认特性集不含
 # bulk-memory / 非陷阱浮点转整（trunc_sat），而当前 rustc 已默认按这些
-# 特性出码，wasm-opt 校验直接报 "all used features should be allowed"
-# 导致整个 wasm-pack 构建失败。关闭后产物为 rustc 全量 LTO + opt-level="z"
-# 的直接输出，实测比旧管线（默认优化 + wasm-opt -O）更小（约 372KB vs
-# 500KB）；浏览器侧 bulk-memory / trunc_sat 特性均已支持多年。
-# 也因此 strip = true 才安全——不再有依赖 target_features 自定义段的
-# 后处理校验步骤。
+# 特性出码，wasm-opt 校验直接报 "error validating input"
+# 导致整个 wasm-pack 构建失败（2026-11-23 WF-04 回收轮再实测复现）。
+# 关闭后产物为 rustc 全量 LTO + opt-level="z" 的直接输出；浏览器侧
+# bulk-memory / trunc_sat 特性均已支持多年。也因此 strip = true 才安全——
+# 不再有依赖 target_features 自定义段的后处理校验步骤。
+# WF-04 尺寸回收（工作流裁决 C 登记，详见 docs/wf04-spec.md §5.3）：元数据路线
+# 保持 false（置 true 实证构建失败），正典回收 = 同一 binaryen 二进制手动后处理，
+# 显式补特性允许标志（行为等价由 cargo test + check:lifecycle 等验证网兜底）：
+#   wasm-opt.exe src/wasm/pkg/finance_core_bg.wasm -o src/wasm/pkg/finance_core_bg.wasm \
+#     -O --enable-bulk-memory --enable-nontrapping-float-to-int
+# （387,792 → 356,983 B，-30,809 B；glue JS / d.ts 不受影响；二进制路径
+#   %LOCALAPPDATA%/.wasm-pack/wasm-opt-cdcb9e877b68d02e/bin/）
+# 上述命令已固化为 npm run build 链内 vite build 之前的固定步骤
+# （scripts/optimize-wasm.mjs，pkg 不入库、wasm-pack 重建即丢手动后处理，
+# 2026-11-23 门禁修复轮实证复发后接线）；找不到二进制时告警放行，
+# 尺寸门禁仍按硬线执法。
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false

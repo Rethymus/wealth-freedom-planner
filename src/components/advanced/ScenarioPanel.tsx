@@ -8,7 +8,7 @@
  *   任一计算失败该列整体显示「—」并在列头以跌色标注。
  * 文案经 react-i18next 三语化。
  */
-import { Button, Empty, Input, Message, Popconfirm, Table, Tag, Typography } from "@arco-design/web-react";
+import { Button, Empty, Input, Message, Popconfirm, Select, Switch, Table, Tag, Typography } from "@arco-design/web-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { decodeShareState, encodeShareState } from "../../services/share";
@@ -21,19 +21,35 @@ import {
   SCENARIO_NAME_MAX_CHARS,
 } from "../../services/scenarios";
 import type { ScenarioEntry } from "../../services/scenarios";
-import { calcBaseline, calcPension, calcRental, calcReverse, calcTax } from "../../services/finance";
+import { calcBaseline, calcLifecycle, calcPension, calcRental, calcReverse, calcTax } from "../../services/finance";
+import type { YearRow } from "../../services/finance";
 import { formatNumber } from "../../services/format";
+import { cnyToDisplay } from "../../services/currency";
 import {
   buildExportFilename,
   buildScenarioTableBitmap,
   downloadCanvasPng,
 } from "../../services/exportScenarios";
 import { resolveThemeTokens } from "../../data/defaults";
+import { effectiveMonthsDivisor } from "../../data/pensionParams";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { EmptyRulerArt } from "../EmptyRuler";
-import { useMoney } from "../hooks";
+import ScenarioOverlayChart from "./ScenarioOverlayChart";
+import { useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text } = Typography;
+
+/** WF-04 T3 叠影重算独立防抖（300ms，DEBOUNCE_MS 先例 BasicCalculator.tsx:38 同值；
+ *  不与读数卡 useFinanceCall 共用实例——wf04-spec §3 红线 2） */
+const OVERLAY_DEBOUNCE_MS = 300;
+
+/** 叠影数据态（组件局部、只读——情景切片不写 store，§4 条 7/8）：null = 未就绪/解码失败 */
+interface OverlayData {
+  base: YearRow[];
+  scen: YearRow[];
+  name: string;
+  depletedYear: number;
+}
 
 /** 对比列：每条合法情景一列；failed = 任一确定性计算失败（整列「—」） */
 interface CompareCol {
@@ -102,13 +118,28 @@ export default function ScenarioPanel() {
   const colorBlindFriendly = useCalculatorStore((s) => s.colorBlindFriendly);
   const theme = useCalculatorStore((s) => s.theme);
   /** ⑤ 金额展示绑定（p4-spec §3.4）：8 项指标中 6 项金额经展示币种换算；rate null = 符号-only */
-  const { money, moneyFixed } = useMoney(displayCode);
+  const { money, moneyFixed, symbol, display } = useMoney(displayCode);
   const themeTokens = resolveThemeTokens(theme, colorBlindFriendly);
   const applyShareState = useCalculatorStore((s) => s.applyShareState);
+  /** WF-04 T3 基准路径入参：六切片原子选择（与 LifeTrajectoryCard 同构入参；原子选择
+   *  保证仅相关切片变更才重跑叠影防抖 effect，§2.3-①） */
+  const baseline = useCalculatorStore((s) => s.baselineInputs);
+  const accumulation = useCalculatorStore((s) => s.accumulationInputs);
+  const pension = useCalculatorStore((s) => s.pensionInputs);
+  const monthsSynced = useCalculatorStore((s) => s.pensionMonthsSynced);
+  const loan = useCalculatorStore((s) => s.loanInputs);
+  const rental = useCalculatorStore((s) => s.rentalInputs);
+  const reducedMotion = usePrefersReducedMotion();
+  /** CNY → 展示币种数值（叠影图数据同源一次换算；rate 不可用恒等） */
+  const convert = (v: number): number => (display.rate !== null ? cnyToDisplay(v, display.rate) : v);
 
   const [name, setName] = useState("");
   const [entries, setEntries] = useState<ScenarioEntry[]>([]);
   const [cols, setCols] = useState<CompareCol[]>([]);
+  /** WF-04 T3 叠影：开关 / 选中情景 / 数据（§1-T3；开关未置位零调用零基线开销） */
+  const [overlayOn, setOverlayOn] = useState(false);
+  const [overlayId, setOverlayId] = useState<string | null>(null);
+  const [overlayData, setOverlayData] = useState<OverlayData | null>(null);
   // P6 S23 已按 §8 降档顺序裁撤（docs/p6-spec.md §8；dist 原始字节门禁实测回写）
 
   const reload = () => setEntries(listScenarios());
@@ -129,6 +160,72 @@ export default function ScenarioPanel() {
       stale = true;
     };
   }, [entries, money, moneyFixed, t]);
+
+  /** WF-04 T3 叠影重算（wf04-spec §1-T3 / research §2.3 八裁定）：触发源仅三种——开关
+   *  置位 / 情景选中变更 / 基准六切片落定帧；独立 300ms 防抖 + stale 布尔闭包丢弃过期
+   *  结果 + clearTimeout cleanup（敏感性 effect 同款形态，§3 红线 2/3）；置位后每次
+   *  重算恰 2 个 calcLifecycle 直接调用、Promise.all 并行（§4 条 5 登记值）；基准入参
+   *  与 LifeTrajectoryCard 同构（effectiveMonthsDivisor 联动），情景入参 = 解码切片映射
+   *  （ShareState.pension.monthsDivisor 已为 buildShareState 联动值，零二次推导）；解码
+   *  失败不进候选（valid 判定同源）；情景切片只读解码进组件局部态，不触碰 applyShareState */
+  useEffect(() => {
+    if (!overlayOn || validCols.length === 0) {
+      setOverlayData(null);
+      return;
+    }
+    let stale = false;
+    const timer = window.setTimeout(async () => {
+      const id = overlayId ?? validCols[0].id;
+      let target: ScenarioEntry | null = entries.find((e) => e.id === id) ?? null;
+      if (!target || decodeShareState(target.payload) === null) {
+        target = entries.find((e) => decodeShareState(e.payload) !== null) ?? null;
+      }
+      const decoded = target ? decodeShareState(target.payload) : null;
+      if (!decoded) {
+        if (!stale) setOverlayData(null);
+        return;
+      }
+      const shared = decoded.state;
+      const scenName = target?.name ?? "";
+      const s = useCalculatorStore.getState();
+      const effMonths = effectiveMonthsDivisor(
+        s.pensionInputs.monthsDivisor,
+        s.pensionInputs.retireAge,
+        s.pensionMonthsSynced,
+      );
+      const [baseR, scenR] = await Promise.all([
+        calcLifecycle({
+          base: s.baselineInputs,
+          accum: s.accumulationInputs,
+          pension: { ...s.pensionInputs, monthsDivisor: effMonths },
+          loan: s.loanInputs,
+          rental: s.rentalInputs,
+        }),
+        calcLifecycle({
+          base: shared.baseline,
+          accum: shared.accumulation,
+          pension: shared.pension,
+          loan: shared.loan,
+          rental: shared.rental,
+        }),
+      ]);
+      if (stale) return;
+      setOverlayData(
+        baseR.ok && scenR.ok
+          ? {
+              base: baseR.data.timeline,
+              scen: scenR.data.timeline,
+              name: scenName,
+              depletedYear: scenR.data.summary.depletedYear,
+            }
+          : null,
+      );
+    }, OVERLAY_DEBOUNCE_MS);
+    return () => {
+      stale = true;
+      window.clearTimeout(timer);
+    };
+  }, [overlayOn, overlayId, entries, baseline, accumulation, pension, monthsSynced, loan, rental]);
 
   const onSave = () => {
     const trimmed = Array.from(name.trim())
@@ -266,6 +363,50 @@ export default function ScenarioPanel() {
               );
             })}
           </div>
+        ) : null}
+      </div>
+
+      {/* WF-04 T3 情景叠影（wf04-spec §1-T3）：对比表上方图卡；开关置图卡头（wf-touch-target
+          44 命中）；恒两线裁定（research §2.4）——多情景仍由对比表 ≤12 列承载；挂 scenario
+          Tabs pane 内（hidden 非卸载承载，AdvancedPanel.tsx:168-175 注释口径）——切组/切 Tab
+          不卸载、不重算、不重播入场；防抖不被 Tab 切换触发（§2-S20） */}
+      <div style={{ marginTop: 16 }}>
+        <Text bold>{t("scenario.overlaySwitch")}</Text>
+        <span className="wf-touch-target" style={{ marginLeft: 8 }}>
+          <Switch
+            size="small"
+            className="wf-pressable"
+            checked={overlayOn}
+            aria-label={t("scenario.overlaySwitch")}
+            onChange={(v) => setOverlayOn(v)}
+          />
+        </span>
+        {overlayOn && validCols.length > 0 ? (
+          <Select
+            size="mini"
+            value={overlayId ?? validCols[0].id}
+            style={{ width: 160, marginLeft: 8 }}
+            aria-label={t("scenario.nameLabel")}
+            options={validCols.map((c) => ({ label: c.name, value: c.id }))}
+            onChange={(v) => setOverlayId(v)}
+          />
+        ) : null}
+        {overlayOn && validCols.length === 0 ? (
+          <Text type="secondary" className="wf-lens-cap" style={{ marginLeft: 8 }}>
+            {t("scenario.overlayEmpty")}
+          </Text>
+        ) : null}
+        {overlayOn && overlayData ? (
+          <ScenarioOverlayChart
+            base={overlayData.base}
+            scen={overlayData.scen}
+            scenName={overlayData.name}
+            depletedYear={overlayData.depletedYear}
+            tokens={themeTokens}
+            symbol={symbol}
+            convert={convert}
+            reducedMotion={reducedMotion}
+          />
         ) : null}
       </div>
 

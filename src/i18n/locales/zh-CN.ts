@@ -84,6 +84,12 @@ const zhCN = {
     criticalExactLabel: "精确口径参考线",
     fisherNote:
       "实际回报率按精确费雪式 (1+r_nom)/(1+π)−1 计算；近似式 r≈r_nom−π 仅供教学对照，两者差 ≈ π×实际回报率。",
+    formulaRow: "480 法则公式解构",
+  },
+  anatomy: {
+    varNote: "{{sym}}＝{{name}}：该项贡献 {{term}}",
+    escHint: "点击或 Enter 锁定变量，Esc 解除",
+    lockedAria: "当前解构：{{name}}",
   },
   presets: {
     custom: "自定义",
@@ -619,6 +625,11 @@ const zhCN = {
     exportNote: "本地计算 · 不构成投资建议",
     exportDone: "对比图片已导出",
     exportFailed: "导出图片失败",
+    overlaySwitch: "情景叠影",
+    overlayLegendBase: "基准路径",
+    overlayLegendScenario: "情景路径",
+    overlayChartAria: "基准与情景「{{name}}」资产路径叠影图（横轴年龄，纵轴期末资产）",
+    overlayEmpty: "叠影暂不可用——先在上方保存情景",
   },
   tax: {
     countryLabel: "国家 / 地区",
@@ -721,6 +732,11 @@ const zhCN = {
       "口径全文：时间线生活费、储蓄基流与增长率取打工积累面板均值参数，乘数与养老金金额取基础参数卡与养老面板各自口径（默认同源，分面板修改后各自生效）；桥接备资为纯生活费口径（480 乘数），育儿、健康与重大投入一次性预留单次计入、不拆行；实际回报 ≤ 0 时 480 乘数族走契约错误分支，而年度时间线在 r = i 下仍良态可算——支取退化为 40 年线性实耗（展示层口径）、积累退化为储蓄定速实际积累；存续判定按资产 ≤ 0 口径——首触 ≠ 持续，存续 ≠ 未跌破目标。",
     timelineLabel: "事件标记",
     pensionStartMark: "养老金起领",
+    lensLabel: "时间透镜（拖动或按方向键查看逐年明细）",
+    lensValueText: "第 {{year}} 年，{{age}} 岁，期末 {{value}}",
+    lensWithdrawal: "当年支取",
+    lensClosing: "期末资产",
+    lensAfterDepleted: "已耗尽——此后各年恒为 0",
   },
   a11y: {
     skipToContent: "跳转到主内容",

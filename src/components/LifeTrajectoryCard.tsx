@@ -1,13 +1,15 @@
 /**
  * 人生轨迹读数卡（docs/p8-spec.md §4；P8 最小面）。
- * 纯读数卡（D9 同构：无输入控件，P5.1 V1「输出卡纯读数」口径延伸）；
+ * 纯读数卡（D9 同构：无参数输入控件，P5.1 V1「输出卡纯读数」口径延伸；WF-04 T1
+ * 时间透镜为时间维度的只读检视控件——零 store 写入、零参数修改，仅选择读数行，
+ * 「无参数输入控件」语义不破，「无控件」字面经 wf04-spec §4 条 10 口径精确化）；
  * 一次 calcLifecycle 调用覆盖全周期（验收 ⑦①「同资料单次」），输入全部来自既有
  * store 切片（零新切片、零新必填用户输入）；monthsDivisor 经 effectiveMonthsDivisor
  * 联动口径入链（store buildShareState 同源函数，禁两处内联重推——p8-spec §4.2）。
  * 宪法约束（§5 红线）：零新动效、零新视觉令牌、零新签名元素（design-language §5.1
  * 本轮零申请）；数值行沿用 S3 等宽字排（global.css tabular-nums 既有规则）；
  * 金额全部经 useMoney().money() 币种换算（先例 PensionPanel.tsx:35-36）；
- * 时间透镜可视化不在本轮（归 WF-04）——标记轴仅数字行 + 非视觉替代文本（aria）。
+ * 时间透镜（WF-04 T1）经同一 timeline 数组引用嵌入——零新增调用点。
  */
 import { Alert, Descriptions, Spin, Tag, Tooltip, Typography } from "@arco-design/web-react";
 import { useTranslation } from "react-i18next";
@@ -15,6 +17,7 @@ import { calcLifecycle } from "../services/finance";
 import { formatNumber } from "../services/format";
 import { effectiveMonthsDivisor } from "../data/pensionParams";
 import { useCalculatorStore } from "../store/useCalculatorStore";
+import LifeLensTrack from "./lens/LifeLensTrack";
 import { useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney } from "./hooks";
 
 const { Text } = Typography;
@@ -148,6 +151,22 @@ export default function LifeTrajectoryCard() {
               : []),
           ]}
         />
+      ) : null}
+
+      {/* WF-04 T1 时间透镜（docs/wf04-spec.md §1-T1；落位次序 research-wf04-lens §2.1：
+          Descriptions → 刻度轨区 → 读数面板 → 既有标记轴 aria 行）。props 传同一
+          timeline 内存数组引用（零新增调用零 wasm，§3 红线 1）；防抖窗口旧数据在则轨
+          照常可拖，容器随 Descriptions 同步 opacity 0.45（:84 同源）；落定后选中 t
+          钳制不重置（LifeLensTrack 内钳制）；未就绪/服务错误/timeline 空整块不渲染不占位 */}
+      {summary && data && data.timeline.length > 0 ? (
+        <div style={{ marginTop: 8, opacity: loading ? 0.45 : 1 }}>
+          <LifeLensTrack
+            timeline={data.timeline}
+            fiFirstYear={summary.fiFirstYear}
+            depletedYear={summary.depletedYear}
+            money={money}
+          />
+        </div>
       ) : null}
 
       {/* 读数 7：事件标记轴（本轮唯一施工标记 = pensionStart；events[] 恒空——WF-04）。

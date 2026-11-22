@@ -77,6 +77,12 @@ const zhHant = {
     "criticalExactLabel": "精確口徑參考線",
     "fisherNote":
       "實際回報率按精確費雪式 (1+r_nom)/(1+π)−1 計算；近似式 r≈r_nom−π 僅供教學對照，兩者差 ≈ π×實際回報率。",
+    "formulaRow": "480 法則公式解構"
+  },
+  "anatomy": {
+    "varNote": "{{sym}}＝{{name}}：該項貢獻 {{term}}",
+    "escHint": "點擊或 Enter 鎖定變量，Esc 解除",
+    "lockedAria": "當前解構：{{name}}"
   },
   "presets": {
     "custom": "自定義",
@@ -564,7 +570,12 @@ const zhHant = {
     "export": "導出圖片",
     "exportNote": "本地計算 · 不構成投資建議",
     "exportDone": "對比圖片已導出",
-    "exportFailed": "導出圖片失敗"
+    "exportFailed": "導出圖片失敗",
+    "overlaySwitch": "情景疊影",
+    "overlayLegendBase": "基準路徑",
+    "overlayLegendScenario": "情景路徑",
+    "overlayChartAria": "基準與情景「{{name}}」資產路徑疊影圖（橫軸年齡，縱軸期末資產）",
+    "overlayEmpty": "疊影暫不可用——先在上方保存情景"
   },
   "tax": {
     "countryLabel": "國家 / 地區",
@@ -660,7 +671,12 @@ const zhHant = {
     "caliberTooltip":
       "口徑全文：時間線生活費、儲蓄基流與增長率取打工積累面板均值參數，乘數與養老金金額取基礎參數卡與養老面板各自口徑（默認同源，分面板修改後各自生效）；橋接備資為純生活費口徑（480 乘數），育兒、健康與重大投入一次性預留單次計入、不拆行；實際回報 ≤ 0 時 480 乘數族走契約錯誤分支，而年度時間線在 r = i 下仍良態可算——支取退化為 40 年線性實耗（展示層口徑）、積累退化為儲蓄定速實際積累；存續判定按資產 ≤ 0 口徑——首觸 ≠ 持續，存續 ≠ 未跌破目標。",
     "timelineLabel": "事件標記",
-    "pensionStartMark": "養老金起領"
+    "pensionStartMark": "養老金起領",
+    "lensLabel": "時間透鏡（拖動或按方向鍵查看逐年明細）",
+    "lensValueText": "第 {{year}} 年，{{age}} 歲，期末 {{value}}",
+    "lensWithdrawal": "當年支取",
+    "lensClosing": "期末資產",
+    "lensAfterDepleted": "已耗盡——此後各年恆為 0"
   },
   "a11y": {
     "skipToContent": "跳轉到主內容",

@@ -196,9 +196,13 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
   }, [route.task]);
 
   /** 数字键 1–4/5 分域 + Esc（§2.4）：S21 式显式输入豁免逐字沿用（INPUT/TEXTAREA/
-   *  SELECT/contenteditable 不派发，AdvancedPanel.tsx:100-107 判定原文）；修饰键组合
-   *  不劫持；task=pro 时任务键整组不绑定（冲突消解见 DIGIT_TASKS 注）；Esc 仅 pro
-   *  消费——返回最近所在任务，组件库弹层容器内不消费（弹层自身 Esc 语义优先）。 */
+   *  SELECT/contenteditable 不派发，AdvancedPanel.tsx:100-107 判定原文）；WF-04 T1
+   *  豁免扩展（wf04-spec §2-S21 裁定 a，透镜硬前置）：role="slider"[tabIndex=0] 的
+   *  target.tagName 为 DIV 不在既有集合内，焦点落于时间透镜刻度轨时按 1–5 不得跳任务；
+   *  修饰键组合不劫持；task=pro 时任务键整组不绑定（冲突消解见 DIGIT_TASKS 注）；
+   *  Esc 仅 pro 消费——返回最近所在任务，组件库弹层容器内不消费（弹层自身 Esc 语义
+   *  优先）。makeTabsKeyDown 判定原文同款不联动——透镜不在 pro 页零改动；未来 slider
+   *  落 pro 页须同款扩展（wf04-spec §2-S21 登记注记）。 */
   const handleAtlasKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const target = e.target as HTMLElement | null;
@@ -206,7 +210,8 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
       target?.tagName === "INPUT" ||
       target?.tagName === "TEXTAREA" ||
       target?.tagName === "SELECT" ||
-      target?.isContentEditable === true;
+      target?.isContentEditable === true ||
+      target?.getAttribute("role") === "slider";
     if (typing) return;
     if (e.key === "Escape") {
       if (route.task !== "pro" || e.defaultPrevented) return;

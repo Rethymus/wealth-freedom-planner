@@ -46,6 +46,11 @@ export interface NumberFieldProps {
    *  越界错误文案的 min/max 插值维持 limit 原值（CNY 域）——报错边界与展示币种错位为
    *  本轮按现状简化不扩大（p4-spec §14 #13），由换算横幅「自动回写为人民币口径」表述兜底。 */
   convertRate?: number | null;
+  /** WF-04 T2 公式解构高亮锚点（wf04-spec §1-T2）：true 时 wf-field 容器挂静态描边类
+   *  + label 加粗（纯展示态，置位/清除由宿主成对驱动；缺省 false = 既有行为零变化。
+   *  实现注记：字段宿主 Col 由本组件自渲染，外包 div 会破坏 FieldRow 栅格——以本可选
+   *  prop 承载高亮，登记为 wf04-spec §1-T2 落点文件的在册扩展） */
+  highlighted?: boolean;
 }
 
 export function NumberField({
@@ -60,6 +65,7 @@ export function NumberField({
   md = 24,
   disabled,
   convertRate,
+  highlighted,
 }: NumberFieldProps) {
   const { t } = useTranslation();
   const { min, max, step, precision } = limit;
@@ -118,9 +124,11 @@ export function NumberField({
 
   return (
     <Col xs={24} md={md}>
-      <div className="wf-field">
+      <div className={highlighted ? "wf-field wf-anatomy-target" : "wf-field"}>
         <div className="wf-field-label">
-          <Text id={labelId}>{label}</Text>
+          <Text id={labelId} bold={highlighted || undefined}>
+            {label}
+          </Text>
           {tooltip ? <FieldTip text={tooltip} /> : null}
         </div>
         <InputNumber
