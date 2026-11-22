@@ -782,6 +782,26 @@ const en = {
       "The share link content could not be recognized (ignored; default parameters are shown)",
     strategyLegacyNotice: "The legacy “inflation uplift” withdrawal basis in the old link has been merged into Fixed real spending (the two are numerically identical)",
   },
+  life: {
+    trajectoryTitle: "Trajectory overview",
+    fiFirstYear: "FI first reached (mean path)",
+    fiNotReached: "Not reached",
+    fiAtStart: "Already met at the start",
+    bridgeYears: "Bridge years",
+    bridgeFunding: "Bridge funding needed",
+    pensionMonthly: "Projected monthly pension",
+    pensionStartAt: "Pension starts in year {{year}} (age {{age}})",
+    finalAssets: "Deterministic final assets",
+    depletedAt: "Depleted in year {{year}}",
+    survived: "Not depleted",
+    sameSeedRef: "Same-seed reference: {{label}}",
+    caliberNote:
+      "The timeline is one deterministic path under the work-years mean parameters; the survival pair quotes the same-seed Monte Carlo result — first touch ≠ sustained, sustained ≠ never fell below target.",
+    caliberTooltip:
+      "Full basis: timeline living expense, saving base and growth rates take the work-years panel mean parameters; the multiplier and pension amounts take the basic card and pension panel bases respectively (identical by default, diverging once either panel is edited). Bridge funding is pure living expense (480 multiplier); one-off reserves for children, health and major outlays count once and are not split into rows. When real return ≤ 0 the 480-multiplier family takes the contract error branch while the yearly timeline stays well-defined at r = i — withdrawals degrade to a 40-year linear real drawdown (display-layer basis) and accumulation to constant-real saving. Survival is judged on assets ≤ 0 — first touch ≠ sustained, sustained ≠ never fell below target.",
+    timelineLabel: "Event marks",
+    pensionStartMark: "Pension starts",
+  },
   a11y: {
     skipToContent: "Skip to main content",
     resultAnnouncement: "Reference line updated: {{value}}",

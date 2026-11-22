@@ -702,6 +702,26 @@ const zhCN = {
     restoreIgnored: "分享链接内容无法识别（已忽略，显示默认参数）",
     strategyLegacyNotice: "旧链接的「通胀上调」支取口径已并入固定实际支出（两者数值口径相同）",
   },
+  life: {
+    trajectoryTitle: "轨迹总览",
+    fiFirstYear: "FI 首达年（均值路径）",
+    fiNotReached: "未达成",
+    fiAtStart: "期初已达标",
+    bridgeYears: "桥接年数",
+    bridgeFunding: "桥接期需备资金",
+    pensionMonthly: "预计月养老金",
+    pensionStartAt: "第 {{year}} 年起领（{{age}} 岁）",
+    finalAssets: "确定性期末资产",
+    depletedAt: "第 {{year}} 年耗尽",
+    survived: "未耗尽",
+    sameSeedRef: "同 seed 引用：{{label}}",
+    caliberNote:
+      "时间线为打工积累均值参数下的一条确定性路径；存续双指标引用蒙特卡洛同 seed 结果——首触 ≠ 持续，存续 ≠ 未跌破目标。",
+    caliberTooltip:
+      "口径全文：时间线生活费、储蓄基流与增长率取打工积累面板均值参数，乘数与养老金金额取基础参数卡与养老面板各自口径（默认同源，分面板修改后各自生效）；桥接备资为纯生活费口径（480 乘数），育儿、健康与重大投入一次性预留单次计入、不拆行；实际回报 ≤ 0 时 480 乘数族走契约错误分支，而年度时间线在 r = i 下仍良态可算——支取退化为 40 年线性实耗（展示层口径）、积累退化为储蓄定速实际积累；存续判定按资产 ≤ 0 口径——首触 ≠ 持续，存续 ≠ 未跌破目标。",
+    timelineLabel: "事件标记",
+    pensionStartMark: "养老金起领",
+  },
   a11y: {
     skipToContent: "跳转到主内容",
     resultAnnouncement: "参考线已更新：{{value}}",

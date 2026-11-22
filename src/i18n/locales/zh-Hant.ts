@@ -642,6 +642,26 @@ const zhHant = {
     "restoreIgnored": "分享鏈接內容無法識別（已忽略，顯示默認參數）",
     "strategyLegacyNotice": "舊鏈接的「通脹上調」支取口徑已併入固定實際支出（兩者數值口徑相同）",
   },
+  "life": {
+    "trajectoryTitle": "軌跡總覽",
+    "fiFirstYear": "FI 首達年（均值路徑）",
+    "fiNotReached": "未達成",
+    "fiAtStart": "期初已達標",
+    "bridgeYears": "橋接年數",
+    "bridgeFunding": "橋接期需備資金",
+    "pensionMonthly": "預計月養老金",
+    "pensionStartAt": "第 {{year}} 年起領（{{age}} 歲）",
+    "finalAssets": "確定性期末資產",
+    "depletedAt": "第 {{year}} 年耗盡",
+    "survived": "未耗盡",
+    "sameSeedRef": "同 seed 引用：{{label}}",
+    "caliberNote":
+      "時間線為打工積累均值參數下的一條確定性路徑；存續雙指標引用蒙特卡洛同 seed 結果——首觸 ≠ 持續，存續 ≠ 未跌破目標。",
+    "caliberTooltip":
+      "口徑全文：時間線生活費、儲蓄基流與增長率取打工積累面板均值參數，乘數與養老金金額取基礎參數卡與養老面板各自口徑（默認同源，分面板修改後各自生效）；橋接備資為純生活費口徑（480 乘數），育兒、健康與重大投入一次性預留單次計入、不拆行；實際回報 ≤ 0 時 480 乘數族走契約錯誤分支，而年度時間線在 r = i 下仍良態可算——支取退化為 40 年線性實耗（展示層口徑）、積累退化為儲蓄定速實際積累；存續判定按資產 ≤ 0 口徑——首觸 ≠ 持續，存續 ≠ 未跌破目標。",
+    "timelineLabel": "事件標記",
+    "pensionStartMark": "養老金起領"
+  },
   "a11y": {
     "skipToContent": "跳轉到主內容",
     "resultAnnouncement": "參考線已更新：{{value}}",

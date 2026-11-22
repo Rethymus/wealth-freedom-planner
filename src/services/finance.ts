@@ -48,6 +48,7 @@ import type {
   SequenceSimOutput,
   WasmFn,
 } from "../wasm/bridge";
+import type { PensionInputs } from "../data/pensionParams";
 
 /** 统一结果类型：所有 service 调用都返回该形状，永不抛出 */
 export type FinanceResult<T> =
@@ -531,4 +532,364 @@ export async function runSequenceReorder(
     ok: true,
     data: { original: original.data, ascending: ascending.data, descending: descending.data },
   };
+}
+
+// ---------------------------------------------------------------------------
+// P8 统一生命周期现金流引擎（docs/p8-spec.md §1/§2；TS 侧编排——零 Rust 导出面增量，
+// src/wasm/src/*.rs 与 bridge.ts 逐字节不动，pass1/pass2 锁区零触碰）
+// ---------------------------------------------------------------------------
+
+/** 引擎递推防御下限（§1.4(c)；与随机样本防御 accumulation.rs:269-276 同源） */
+const LIFECYCLE_SAMPLE_FLOOR = -0.99;
+/** 时间线行数上限（§1.3；accumulation.rs:65 MAX_YEARS 同值） */
+const LIFECYCLE_MAX_YEARS = 200;
+/** estimate_pension 乘数族业务错误文案（pension.rs:223 / bridge.ts §i 契约定字；
+ *  引擎错误分支据此区分「业务错误 → bridgeYears 保留计算值」与「校验失败 → 安全值 0」） */
+const PENSION_REAL_RETURN_ERROR = "通胀率需低于名义回报率";
+/** describeError 专属前缀（finance.ts:81-90）——wasm 层异常与业务错误的分界字面 */
+const WASM_LAYER_ERROR_PREFIX = "计算核心";
+
+/**
+ * P8 统一生命周期输入（docs/p8-spec.md §1.1；41 字段 = base 7 + accum 12 + pension 8 +
+ * loan 4 + rental 10）。全部字段为既有 store 切片 / bridge.ts 既有类型的原样引用——
+ * 新增必填用户输入 = 0、新增 store 切片 = 0、share 载荷键增量 = 0（随 v4 自动携带）。
+ * 类型落 finance.ts 而非 bridge.ts：LifecycleInput 不跨越 wasm 边界（TS 侧编排类型），
+ * 进 bridge.ts 会制造「wasm 契约」的假增量（§1 定稿说明）。
+ * pension.monthsDivisor 须由调用方经 effectiveMonthsDivisor 联动口径传入
+ * （useCalculatorStore.ts:314 同源函数，禁两处内联重推）。
+ */
+export interface LifecycleInput {
+  /** 7 字段 ← store.baselineInputs（bridge.ts:53-64 原样引用）；消费点 estimate_pension */
+  base: BaselineInput;
+  /** 12 字段 ← store.accumulationInputs（bridge.ts:472-500 原样引用）；均值参数
+   *  （r_mean / i_mean）→ 时间线递推；σ / paths / seed 仅透传 simulate_accumulation
+   *  （双指标引用），引擎自身递推零随机消费（§2.1）；monthlyExpense 同时是时间线
+   *  生活费基流（§2.4 双参数族注记） */
+  accum: AccumulationInput;
+  /** 8 字段 ← store.pensionInputs（pensionParams.ts:57-77 原样引用） */
+  pension: PensionInputs;
+  /** 4 字段 ← store.loanInputs（bridge.ts:127-136）；本轮仅类型承载：不调用、不校验、
+   *  不进递推（WF-04 homePurchase 事件年供款原子预留） */
+  loan: AmortizeInput;
+  /** 10 字段 ← store.rentalInputs（bridge.ts:173-196）；本轮仅类型承载（WF-04+ 持有成本对照预留） */
+  rental: RentalAnalysisInput;
+}
+
+/**
+ * 事件标记 schema（docs/p8-spec.md §1.2；形状预留——本轮 events 恒空数组，唯一施工
+ * 标记走 YearRow.pensionStart 布尔；homePurchase / childBirth / healthPhase 施工归 WF-04+）
+ */
+export type LifecycleEventTag =
+  | { kind: "pensionStart"; year: number }
+  | { kind: "homePurchase"; year: number }
+  | { kind: "childBirth"; year: number }
+  | { kind: "healthPhase"; year: number; phase: string };
+
+/**
+ * 年度行（docs/p8-spec.md §1.2；8 字段）。精度口径（§2.3「递推链在舍入之前」，
+ * accumulation.rs:301 先例）：各金额字段持有 f64 全精度递推值，round2 在展示层完成——
+ * 耗尽判定层须全精度（§3.7 D2 修正：r=i 算例第 40 行 f64 残差 > 0、判定落第 41 行、
+ * 展示层 round2 = 0.00，「480 个月 ÷ 12 = 40 年线性实耗」的教学闭合在展示层成立）。
+ */
+export interface YearRow {
+  /** 相对年序 t，1..=horizon（1 起计，accumulation/montecarlo 同例） */
+  year: number;
+  /** 行首年龄 = pension.currentAge + year − 1（行覆盖年龄 [行首, 行首+1)） */
+  age: number;
+  /** 期初资产（元，round2 展示）＝上一年 closingAssets；第 1 年 = accum.currentAssets */
+  openingAssets: number;
+  /** 当年投入（名义元，round2 展示）：工作段 = (monthlyIncome − monthlyExpense)×12×(1+i)^t
+   *  （accumulation.rs:279-280 年储蓄随通胀上行同式，含当年通胀；可为负）；停工后恒 0；
+   *  耗尽次年起恒 0（§2.3 耗尽行语义） */
+  contribution: number;
+  /** 当年支取（名义元，round2 展示，净额口径）：桥接段 = 生活费全额；领取段 =
+   *  max(0, 生活费 − pensionMonthly×12)（养老金隐式耗用于生活费、不再作为流入二次
+   *  入账——净支取与「全额支取 + 流入」两写法代数恒等）；工作段恒 0；耗尽次年起恒 0 */
+  withdrawal: number;
+  /** 事件标记（本轮恒空数组，形状预留） */
+  events: LifecycleEventTag[];
+  /** 当年是否养老金起领 =（t == yearsToRetire + 1）——行首年龄恰等于起领年龄的首行
+   *  （§3.7 D1 修正口径） */
+  pensionStart: boolean;
+  /** 期末资产（名义元，round2 展示）：closing = opening×(1+r_eff) + contribution −
+   *  withdrawal；耗尽当年钳 0、其后行全字段恒 0（sequence.rs:133-141/:154-159 同款） */
+  closingAssets: number;
+}
+
+/** 存续双指标（引用口径——引擎不重算，§2.1；sustainYears 输入回显，0 = 未度量哨兵
+ *  bridge.ts:515-519，Rust 不引入 −1 特判） */
+export interface LifecycleSurvival {
+  /** ← simulate_accumulation fiProbability（pass1 口径，逐位引用） */
+  fiProbability: number;
+  /** ← simulate_accumulation sustainedProbability（pass2 口径，逐位引用） */
+  sustainedProbability: number;
+  /** 输入回显；0 = 未度量哨兵 */
+  sustainYears: number;
+}
+
+/** 汇总（docs/p8-spec.md §1.3；10 字段 = 6 标量 + survival 3 子字段 + error） */
+export interface LifecycleSummary {
+  /** 实际模拟行数 = max(accum.years, yearsToRetire + 1)，上限 200 */
+  horizon: number;
+  /** FI 首达年（相对年序；−1 = 未达成，accumulation 年限哨兵同款）；判定
+   *  closing_t ≥ targetValue×(1+i)^t，含 t = 0 初始判定；首触即记录、不回写 */
+  fiFirstYear: number;
+  /** 引用 estimate_pension bridgeYears（pension.rs:203-205 同式，不重算） */
+  bridgeYears: number;
+  /** 引用同上（pension.rs:290-303 纯生活费口径，不重算） */
+  bridgeFundingNeeded: number;
+  /** 引用 estimate_pension pensionMonthly（领取段恒额来源；错误分支安全值 0 →
+   *  净支取退化为全额生活费） */
+  pensionMonthly: number;
+  /** 确定性路径耗尽年（1 起计；−1 = 存活——sequence.rs depletedYear 同款哨兵）；
+   *  判定字面 = 全精度 closing ≤ 0（§2.3，D2 差一行现象的承载） */
+  depletedYear: number;
+  /** 存续口径——引用双指标，引擎不重算（§2.1 裁定） */
+  survival: LifecycleSurvival;
+  /** bridge.ts 全局错误约定（"" 成功 / 非空中文安全值）；聚合规则见 §1.4 */
+  error: string;
+}
+
+/** P8 引擎输出（timeline 行数组 + summary；docs/p8-spec.md §1.3） */
+export interface LifecycleOutput {
+  timeline: YearRow[];
+  summary: LifecycleSummary;
+}
+
+/** 单年样本（小数）；生产路径恒用均值 provider，测试缝可注入任意序列（§1.3 算例②⑥） */
+export interface YearSamples {
+  r: number;
+  infl: number;
+}
+
+/** 样本注入缝：生产缺省 = 均值确定性口径；算例② / ⑥ 的序列断言经该缝注入 */
+export type SampleProvider = (year: number) => YearSamples;
+
+/**
+ * 时间线装配参数（全部由 LifecycleInput 纯算术派生，与 wasm 无关——纯函数测试缝的
+ * 承载面；WF-04 情景透镜演进同缝注入序列，仍零新随机消费，§2.1.4）。
+ */
+export interface TimelineArgs {
+  /** 期初资产（元）＝ accum.currentAssets */
+  currentAssets: number;
+  /** 税后月收入（打工积累均值参数族，§2.4） */
+  monthlyIncome: number;
+  /** 月支出——时间线生活费基流（accum.monthlyExpense） */
+  monthlyExpense: number;
+  /** FI 目标值（基期名义；判定随通胀上行） */
+  targetValue: number;
+  /** 名义回报率均值（百分点） */
+  rMeanPct: number;
+  /** 通胀率均值（百分点） */
+  iMeanPct: number;
+  /** 工作段结束相对年 = max(0, targetRetireAge − currentAge)（pension.rs:200-202
+   *  saturating 同口径；target < current = 已停工 → 0） */
+  workEnd: number;
+  /** 距养老金起领 = retireAge − currentAge（起领行 t = yearsToRetire + 1，D1 口径） */
+  yearsToRetire: number;
+  /** 领取段年养老金 = pensionMonthly × 12（0 = pension 错误分支退化 → 净支取 = 全额生活费） */
+  pensionAnnual: number;
+  /** 行首年龄原点（pension.currentAge） */
+  currentAge: number;
+  /** 行数 = max(accum.years, yearsToRetire + 1)，上限 200 */
+  horizon: number;
+}
+
+/**
+ * 时间线装配（纯函数、无 wasm 依赖、零随机——docs/p8-spec.md §1.3 测试缝）。
+ * 生产路径 provider 缺省 = 每年 { r: r_eff, infl: i_eff }（均值确定性口径，同输入恒
+ * 同输出）；递推 closing = opening×(1+r_t) + contribution − withdrawal，防御与既有
+ * 模块逐字同源（§1.4）：
+ *  (a) closing NaN / ≤ 0 → 耗尽：该行 closing 钳 0（当行投入/支取仍按公式记值——支出
+ *      把资产打到零是真实发生的事）、其后行全字段恒 0（sequence.rs:133-141 break +
+ *      :154-159 补零同款；NaN 同判）；
+ *  (b) 正溢出钳 Number.MAX_VALUE（accumulation.rs:285-287 同款）；
+ *  (c) 有效增长率 / 通胀因子下限钳 −0.99（accumulation.rs:269-276 同源；均值域由 wasm
+ *      校验前置，TS 层不另立口径）。
+ * 三阶段行语义（§2.3）：工作段（t ≤ workEnd）contribution = 月储蓄×12×(1+i)^t、
+ * withdrawal = 0；桥接段（workEnd < t ≤ yearsToRetire）支取生活费全额；领取段
+ * （t > yearsToRetire）支取 max(0, 生活费 − 养老金年额)。停工晚于起领（workEnd >
+ * yearsToRetire，合法输入域 bridge.ts §i「不与 retireAge 做大小约束」）时两现金流
+ * 独立入行（储蓄随停工、养老金随起领）——「养老金自起领年进入现金流」（cases §0.3）
+ * 与「工作段储蓄至停工」两口径正交，重叠年份两字段并存。
+ * 累计通胀用重复乘法（与 deriveTimelineSummary 的判定重构逐位同序）。
+ */
+export function assembleTimeline(args: TimelineArgs, provider?: SampleProvider): YearRow[] {
+  const sample: SampleProvider =
+    provider ??
+    ((year: number) => ({
+      r: Math.max(args.rMeanPct / 100, LIFECYCLE_SAMPLE_FLOOR),
+      infl: Math.max(args.iMeanPct / 100, LIFECYCLE_SAMPLE_FLOOR),
+    }));
+  const savingBase = (args.monthlyIncome - args.monthlyExpense) * 12;
+  const expenseBase = args.monthlyExpense * 12;
+  const rows: YearRow[] = [];
+  let opening = args.currentAssets;
+  let cumInfl = 1;
+  let depleted = false;
+  for (let t = 1; t <= args.horizon; t += 1) {
+    const age = args.currentAge + t - 1;
+    if (depleted) {
+      // 耗尽次年起全字段恒 0（sequence.rs:154-159 补零同款）
+      rows.push({
+        year: t,
+        age,
+        openingAssets: 0,
+        contribution: 0,
+        withdrawal: 0,
+        events: [],
+        pensionStart: false,
+        closingAssets: 0,
+      });
+      continue;
+    }
+    const s = sample(t);
+    const r = Math.max(s.r, LIFECYCLE_SAMPLE_FLOOR);
+    const infl = Math.max(s.infl, LIFECYCLE_SAMPLE_FLOOR);
+    cumInfl *= 1 + infl;
+    // 工作段储蓄基流随通胀上行（accumulation.rs:280 年储蓄 × cum_infl 同式，含当年通胀；可为负）
+    const contribution = t <= args.workEnd ? savingBase * cumInfl : 0;
+    const living = expenseBase * cumInfl;
+    // 净额口径：−max(0, C−P) ≡ −C + P（养老金隐式耗用于生活费，算例① 第 31 行复核即证）
+    const withdrawal =
+      t > args.yearsToRetire
+        ? Math.max(0, living - args.pensionAnnual)
+        : t > args.workEnd
+          ? living
+          : 0;
+    const pensionStart = t === args.yearsToRetire + 1;
+    let closing = opening * (1 + r) + contribution - withdrawal;
+    if (Number.isNaN(closing) || closing <= 0) {
+      // 耗尽行：当行投入/支取仍按公式记值、closing 钳 0、递推终止（sequence.rs:136-139 字面同款）
+      rows.push({ year: t, age, openingAssets: opening, contribution, withdrawal, events: [], pensionStart, closingAssets: 0 });
+      depleted = true;
+      continue;
+    }
+    if (!Number.isFinite(closing)) closing = Number.MAX_VALUE;
+    rows.push({ year: t, age, openingAssets: opening, contribution, withdrawal, events: [], pensionStart, closingAssets: closing });
+    opening = closing;
+  }
+  return rows;
+}
+
+/**
+ * 时间线汇总派生（纯函数）：FI 首达年 / 耗尽年 / 行数（docs/p8-spec.md §1.3）。
+ * FI 判定 closing_t ≥ targetValue×∏(1+i_eff)（目标随通胀水涨，accumulation.rs:290-292
+ * 同式），含 t = 0 初始判定（accumulation.rs:260 同构）；首触即记录、不回写
+ * （accumulation.rs:289 if none 同构）。目标通胀因子按重复乘法重构（与装配层
+ * cumInfl 逐位同序——pow 与连乘在 f64 下可差 ULP，判定层禁两套口径）。
+ * 耗尽判定 = 任一行全精度 closing ≤ 0（装配层已把耗尽行钳 0——首个 ≤ 0 行即耗尽年；
+ * sequence.rs depletedYear 哨兵同款：−1 = 存活）。D2 口径：判定用全精度行值，
+ * 展示层 round2 不参与判定（否决「round2 后判定」新口径——会另立审计面）。
+ */
+export function deriveTimelineSummary(
+  rows: YearRow[],
+  args: TimelineArgs,
+): { horizon: number; fiFirstYear: number; depletedYear: number } {
+  let fiFirstYear = args.currentAssets >= args.targetValue ? 0 : -1;
+  let inflFactor = 1;
+  for (let t = 1; t <= rows.length; t += 1) {
+    inflFactor *= 1 + Math.max(args.iMeanPct / 100, LIFECYCLE_SAMPLE_FLOOR);
+    const closing = rows[t - 1].closingAssets;
+    if (fiFirstYear < 0 && closing >= args.targetValue * inflFactor) fiFirstYear = t;
+  }
+  const depletedIndex = rows.findIndex((row) => row.closingAssets <= 0);
+  return { horizon: rows.length, fiFirstYear, depletedYear: depletedIndex < 0 ? -1 : depletedIndex + 1 };
+}
+
+/**
+ * 统一生命周期现金流（docs/p8-spec.md §1.3/§2；TS 侧编排，永不抛出纪律照抄）：
+ * calcPension（养老金金额 / 桥接两字段）与 calcAccumulation（存续双指标引用）并行 →
+ * 纯确定性年度行装配（均值口径 provider，引擎递推零随机消费——accum.seed / paths 仅
+ * 透传既有双指标调用，无 seed 进入引擎递推，§2.1）→ 汇总。
+ *
+ * 错误聚合口径（§1.4 钉死）：summary.error = 固定次序首个非空——先 estimate_pension
+ * 业务错误、后 simulate_accumulation 业务错误、皆空则 ""。各子块按既有错误分支降级、
+ * 互不牵连：
+ *  - pension 业务错误（含 base 实际回报 ≤ 0 的乘数族分支 bridge.ts:103-104 口径）→
+ *    pensionMonthly = 0、bridgeFundingNeeded = 0、bridgeYears 保留计算值（pension.rs:
+ *    209-225 回显先例）；parsePension 在业务错误分支丢弃数据载荷（finance.ts parsePension
+ *    `if (err) return { ok: false, … }`），故此处以 pension.rs:203-205 逐字同式本地重推
+ *    bridgeYears（仅限错误文案恰为乘数族契约定字时；其余错误 = 解析/校验失败 → 安全值 0，
+ *    bridge.ts §i 错误分支形状），时间线继续装配（领取段净支取退化为全额生活费）；
+ *  - accumulation 业务错误（含 σ ≤ 0 经分享链注入的情形）→ survival 双 0、sustainYears
+ *    照常回显，时间线不受影响（确定性递推不消费 σ）；
+ *  - 解析 / wasm 层异常（error 以 describeError 专属前缀「计算核心」开头）→
+ *    FinanceResult 错误通道，UI 走既有 Alert 分支。
+ * 两族分水岭（§1.4）：实际回报 ≤ 0 是「乘数族」输出与「行族」输出的分水岭——乘数族走
+ * 契约错误分支（0 + 中文 error，禁 Infinity/NaN/负乘数/panic），行族（年度时间线）在
+ * r_mean = i_mean 下数学良态（支取退化为 40 年线性实耗、积累退化为储蓄定速实际积累），
+ * 不得以乘数族错误静默吞掉可算的行（research-p8-cases §4 断言①、§7 边界结论 2）。
+ */
+export async function calcLifecycle(input: LifecycleInput): Promise<FinanceResult<LifecycleOutput>> {
+  try {
+    const yearsToRetire = input.pension.retireAge - input.pension.currentAge;
+    const targetRetire = input.pension.targetRetireAge ?? input.pension.retireAge;
+    const workEnd = Math.max(0, targetRetire - input.pension.currentAge);
+    const horizon = Math.min(LIFECYCLE_MAX_YEARS, Math.max(input.accum.years, yearsToRetire + 1));
+    const [pensionRes, accumRes] = await Promise.all([
+      calcPension({ ...input.base, ...input.pension }),
+      calcAccumulation(input.accum),
+    ]);
+    // wasm 层失败（describeError 专属前缀）→ 统一错误通道（pension 优先，永不抛出）
+    for (const res of [pensionRes, accumRes]) {
+      if (!res.ok && res.error.startsWith(WASM_LAYER_ERROR_PREFIX)) {
+        return { ok: false, error: res.error, notReady: res.notReady };
+      }
+    }
+    // ---- pension 子块（业务错误降级，§1.4）----
+    const pensionOk = pensionRes.ok ? pensionRes.data : null;
+    const pensionError = pensionRes.ok ? "" : pensionRes.error;
+    const bridgeYears = pensionOk
+      ? pensionOk.bridgeYears
+      : pensionError === PENSION_REAL_RETURN_ERROR
+        ? // 乘数族业务错误分支：bridgeYears 保留计算值（pension.rs:203-205 逐字同式——
+          // saturating 语义：target ≤ current → 桥接 = yearsToRetire；target ≥ retire → 0）
+          Math.max(0, input.pension.retireAge - Math.max(targetRetire, input.pension.currentAge))
+        : 0; // 解析/校验失败 → 安全值 0（bridge.ts §i 错误分支形状）
+    const bridgeFundingNeeded = pensionOk ? pensionOk.bridgeFundingNeeded : 0;
+    const pensionMonthly = pensionOk ? pensionOk.pensionMonthly : 0;
+    // ---- accumulation 子块（survival 引用口径——逐位透传，引擎不重算，§2.1）----
+    const accumOk = accumRes.ok ? accumRes.data : null;
+    const survival: LifecycleSurvival = {
+      fiProbability: accumOk ? accumOk.fiProbability : 0,
+      sustainedProbability: accumOk ? accumOk.sustainedProbability : 0,
+      sustainYears: input.accum.sustainYears ?? 0,
+    };
+    // ---- 确定性时间线装配（§2.3 三阶段行语义）----
+    const args: TimelineArgs = {
+      currentAssets: input.accum.currentAssets,
+      monthlyIncome: input.accum.monthlyIncome,
+      monthlyExpense: input.accum.monthlyExpense,
+      targetValue: input.accum.targetValue,
+      rMeanPct: input.accum.nominalReturnMeanPct,
+      iMeanPct: input.accum.inflationMeanPct,
+      workEnd,
+      yearsToRetire,
+      pensionAnnual: pensionMonthly * 12,
+      currentAge: input.pension.currentAge,
+      horizon,
+    };
+    const timeline = assembleTimeline(args);
+    const derived = deriveTimelineSummary(timeline, args);
+    // 错误聚合固定次序：先 pension、后 accumulation、皆空 ""（§1.4）
+    const accumError = accumRes.ok ? "" : accumRes.error;
+    const summary: LifecycleSummary = {
+      horizon: derived.horizon,
+      fiFirstYear: derived.fiFirstYear,
+      bridgeYears,
+      bridgeFundingNeeded,
+      pensionMonthly,
+      depletedYear: derived.depletedYear,
+      survival,
+      error: pensionError !== "" ? pensionError : accumError,
+    };
+    return { ok: true, data: { timeline, summary } };
+  } catch (e) {
+    return {
+      ok: false,
+      error: `生命周期引擎调用失败：${e instanceof Error ? e.message : String(e)}`,
+      notReady: false,
+    };
+  }
 }
