@@ -46,8 +46,10 @@ const en = {
       "The real return rate is {{pct}} (≤ 0): the nominal return rate must be higher than the inflation rate to form the positive loop of “returns beating inflation”, so the critical value cannot be computed. Please expand “Core Parameters” to adjust.",
     summaryPrefix:
       "Based on the current inputs, your financial-freedom reference line is about ",
-    summarySuffix:
-      " (including children, health and major-investment reserves).",
+    summaryPartChild: "incl. child-raising reserve",
+    summaryPartHealth: "incl. health reserve",
+    summaryPartMajor: "incl. major-investment reserve",
+    summarySuffixNone: ".",
     savePrefix: "Every additional ",
     saveSuffix: " saved buys 1 more of monthly spending.",
     rowMultiplier: "Monthly expense × multiplier",
@@ -813,7 +815,7 @@ const en = {
     survived: "Not depleted",
     sameSeedRef: "Same-seed reference: {{label}}",
     caliberNote:
-      "The timeline is one deterministic path under the work-years mean parameters; the survival pair quotes the same-seed Monte Carlo result — first touch ≠ sustained, sustained ≠ never fell below target.",
+      "This timeline is one optimistic reference path where markets simply follow their average; the accumulation-simulation median is the typical outcome across thousands of random markets — usually later and more conservative. Plan with the median as your floor and this line as upside; sustainability caveats in the tip (first touch ≠ sustained).",
     caliberTooltip:
       "Full basis: timeline living expense, saving base and growth rates take the work-years panel mean parameters; the multiplier and pension amounts take the basic card and pension panel bases respectively (identical by default, diverging once either panel is edited). Bridge funding is pure living expense (480 multiplier); one-off reserves for children, health and major outlays count once and are not split into rows. When real return ≤ 0 the 480-multiplier family takes the contract error branch while the yearly timeline stays well-defined at r = i — withdrawals degrade to a 40-year linear real drawdown (display-layer basis) and accumulation to constant-real saving. Survival is judged on assets ≤ 0 — first touch ≠ sustained, sustained ≠ never fell below target.",
     timelineLabel: "Event marks",

@@ -729,6 +729,19 @@ export default function BasicCalculator() {
 
   /** 敏感性说明行变动值：月开销 × 10% × 乘数（乘数取核心回显值，未就绪时退回本地预览） */
   const sensDelta = money(baseline.monthlyExpense * 0.1 * (data ? data.multiplier : multiplierPreview));
+  /** F6（WF-06 P2）：摘要括注按实际预留动态生成——未开启的预留不再写「含」，
+      消除「未计划育儿却显示含育儿预留」的误导（走查 F6）；全未开启则句号收尾 */
+  const summaryParts = [
+    baseline.childCount > 0 ? t("basic.summaryPartChild") : null,
+    baseline.healthReserve > 0 ? t("basic.summaryPartHealth") : null,
+    baseline.majorInvestment > 0 ? t("basic.summaryPartMajor") : null,
+  ].filter((p): p is string => p !== null);
+  const summarySuffix =
+    summaryParts.length > 0
+      ? i18n.language.startsWith("en")
+        ? ` (${summaryParts.join(", ")}).`
+        : `（${summaryParts.join("、")}）。`
+      : t("basic.summarySuffixNone");
 
   /** 复制分享（docs/p3-spec.md §6.7 D8）：原 wf-share-row 按钮逻辑提取为局部函数，
    *  原按钮与 <768 底部吸附条按钮共用同一入口（DRY）；P5 T5 轻确认：成功回调即换
@@ -798,7 +811,7 @@ export default function BasicCalculator() {
                   className="wf-big-number"
                   style={{ color: themeTokens.primary, fontSize: "var(--wf-text-display)" }}
                 >
-                  {data ? money(animatedCritical) : "—"}
+                  {data ? money(animatedCritical) : loading ? <Spin size={24} /> : "—"}
                 </Title>
                 {gaugeVisible ? (
                   <FreedomGauge
@@ -851,8 +864,8 @@ export default function BasicCalculator() {
                       ) : (
                         "—"
                       )}
-                    </Text>{" "}
-                    {t("basic.summarySuffix")}
+                    </Text>
+                    {summarySuffix}
                   </Text>
                 </div>
                 {/* T14 = S14 段位徽标：乘数 ≥ 2 时行尾段位 Tag（key 含 flash 序号——仅真实跨档
