@@ -26,6 +26,7 @@ import { PRESET_PROFILES } from "../data/presets";
 import type { PresetId } from "../data/presets";
 import { decodeShareState } from "../services/share";
 import type { ShareState } from "../services/share";
+import type { LifeEventInput } from "../services/finance";
 import type {
   AccumulationInput,
   AmortizeInput,
@@ -94,6 +95,16 @@ interface CalculatorState {
   accumulationTargetSynced: boolean;
   /** 社保养老金面板输入 */
   pensionInputs: PensionInputs;
+  /** P9 人生事件切片（显式增删改、零自动播种——写入路径白名单恰五处：本三动作 +
+   *  applyShareState（v5 载荷）+ businessDefaults 回落空数组；applyPreset / clearPreset
+   *  不触碰事件，docs/p9-spec.md §1.5 零播种铁律） */
+  lifeEvents: LifeEventInput[];
+  /** 添加一条人生事件（id 由调用方生成，scenarios.ts:96 先例同式） */
+  addLifeEvent: (ev: LifeEventInput) => void;
+  /** 按 id 局部更新一条人生事件 */
+  updateLifeEvent: (id: string, patch: Partial<LifeEventInput>) => void;
+  /** 按 id 删除一条人生事件 */
+  removeLifeEvent: (id: string) => void;
   setPensionInputs: (patch: Partial<PensionInputs>) => void;
   /** 计发月数是否与退休年龄联动对照表（手动修改即置 false） */
   pensionMonthsSynced: boolean;
@@ -166,6 +177,8 @@ function businessDefaults() {
     accumulationInputs: { ...ACCUMULATION_DEFAULTS },
     accumulationTargetSynced: true,
     pensionInputs: { ...PENSION_DEFAULTS },
+    // P9 事件切片：恒空数组（零自动播种铁律——无示例事件、无演示数据、无「帮你填一条」）
+    lifeEvents: [],
     pensionMonthsSynced: true,
     monteCarloReturnMode: "normal" as MonteCarloReturnMode,
     monteCarloSeriesId: "csi300" as IndexId,
@@ -243,6 +256,15 @@ export const useCalculatorStore = create<CalculatorState>()((set, get) => ({
   setAccumulationTargetSynced: (v) => set({ accumulationTargetSynced: v }),
   setPensionInputs: (patch) =>
     set((state) => ({ pensionInputs: { ...state.pensionInputs, ...patch } })),
+  // P9 人生事件三动作（零自动播种白名单内的写入路径；事件属业务输入切片，
+  // resetAll / resetBusinessInputs 经 businessDefaults() 回落空数组）
+  addLifeEvent: (ev) => set((state) => ({ lifeEvents: [...state.lifeEvents, ev] })),
+  updateLifeEvent: (id, patch) =>
+    set((state) => ({
+      lifeEvents: state.lifeEvents.map((e) => (e.id === id ? ({ ...e, ...patch } as LifeEventInput) : e)),
+    })),
+  removeLifeEvent: (id) =>
+    set((state) => ({ lifeEvents: state.lifeEvents.filter((e) => e.id !== id) })),
   setPensionMonthsSynced: (v) => set({ pensionMonthsSynced: v }),
   setMonteCarloReturnMode: (v) => set({ monteCarloReturnMode: v }),
   setMonteCarloSeriesId: (v) => set({ monteCarloSeriesId: v }),
@@ -288,6 +310,9 @@ export const useCalculatorStore = create<CalculatorState>()((set, get) => ({
       accumulationTargetSynced: false, // 目标值以链接携带的原值呈现，不联动
       progressInputs: { currentAssets: decoded.state.progressCurrentAssets },
       pensionInputs: decoded.state.pension,
+      // P9 v5 载荷：事件切片随分享整体恢复（缺键/形状不符由 decode 整体 null 拒绝，
+      // 禁止部分恢复——share.ts:12-13 纪律）
+      lifeEvents: decoded.state.lifeEvents,
       pensionMonthsSynced: false,
       strategyLegacyNotice: decoded.strategyNormalizedFromLegacy,
     });
@@ -309,6 +334,7 @@ export const useCalculatorStore = create<CalculatorState>()((set, get) => ({
       tax: s.taxInputs,
       accumulation: s.accumulationInputs,
       progressCurrentAssets: s.progressInputs.currentAssets,
+      lifeEvents: s.lifeEvents, // P9 v5：事件入载荷（发送方所见 = 接收方所得，docs/p9-spec.md §6.2）
       pension: {
         ...s.pensionInputs,
         monthsDivisor: effectiveMonthsDivisor(

@@ -543,6 +543,9 @@ export async function runSequenceReorder(
 const LIFECYCLE_SAMPLE_FLOOR = -0.99;
 /** 时间线行数上限（§1.3；accumulation.rs:65 MAX_YEARS 同值） */
 const LIFECYCLE_MAX_YEARS = 200;
+/** 育儿成本摊提年数（P9 §1.4；0–17 岁报告口径区间 = 18 行，与 bridge.ts:58-59
+ *  「0–18 岁累计口径由数据层定义」同源；孩子年龄 = t − 出生行 t₀，出生行 0 岁） */
+export const CHILD_COST_YEARS = 18;
 /** estimate_pension 乘数族业务错误文案（pension.rs:223 / bridge.ts §i 契约定字；
  *  引擎错误分支据此区分「业务错误 → bridgeYears 保留计算值」与「校验失败 → 安全值 0」） */
 const PENSION_REAL_RETURN_ERROR = "通胀率需低于名义回报率";
@@ -550,21 +553,46 @@ const PENSION_REAL_RETURN_ERROR = "通胀率需低于名义回报率";
 const WASM_LAYER_ERROR_PREFIX = "计算核心";
 
 /**
- * P8 统一生命周期输入（docs/p8-spec.md §1.1；41 字段 = base 7 + accum 12 + pension 8 +
- * loan 4 + rental 10）。全部字段为既有 store 切片 / bridge.ts 既有类型的原样引用——
- * 新增必填用户输入 = 0、新增 store 切片 = 0、share 载荷键增量 = 0（随 v4 自动携带）。
+ * P9 事件输入（docs/p9-spec.md §1.2；research-p9-events.md §1.2 采纳；年龄锚存储——
+ * 用户改 currentAge 后「37 岁买房」语义不漂移，t 在引擎入口重推：t = age − currentAge + 1）。
+ * 类型落 finance.ts 而非 bridge.ts：不制造「wasm 契约」假增量（§1 定稿说明）。
+ * id 生成复用 scenarios.ts:96 先例（`${Date.now().toString(36)}-…`）。
+ */
+export type LifeEventInput =
+  | { id: string; kind: "homePurchase"; age: number; amount: number }
+  | { id: string; kind: "childBirth"; age: number }
+  | { id: string; kind: "healthPhase"; age: number; endAge: number; annualAmount: number; label?: string };
+
+/**
+ * P9 引擎选项（docs/p9-spec.md §2.1；LifecycleInput 子块）。全部可选、缺省 = 现状口径
+ * 逐位一致。不进 AccumulationInput：bridge.ts:472-500 属锁区邻接面，加字段即触碰
+ * bridge.ts——红线禁（p9-spec §7 红线 5）。
+ */
+export interface LifecycleOpts {
+  /** 年收入实际增长（百分点）；缺省/0 = 现状（储蓄只随通胀上行） */
+  salaryGrowthPct?: number;
+  /** 最低生活线（基期名义元/年）；缺省 = accum.monthlyExpense × 12（§3.2） */
+  minLivingAnnual?: number;
+}
+
+/**
+ * P8 统一生命周期输入（docs/p8-spec.md §1.1 + P9 §1.2/§2.1；43 字段 = base 7 + accum 12 +
+ * pension 8 + loan 4 + rental 10 + lifeEvents 1 + opts 1）。既有五切片字段为 store /
+ * bridge.ts 既有类型的原样引用——P9 新增两可选字段（lifeEvents / opts，缺省 = 现状
+ * 逐位一致），新增必填用户输入 = 0。
  * 类型落 finance.ts 而非 bridge.ts：LifecycleInput 不跨越 wasm 边界（TS 侧编排类型），
  * 进 bridge.ts 会制造「wasm 契约」的假增量（§1 定稿说明）。
  * pension.monthsDivisor 须由调用方经 effectiveMonthsDivisor 联动口径传入
  * （useCalculatorStore.ts:314 同源函数，禁两处内联重推）。
  */
 export interface LifecycleInput {
-  /** 7 字段 ← store.baselineInputs（bridge.ts:53-64 原样引用）；消费点 estimate_pension */
+  /** 7 字段 ← store.baselineInputs（bridge.ts:53-64 原样引用）；消费点 estimate_pension；
+   *  costPerChild 同时是 P9 育儿事件年成本的单一事实来源（÷18 摊提，§1.4） */
   base: BaselineInput;
   /** 12 字段 ← store.accumulationInputs（bridge.ts:472-500 原样引用）；均值参数
    *  （r_mean / i_mean）→ 时间线递推；σ / paths / seed 仅透传 simulate_accumulation
    *  （双指标引用），引擎自身递推零随机消费（§2.1）；monthlyExpense 同时是时间线
-   *  生活费基流（§2.4 双参数族注记） */
+   *  生活费基流（§2.4 双参数族注记）与购买力最低生活线缺省源（×12，§3.2） */
   accum: AccumulationInput;
   /** 8 字段 ← store.pensionInputs（pensionParams.ts:57-77 原样引用） */
   pension: PensionInputs;
@@ -573,23 +601,33 @@ export interface LifecycleInput {
   loan: AmortizeInput;
   /** 10 字段 ← store.rentalInputs（bridge.ts:173-196）；本轮仅类型承载（WF-04+ 持有成本对照预留） */
   rental: RentalAnalysisInput;
+  /** P9 事件切片 ← store.lifeEvents 原样引用（年龄锚存储，行定位引擎入口重推，§1.4；
+   *  越界事件存而不用，引擎层零运行时守卫——域由 UI/decode 前置，§1.5） */
+  lifeEvents?: readonly LifeEventInput[];
+  /** P9 引擎选项（§2.1；缺省 = 现状口径逐位一致） */
+  opts?: LifecycleOpts;
 }
 
 /**
- * 事件标记 schema（docs/p8-spec.md §1.2；形状预留——本轮 events 恒空数组，唯一施工
- * 标记走 YearRow.pensionStart 布尔；homePurchase / childBirth / healthPhase 施工归 WF-04+）
+ * 事件标记 schema（docs/p8-spec.md §1.2 预留 → docs/p9-spec.md §1.3 施工化定稿）：
+ * homePurchase 加 amount、childBirth 加 annualCost、healthPhase 弃 phase: string 改数值化
+ * （形状变更裁定依据：events[] 零消费者、P8 预留注释即声明施工归后续轮，形状定稿权在
+ * 施工轮——偏差登记 E3；不触碰任何既有输出字段）。tag 的 amount / annualCost 恒为
+ * 行内名义流出值（基期 × 该行 cumInfl_t）——与逐年读数面板「当年支取」同域（当年名义）；
+ * 行级 tag 为标记字段，不参与递推（递推消费的行内流出在 withdrawal 合成）。
  */
 export type LifecycleEventTag =
   | { kind: "pensionStart"; year: number }
-  | { kind: "homePurchase"; year: number }
-  | { kind: "childBirth"; year: number }
-  | { kind: "healthPhase"; year: number; phase: string };
+  | { kind: "homePurchase"; year: number; amount: number }
+  | { kind: "childBirth"; year: number; annualCost: number }
+  | { kind: "healthPhase"; year: number; annualCost: number };
 
 /**
- * 年度行（docs/p8-spec.md §1.2；8 字段）。精度口径（§2.3「递推链在舍入之前」，
- * accumulation.rs:301 先例）：各金额字段持有 f64 全精度递推值，round2 在展示层完成——
- * 耗尽判定层须全精度（§3.7 D2 修正：r=i 算例第 40 行 f64 残差 > 0、判定落第 41 行、
- * 展示层 round2 = 0.00，「480 个月 ÷ 12 = 40 年线性实耗」的教学闭合在展示层成立）。
+ * 年度行（docs/p8-spec.md §1.2 + P9 §3.2；9 字段 = 8 + realWithdrawal）。精度口径
+ * （§2.3「递推链在舍入之前」，accumulation.rs:301 先例）：各金额字段持有 f64 全精度
+ * 递推值，round2 在展示层完成——耗尽判定层须全精度（§3.7 D2 修正：r=i 算例第 40 行
+ * f64 残差 > 0、判定落第 41 行、展示层 round2 = 0.00，「480 个月 ÷ 12 = 40 年线性实耗」
+ * 的教学闭合在展示层成立）。
  */
 export interface YearRow {
   /** 相对年序 t，1..=horizon（1 起计，accumulation/montecarlo 同例） */
@@ -600,13 +638,21 @@ export interface YearRow {
   openingAssets: number;
   /** 当年投入（名义元，round2 展示）：工作段 = (monthlyIncome − monthlyExpense)×12×(1+i)^t
    *  （accumulation.rs:279-280 年储蓄随通胀上行同式，含当年通胀；可为负）；停工后恒 0；
-   *  耗尽次年起恒 0（§2.3 耗尽行语义） */
+   *  耗尽次年起恒 0（§2.3 耗尽行语义）。P9 g 分支（opts.salaryGrowthPct ≠ 0）：工作段 =
+   *  monthlyIncome×12×cumInfl×gPow − 生活费（收入单独随 (1+i)(1+g) 上行、支出只随 i，
+   *  「支出不联动」§2.2-1；g = 0 → 负储蓄 −生活费，既有合法域） */
   contribution: number;
   /** 当年支取（名义元，round2 展示，净额口径）：桥接段 = 生活费全额；领取段 =
    *  max(0, 生活费 − pensionMonthly×12)（养老金隐式耗用于生活费、不再作为流入二次
-   *  入账——净支取与「全额支取 + 流入」两写法代数恒等）；工作段恒 0；耗尽次年起恒 0 */
+   *  入账——净支取与「全额支取 + 流入」两写法代数恒等）；工作段恒 0；耗尽次年起恒 0。
+   *  P9：三段基流之上线性叠加事件流出（基期名义 × cumInfl_t，§1.4 统一口径——全部
+   *  三族同一通胀因子同行取值；工作段不再恒 0） */
   withdrawal: number;
-  /** 事件标记（本轮恒空数组，形状预留） */
+  /** 事件标记（P8 恒空数组 → P9 施工化：该行发生现金流消费的事件逐条入列——育儿成本
+   *  区间逐行一条 childBirth tag、医疗区间逐行一条 healthPhase tag、购房付款行一条
+   *  homePurchase tag；按 kind 字典序 childBirth ＜ healthPhase ＜ homePurchase 稳定排列
+   *  （同 kind 多条保持输入数组序），排列不变性由此在标记层逐字节成立（E6）；耗尽当行
+   *  照常记值与标记；恒零尾行恒 []（无消费即无标记）） */
   events: LifecycleEventTag[];
   /** 当年是否养老金起领 =（t == yearsToRetire + 1）——行首年龄恰等于起领年龄的首行
    *  （§3.7 D1 修正口径） */
@@ -614,6 +660,10 @@ export interface YearRow {
   /** 期末资产（名义元，round2 展示）：closing = opening×(1+r_eff) + contribution −
    *  withdrawal；耗尽当年钳 0、其后行全字段恒 0（sequence.rs:133-141/:154-159 同款） */
   closingAssets: number;
+  /** P9 当年支取的基期购买力（元）= withdrawal ÷ cumInfl_t，在 assembleTimeline 同一
+   *  cumInfl 链内计算（禁第二遍历/第二套 cumInfl——D2 教训：判定层两套口径会另立审计面；
+   *  SampleProvider 注入序列下派生自动同源）。耗尽后零行恒 0（withdrawal 已恒 0） */
+  realWithdrawal: number;
 }
 
 /** 存续双指标（引用口径——引擎不重算，§2.1；sustainYears 输入回显，0 = 未度量哨兵
@@ -627,7 +677,19 @@ export interface LifecycleSurvival {
   sustainYears: number;
 }
 
-/** 汇总（docs/p8-spec.md §1.3；10 字段 = 6 标量 + survival 3 子字段 + error） */
+/** P9 购买力指标（docs/p9-spec.md §3.2；summary 子对象，3 字段）。逐年比较在基期域：
+ *  达标行 ⇔ realWithdrawal_t ≥ minLivingAnnual（两量同为基期元，无通胀折算歧义） */
+export interface PurchasingPowerSummary {
+  /** 支取统计域行数；0 = 无支取域 */
+  withdrawalYears: number;
+  /** 达标率 = 达标行 ÷ withdrawalYears；哨兵 −1 = 域空未度量 */
+  metShare: number;
+  /** 累计缺口（基期元）= Σ max(0, minLiving − realWithdrawal_t)，仅支取域内；域空 = 0 */
+  cumulativeGap: number;
+}
+
+/** 汇总（docs/p8-spec.md §1.3 + P9 §3.2；13 字段 = 6 标量 + survival 3 子字段 +
+ *  purchasingPower 3 子字段 + error） */
 export interface LifecycleSummary {
   /** 实际模拟行数 = max(accum.years, yearsToRetire + 1)，上限 200 */
   horizon: number;
@@ -646,6 +708,8 @@ export interface LifecycleSummary {
   depletedYear: number;
   /** 存续口径——引用双指标，引擎不重算（§2.1 裁定） */
   survival: LifecycleSurvival;
+  /** P9 购买力指标（§3.2；derivePurchasingPower 派生） */
+  purchasingPower: PurchasingPowerSummary;
   /** bridge.ts 全局错误约定（"" 成功 / 非空中文安全值）；聚合规则见 §1.4 */
   error: string;
 }
@@ -693,6 +757,13 @@ export interface TimelineArgs {
   currentAge: number;
   /** 行数 = max(accum.years, yearsToRetire + 1)，上限 200 */
   horizon: number;
+  /** P9 年收入实际增长（百分点）；缺省 0 = 现状（关闭分支与既有代码路径逐字节一致，§2.2-1） */
+  salaryGrowthPct?: number;
+  /** P9 育儿事件年成本（基期名义元/年）= base.costPerChild ÷ CHILD_COST_YEARS（调用方
+   *  派生；事件体不存金额——单一事实来源裁定，§1.2/§1.4） */
+  childAnnualCost?: number;
+  /** P9 事件切片原样传入（行定位装配内派生；越界事件存而不用，§1.4） */
+  lifeEvents?: readonly LifeEventInput[];
 }
 
 /**
@@ -713,6 +784,19 @@ export interface TimelineArgs {
  * 独立入行（储蓄随停工、养老金随起领）——「养老金自起领年进入现金流」（cases §0.3）
  * 与「工作段储蓄至停工」两口径正交，重叠年份两字段并存。
  * 累计通胀用重复乘法（与 deriveTimelineSummary 的判定重构逐位同序）。
+ * P9 三处内聚增量（docs/p9-spec.md §7 红线 7，递推式/三段划分/耗尽语义逐字不动）：
+ *  1. 事件流入 withdrawal 累加（§1.4 统一口径：一切事件金额按基期名义理解，行内流出 =
+ *     金额 × cumInfl_t，与生活费/储蓄同一通胀因子同行取值；越界事件存而不用——不钳位、
+ *     不挪行；区间与行域 [1, horizon] 求交截断；同一年多事件线性叠加，行内流出按
+ *     childBirth → healthPhase → homePurchase 的 kind 固定序分组求和——加法交换 + f64
+ *     加法结合序固定 ⇒ 行数值对登记顺序逐字节不变，L12③ 承载）；
+ *  2. 储蓄 g 分支（§2.2-1）：关闭分支（salaryGrowthPct 缺省/0 → g = 1）= 既有
+ *     savingBase × cumInfl 同一代码路径逐字节一致——「缺省 = 现状」是结构性保证；开启
+ *     分支 income_t = monthlyIncome×12×cumInfl×gPow_t（gPow 连乘，禁 pow）、
+ *     contribution = income_t − 生活费（支出不联动；g = 0 → 负储蓄，既有合法域）；
+ *  3. 派生字段 realWithdrawal = withdrawal ÷ cumInfl_t（同一 cumInfl 链内计算，禁第二
+ *     遍历/第二套 cumInfl——D2 教训）＋ 行级 events[] 标记（该行发生现金流消费的事件
+ *     逐条入列，kind 字典序稳定排列；耗尽当行照常记值与标记、恒零尾行恒 []）。
  */
 export function assembleTimeline(args: TimelineArgs, provider?: SampleProvider): YearRow[] {
   const sample: SampleProvider =
@@ -723,14 +807,40 @@ export function assembleTimeline(args: TimelineArgs, provider?: SampleProvider):
     }));
   const savingBase = (args.monthlyIncome - args.monthlyExpense) * 12;
   const expenseBase = args.monthlyExpense * 12;
+  // ---- P9 事件行定位（引擎入口重推：t = age − currentAge + 1；区间与 [1, horizon]
+  //      求交截断，§1.4/E7；越界购房事件存而不用，E8）----
+  const lifeEvents = args.lifeEvents ?? [];
+  const homeAmounts = new Map<number, number>();
+  const childRanges: Array<{ from: number; to: number }> = [];
+  const healthRanges: Array<{ from: number; to: number; annualAmount: number }> = [];
+  for (const ev of lifeEvents) {
+    if (ev.kind === "homePurchase") {
+      const t = ev.age - args.currentAge + 1;
+      if (t >= 1 && t <= args.horizon) homeAmounts.set(t, (homeAmounts.get(t) ?? 0) + ev.amount);
+    } else if (ev.kind === "childBirth") {
+      const t0 = ev.age - args.currentAge + 1;
+      childRanges.push({ from: Math.max(1, t0), to: Math.min(args.horizon, t0 + CHILD_COST_YEARS - 1) });
+    } else {
+      const t1 = ev.age - args.currentAge + 1;
+      const t2 = ev.endAge - args.currentAge + 1;
+      healthRanges.push({ from: Math.max(1, t1), to: Math.min(args.horizon, t2), annualAmount: ev.annualAmount });
+    }
+  }
+  // 增长因子（§2.2-1）：缺省 → 1（关闭分支 = 现状同一路径）；下限 0 = 停薪（收入归零、
+  // 负储蓄）；g 是确定性参数，语义「增长后收入非负」（不照抄 −0.99 随机样本防御值）
+  const g =
+    args.salaryGrowthPct === undefined ? 1 : Math.max(1 + args.salaryGrowthPct / 100, 0);
+  const growthOn = g !== 1;
   const rows: YearRow[] = [];
   let opening = args.currentAssets;
   let cumInfl = 1;
+  let gPow = 1;
   let depleted = false;
   for (let t = 1; t <= args.horizon; t += 1) {
     const age = args.currentAge + t - 1;
     if (depleted) {
-      // 耗尽次年起全字段恒 0（sequence.rs:154-159 补零同款）
+      // 耗尽次年起全字段恒 0（sequence.rs:154-159 补零同款）；恒零尾行 events 恒 []、
+      // realWithdrawal 恒 0（无消费即无标记，§1.3）
       rows.push({
         year: t,
         age,
@@ -740,6 +850,7 @@ export function assembleTimeline(args: TimelineArgs, provider?: SampleProvider):
         events: [],
         pensionStart: false,
         closingAssets: 0,
+        realWithdrawal: 0,
       });
       continue;
     }
@@ -747,26 +858,62 @@ export function assembleTimeline(args: TimelineArgs, provider?: SampleProvider):
     const r = Math.max(s.r, LIFECYCLE_SAMPLE_FLOOR);
     const infl = Math.max(s.infl, LIFECYCLE_SAMPLE_FLOOR);
     cumInfl *= 1 + infl;
-    // 工作段储蓄基流随通胀上行（accumulation.rs:280 年储蓄 × cum_infl 同式，含当年通胀；可为负）
-    const contribution = t <= args.workEnd ? savingBase * cumInfl : 0;
+    gPow *= g; // P9：gPow_t = gPow_{t−1} × g，与 cumInfl 重复乘法同序（禁 pow）
+    // P9 事件流出（kind 固定序分组求和 ⇒ 排列不变；tag 与流出同一循环装配，§1.3/§1.4）
+    let childFlow = 0;
+    let healthFlow = 0;
+    let homeFlow = 0;
+    const events: LifecycleEventTag[] = [];
+    const childAnnual = (args.childAnnualCost ?? 0) * cumInfl;
+    for (const cr of childRanges) {
+      if (t >= cr.from && t <= cr.to) {
+        childFlow += childAnnual;
+        events.push({ kind: "childBirth", year: t, annualCost: childAnnual });
+      }
+    }
+    for (const hr of healthRanges) {
+      if (t >= hr.from && t <= hr.to) {
+        healthFlow += hr.annualAmount * cumInfl;
+        events.push({ kind: "healthPhase", year: t, annualCost: hr.annualAmount * cumInfl });
+      }
+    }
+    const homeAmt = homeAmounts.get(t);
+    if (homeAmt !== undefined) {
+      homeFlow = homeAmt * cumInfl;
+      events.push({ kind: "homePurchase", year: t, amount: homeFlow });
+    }
+    const eventFlow = childFlow + healthFlow + homeFlow;
+    // 工作段储蓄基流随通胀上行（accumulation.rs:280 年储蓄 × cum_infl 同式，含当年通胀；
+    // 可为负）。P9 g 分支：关闭分支 = 原式逐字节（结构性「缺省 = 现状」，§2.2-1）；
+    // 开启分支 = income − 生活费（收入随 (1+i)(1+g) 上行、支出只随 i）
+    const contribution = growthOn
+      ? t <= args.workEnd
+        ? args.monthlyIncome * 12 * cumInfl * gPow - expenseBase * cumInfl
+        : 0
+      : t <= args.workEnd
+        ? savingBase * cumInfl
+        : 0;
     const living = expenseBase * cumInfl;
-    // 净额口径：−max(0, C−P) ≡ −C + P（养老金隐式耗用于生活费，算例① 第 31 行复核即证）
+    // 净额口径：−max(0, C−P) ≡ −C + P（养老金隐式耗用于生活费，算例① 第 31 行复核即证）；
+    // P9：三段基流之上线性叠加事件流出（工作段不再恒 0，§1.4）
     const withdrawal =
-      t > args.yearsToRetire
+      (t > args.yearsToRetire
         ? Math.max(0, living - args.pensionAnnual)
         : t > args.workEnd
           ? living
-          : 0;
+          : 0) + eventFlow;
     const pensionStart = t === args.yearsToRetire + 1;
     let closing = opening * (1 + r) + contribution - withdrawal;
+    const realWithdrawal = withdrawal / cumInfl;
     if (Number.isNaN(closing) || closing <= 0) {
-      // 耗尽行：当行投入/支取仍按公式记值、closing 钳 0、递推终止（sequence.rs:136-139 字面同款）
-      rows.push({ year: t, age, openingAssets: opening, contribution, withdrawal, events: [], pensionStart, closingAssets: 0 });
+      // 耗尽行：当行投入/支取仍按公式记值、closing 钳 0、递推终止（sequence.rs:136-139 字面同款）；
+      // P9：耗尽当行事件照常记值与标记（§1.3）
+      rows.push({ year: t, age, openingAssets: opening, contribution, withdrawal, events, pensionStart, closingAssets: 0, realWithdrawal });
       depleted = true;
       continue;
     }
     if (!Number.isFinite(closing)) closing = Number.MAX_VALUE;
-    rows.push({ year: t, age, openingAssets: opening, contribution, withdrawal, events: [], pensionStart, closingAssets: closing });
+    rows.push({ year: t, age, openingAssets: opening, contribution, withdrawal, events, pensionStart, closingAssets: closing, realWithdrawal });
     opening = closing;
   }
   return rows;
@@ -795,6 +942,37 @@ export function deriveTimelineSummary(
   }
   const depletedIndex = rows.findIndex((row) => row.closingAssets <= 0);
   return { horizon: rows.length, fiFirstYear, depletedYear: depletedIndex < 0 ? -1 : depletedIndex + 1 };
+}
+
+/**
+ * 购买力指标派生（docs/p9-spec.md §3.2；纯函数、零 wasm 依赖，与 deriveTimelineSummary
+ * 同层测试缝）。统计域（钉死）：停工后支取行 = t > workEnd 且不在耗尽尾行——耗尽判定域
+ * 界 = 首个 closingAssets ≤ 0 的行索引之后（与 deriveTimelineSummary 的 findIndex 语义
+ * 同一字面，禁第二套耗尽判定）；耗尽当行本身计入域（withdrawal 记值 ＞ 0）；工作段零
+ * 支取行不计；重叠年份（workEnd > yearsToRetire 的 t ∈ (yearsToRetire, workEnd]）按
+ * 「停工后」定义字面不计入（E9）。域空 → 哨兵 −1（「未度量」，yearsP5 同款哨兵家族）。
+ * 逐年比较在基期域：达标行 ⇔ realWithdrawal_t ≥ minLivingAnnual（两量同为基期元）。
+ */
+export function derivePurchasingPower(
+  rows: YearRow[],
+  minLivingAnnual: number,
+  workEnd: number,
+): PurchasingPowerSummary {
+  const depletedIndex = rows.findIndex((row) => row.closingAssets <= 0);
+  let years = 0;
+  let met = 0;
+  let gap = 0;
+  for (let i = 0; i < rows.length; i += 1) {
+    const t = i + 1;
+    if (t <= workEnd) continue;
+    if (depletedIndex >= 0 && i > depletedIndex) continue;
+    years += 1;
+    const rw = rows[i].realWithdrawal;
+    const shortfall = minLivingAnnual - rw;
+    if (shortfall <= 0) met += 1;
+    else gap += shortfall;
+  }
+  return { withdrawalYears: years, metShare: years === 0 ? -1 : met / years, cumulativeGap: years === 0 ? 0 : gap };
 }
 
 /**
@@ -869,9 +1047,21 @@ export async function calcLifecycle(input: LifecycleInput): Promise<FinanceResul
       pensionAnnual: pensionMonthly * 12,
       currentAge: input.pension.currentAge,
       horizon,
+      // P9：收入增长 / 事件切片（缺省 = 现状口径逐位一致，§2.2-1）；育儿年成本由调用方
+      // 派生（单一事实来源 = base.costPerChild，事件体不存金额，§1.4/E1）
+      salaryGrowthPct: input.opts?.salaryGrowthPct ?? 0,
+      childAnnualCost: input.base.costPerChild / CHILD_COST_YEARS,
+      lifeEvents: input.lifeEvents ?? [],
     };
     const timeline = assembleTimeline(args);
     const derived = deriveTimelineSummary(timeline, args);
+    // P9 购买力指标（§3.2）：最低生活线缺省 = 月开销 × 12（双参数族归属 = 打工积累面板
+    // monthlyExpense，caliberTooltip 注记同源）
+    const purchasingPower = derivePurchasingPower(
+      timeline,
+      input.opts?.minLivingAnnual ?? input.accum.monthlyExpense * 12,
+      workEnd,
+    );
     // 错误聚合固定次序：先 pension、后 accumulation、皆空 ""（§1.4）
     const accumError = accumRes.ok ? "" : accumRes.error;
     const summary: LifecycleSummary = {
@@ -882,6 +1072,7 @@ export async function calcLifecycle(input: LifecycleInput): Promise<FinanceResul
       pensionMonthly,
       depletedYear: derived.depletedYear,
       survival,
+      purchasingPower,
       error: pensionError !== "" ? pensionError : accumError,
     };
     return { ok: true, data: { timeline, summary } };

@@ -584,7 +584,8 @@ const zhHant = {
     "overlayLegendBase": "基準路徑",
     "overlayLegendScenario": "情景路徑",
     "overlayChartAria": "基準與情景「{{name}}」資產路徑疊影圖（橫軸年齡，縱軸期末資產）",
-    "overlayEmpty": "疊影暫不可用——先在上方保存情景"
+    "overlayEmpty": "疊影暫不可用——先在上方保存情景",
+    "baseColName": "當前參數"
   },
   "tax": {
     "countryLabel": "國家 / 地區",
@@ -678,14 +679,35 @@ const zhHant = {
     "caliberNote":
       "這是「一切按市場平均走」的一條樂觀參考路；打工模擬的中位數是千次隨機市場下的多數結局，通常更晚更保守——建議以中位數為底線、本線為參考；存續口徑詳見提示（首觸 ≠ 持續）。",
     "caliberTooltip":
-      "口徑全文：時間線生活費、儲蓄基流與增長率取打工積累面板均值參數，乘數與養老金金額取基礎參數卡與養老面板各自口徑（默認同源，分面板修改後各自生效）；橋接備資為純生活費口徑（480 乘數），育兒、健康與重大投入一次性預留單次計入、不拆行；實際回報 ≤ 0 時 480 乘數族走契約錯誤分支，而年度時間線在 r = i 下仍良態可算——支取退化為 40 年線性實耗（展示層口徑）、積累退化為儲蓄定速實際積累；存續判定按資產 ≤ 0 口徑——首觸 ≠ 持續，存續 ≠ 未跌破目標。",
+      "口徑全文：時間線生活費、儲蓄基流與增長率取打工積累面板均值參數，乘數與養老金金額取基礎參數卡與養老面板各自口徑（默認同源，分面板修改後各自生效）；橋接備資為純生活費口徑（480 乘數），育兒、健康與重大投入一次性預留單次計入、不拆行；實際回報 ≤ 0 時 480 乘數族走契約錯誤分支，而年度時間線在 r = i 下仍良態可算——支取退化為 40 年線性實耗（展示層口徑）、積累退化為儲蓄定速實際積累；存續判定按資產 ≤ 0 口徑——首觸 ≠ 持續，存續 ≠ 未跌破目標。人生事件只作用於下方時間線，基礎參數卡的一次性預留只作用於 480 臨界值，兩者獨立、不自動抵扣；存續雙指標為靜態儲蓄口徑，不含收入增長。",
     "timelineLabel": "事件標記",
     "pensionStartMark": "養老金起領",
     "lensLabel": "時間透鏡（拖動或按方向鍵查看逐年明細）",
     "lensValueText": "第 {{year}} 年，{{age}} 歲，期末 {{value}}",
     "lensWithdrawal": "當年支取",
     "lensClosing": "期末資產",
-    "lensAfterDepleted": "已耗盡——此後各年恆為 0"
+    "lensAfterDepleted": "已耗盡——此後各年恆為 0",
+    "eventsTitle": "人生事件",
+    "eventsEmpty": "還沒有人生事件——添加第一條，購房、育兒或醫療階段將在時間線中生效",
+    "eventAdd": "新增事件",
+    "eventCount": "{{count}} / 20",
+    "eventKindHome": "購房",
+    "eventKindChild": "育兒",
+    "eventKindHealth": "醫療階段",
+    "eventAge": "發生年齡",
+    "eventEndAge": "結束年齡",
+    "eventAmount": "金額（按當前物價）",
+    "eventAnnualAmount": "每年金額（按當前物價）",
+    "eventEndAgeError": "結束年齡不能早於發生年齡",
+    "eventEdit": "編輯",
+    "eventDelete": "刪除",
+    "eventMarkHome": "第 {{year}} 年購房",
+    "eventMarkChild": "第 {{year}} 年 · 育兒支出",
+    "eventMarkHealth": "第 {{year}} 年 · 醫療支出",
+    "ppMetLabel": "購買力達標率（{{count}} 個支取年）",
+    "ppGapLabel": "購買力累計缺口（按當前物價）",
+    "ppNotMeasured": "未度量",
+    "eventsAxisLabel": "人生事件標記"
   },
   "a11y": {
     "skipToContent": "跳轉到主內容",

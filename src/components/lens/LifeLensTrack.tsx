@@ -60,6 +60,39 @@ export default function LifeLensTrack({ timeline, fiFirstYear, depletedYear, mon
     : "";
   /** 主刻度标签 ≤5（compactXInterval 同式：步长 = ceil(len/5)，标签数 ≤5，D5 全档适用） */
   const tickStep = compactXInterval(len) + 1;
+  /** P9 事件标记（p9-spec §5.5；全部 aria-hidden，读法由轨 valuetext ＋读数卡事件轴
+   *  aria 汇总行承载——形状通道独立于颜色，S10 同构纪律延续）：
+   *  homePurchase = 实心菱形（单年）；childBirth = 区间带（出生→＋17 行）；healthPhase =
+   *  区间带（起→止，双高变体区分）。区间带 = 按 kind 从 timeline 逐行 events[] 提取
+   *  连续段（段断裂即分段渲染）；数量受 events ≤ 20 上限自然受限，重叠区间纵向共用
+   *  轨区（不裁剪——登记：多段重叠靠双高差辨认，视觉不可辨为可接受边界，无降级分支） */
+  const bandSegs = (kind: "childBirth" | "healthPhase"): Array<{ from: number; to: number }> => {
+    const segs: Array<{ from: number; to: number }> = [];
+    let cur: { from: number; to: number } | null = null;
+    timeline.forEach((r, i) => {
+      if (r.events.some((e) => e.kind === kind)) {
+        if (cur !== null && cur.to === i - 1) cur.to = i;
+        else {
+          cur = { from: i, to: i };
+          segs.push(cur);
+        }
+      } else {
+        cur = null;
+      }
+    });
+    return segs;
+  };
+  const childSegs = bandSegs("childBirth");
+  const healthSegs = bandSegs("healthPhase");
+  const homeIdx: number[] = [];
+  timeline.forEach((r, i) => {
+    if (r.events.some((e) => e.kind === "homePurchase")) homeIdx.push(i);
+  });
+  /** 区间带定位：端内距 + 纯百分比（同 posStyle 坐标系；宽度 = 段长 × 单位宽） */
+  const bandStyle = (s: { from: number; to: number }): CSSProperties => ({
+    left: `calc(${TRACK_INSET}px + ${s.from} * ((100% - ${TRACK_INSET * 2}px) / ${len - 1}))`,
+    width: len > 1 ? `calc((${s.to - s.from}) * ((100% - ${TRACK_INSET * 2}px) / ${len - 1}))` : 0,
+  });
 
   const clamp = (v: number) => Math.min(len, Math.max(1, v));
   /** S21 裁定 b：方向键族消费并 stopPropagation（防容器级键位误触）；数字键不消费、
@@ -138,6 +171,16 @@ export default function LifeLensTrack({ timeline, fiFirstYear, depletedYear, mon
             aria-hidden
           />
         ) : null}
+        {/* P9 事件标记（≤3 新形状，全部 aria-hidden）：实心菱形 / 区间带双高变体 */}
+        {homeIdx.map((i) => (
+          <span key={`h${i}`} className="wf-lens-diamond" style={posStyle(len > 1 ? i / (len - 1) : 0)} aria-hidden />
+        ))}
+        {childSegs.map((s, k) => (
+          <span key={`c${k}`} className="wf-lens-band" style={bandStyle(s)} aria-hidden />
+        ))}
+        {healthSegs.map((s, k) => (
+          <span key={`p${k}`} className="wf-lens-band wf-lens-band-health" style={bandStyle(s)} aria-hidden />
+        ))}
         <span className="wf-lens-thumb" style={posStyle(frac)} aria-hidden />
       </div>
       {/* 刻度标签行：主刻度 ≤5，与轨同一坐标系（同端内距 + 纯百分比） */}
@@ -174,6 +217,16 @@ export default function LifeLensTrack({ timeline, fiFirstYear, depletedYear, mon
           </Text>
         ) : null}
         {row?.pensionStart ? <Tag size="small">{t("life.pensionStartMark")}</Tag> : null}
+        {/* P9 逐年事件 Tag 行（pensionStart Tag 先例延伸）：选中行 events[] 逐条 mark 文案 */}
+        {row?.events.map((ev, i) => (
+          <Tag key={`${ev.kind}-${i}`} size="small">
+            {ev.kind === "homePurchase"
+              ? t("life.eventMarkHome", { year: ev.year })
+              : ev.kind === "childBirth"
+                ? t("life.eventMarkChild", { year: ev.year })
+                : t("life.eventMarkHealth", { year: ev.year })}
+          </Tag>
+        ))}
       </div>
     </div>
   );

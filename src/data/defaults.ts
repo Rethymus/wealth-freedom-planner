@@ -76,6 +76,12 @@ export const LIMITS: InputLimits = {
   targetRetireAge: { min: 16, max: 75, step: 1, precision: 0 },
   /** 存续验证年数（P7/P0-2；契约 [0, 200] 整数，0 = 关闭） */
   sustainYears: { min: 0, max: 200, step: 1, precision: 0 },
+  /** P9 人生事件锚年龄（整数 [16, 120]——与 pension currentAge 上限 70 不同域、有意放宽，
+   *  docs/p9-spec.md §1.2 登记） */
+  lifeEventAge: { min: 16, max: 120, step: 1, precision: 0 },
+  /** P9 收入增长（百分点对称域；先例 strategyRealReturnPct min −100 同形——LIMITS.percent
+   *  min 0.01 禁负无法承载） */
+  salaryGrowthPct: { min: -100, max: 100, step: 0.1, precision: 1 },
 };
 
 /** 反向估算面板默认输入（占位：childReserve 沿用 1 孩成本，即视频口径示例值 58 万——报告原文 0–17 岁平均 53.8 万，见面板⑨；totalAssets 为示例值） */

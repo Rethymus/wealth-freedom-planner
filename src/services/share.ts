@@ -27,8 +27,18 @@ import type {
 } from "../wasm/bridge";
 import type { PensionInputs } from "../data/pensionParams";
 import type { IndexId, MonteCarloReturnMode } from "../data/indexSeries";
+import type { LifeEventInput } from "./finance";
+
+/** P9 事件条数上限（与 UI LIMITS 同值；防滥用思想同 MAX_PAYLOAD_CHARS，docs/p9-spec.md §6.3-3） */
+const MAX_LIFE_EVENTS = 20;
 
 /** 分享链接版本（切片形状或字段语义变更时递增；解码端仅接受当前版本）。
+ * v5：ShareState 新增第 12 键 lifeEvents（P9 人生事件切片入载荷——事件是业务输入切片，
+ *   不入载荷则分享/情景库发送方与接收方轨迹静默失真，违反「发送方所见 = 接收方所得」；
+ *   必填键、缺键 → 整体 null，空事件 = []；healthPhase 的 label 为 UI 本地态「存而不传」
+ *   字段：编码端剥除（btoa 非 Latin1 抛异常，P9 不启动 TextEncoder 改造）、解码端置
+ *   缺省空串）；v4 链接与情景库存档一次性失效，需重新生成/重存——延续 v1→v2→v3→v4
+ *   既有决策（ShareState 形状变更即递增，版本单点闸自动承载、无迁移代码）；
  * v4：pension 切片新增 targetRetireAge、accumulation 切片新增 sustainYears
  *   （P7/P0-1 / P0-2 修复）；v3 及更早链接与情景库存档一次性失效，需重新生成/
  *   重存——延续 v1→v2、v2→v3 既有决策（见下文先例）；另：解码端把外来/未来载荷的
@@ -40,7 +50,7 @@ import type { IndexId, MonteCarloReturnMode } from "../data/indexSeries";
  * 链接一次性失效，需重新生成分享链接——延续 v1 → v2 升级的既有决策，见本注释先例）；
  * v2：pension.monthsDivisor 编码值改为「联动态取面板所见表值」（effectiveMonthsDivisor
  * 口径），发送方所见与接收方所得一致；v1 链接按损坏处理（静默回落默认 + 提示） */
-export const SHARE_LINK_VERSION = 4;
+export const SHARE_LINK_VERSION = 5;
 
 /** hash 前缀（#s=<payload>） */
 const HASH_PREFIX = "#s=";
@@ -48,7 +58,7 @@ const HASH_PREFIX = "#s=";
 /** 载荷长度上限（防滥用；超出按损坏处理） */
 const MAX_PAYLOAD_CHARS = 8192;
 
-/** 分享切片（与 store 各业务切片一一对应） */
+/** 分享切片（与 store 各业务切片一一对应；v5 新增第 12 键 lifeEvents） */
 export interface ShareState {
   baseline: BaselineInput;
   reverse: ReverseEstimateInput;
@@ -62,6 +72,9 @@ export interface ShareState {
   /** 进度环输入（切片仅此一个数值） */
   progressCurrentAssets: number;
   pension: PensionInputs;
+  /** P9 人生事件切片（v5；必填键——缺键 → 整体 null 禁止部分恢复；空事件 = []。
+   *  healthPhase 的 label 仅 UI 本地态：编码端剥除、解码端置缺省空串，不入载荷） */
+  lifeEvents: LifeEventInput[];
 }
 
 interface SharePayload extends ShareState {
@@ -104,9 +117,20 @@ function numSlice(obj: Record<string, unknown>, keys: string[]): Record<string, 
   return out;
 }
 
-/** 编码分享切片 → base64url 载荷（不含 #s= 前缀） */
+/** 编码分享切片 → base64url 载荷（不含 #s= 前缀）。
+ * P9（§6.3-2 硬红线）：healthPhase 的 label 在编码端剥除——btoa 对非 Latin1 字符抛异常，
+ * 中文 label 一旦入载荷即破 btoa 链；「存而不传」字段逐字登记（store 保留、编码端剥除、
+ * 解码端置缺省空串）。事件数组其余键全键编码，不引入短键映射层。 */
 export function encodeShareState(state: ShareState): string {
-  const payload: SharePayload = { v: SHARE_LINK_VERSION, ...state };
+  const payload: SharePayload = {
+    v: SHARE_LINK_VERSION,
+    ...state,
+    lifeEvents: state.lifeEvents.map((ev) => {
+      if (ev.kind !== "healthPhase") return ev;
+      const { label: _stripped, ...rest } = ev;
+      return rest;
+    }),
+  };
   return toBase64Url(JSON.stringify(payload));
 }
 
@@ -239,8 +263,43 @@ export function decodeShareState(hash: string): DecodeResult | null {
     sliceOf(obj, "pension") ?? {},
     ["currentAge", "retireAge", "targetRetireAge", "contribYears", "contribIndex", "accountBalance", "avgMonthlyWage", "monthsDivisor"], // v4：+targetRetireAge（同上）
   );
+  // ---- P9 v5：lifeEvents 必填键解码（§6.3-3）----
+  // 缺键 / 非数组 / 条数 > 20 → 整体 null；逐条校验（违反任一 → 整体 null，禁止部分恢复）：
+  // kind 非三枚举之一（枚举校验同款 ：247-249）、数值全 isNum（:72-74）、amount/annualAmount < 0
+  // （负值损坏——rate < 0 先例 ：256）、age 非整数或出 [16, 120]、endAge ∉ [age, 120]、
+  // id 非非空 string；healthPhase 解码端置 label 缺省空串（「存而不传」，§6.3-2）。
+  const eventsRaw = obj["lifeEvents"];
+  let lifeEvents: LifeEventInput[] | null = null;
+  if (Array.isArray(eventsRaw) && eventsRaw.length <= MAX_LIFE_EVENTS) {
+    lifeEvents = [];
+    for (const e of eventsRaw) {
+      if (typeof e !== "object" || e === null || Array.isArray(e)) { lifeEvents = null; break; }
+      const rec = e as Record<string, unknown>;
+      const id = rec["id"];
+      const age = rec["age"];
+      const kind = rec["kind"];
+      if (typeof id !== "string" || id === "") { lifeEvents = null; break; }
+      if (!isNum(age) || !Number.isInteger(age) || age < 16 || age > 120) { lifeEvents = null; break; }
+      if (kind === "homePurchase") {
+        const amount = rec["amount"];
+        if (!isNum(amount) || amount < 0) { lifeEvents = null; break; }
+        lifeEvents.push({ id, kind, age, amount });
+      } else if (kind === "childBirth") {
+        lifeEvents.push({ id, kind, age });
+      } else if (kind === "healthPhase") {
+        const endAge = rec["endAge"];
+        const annualAmount = rec["annualAmount"];
+        if (!isNum(endAge) || !Number.isInteger(endAge) || endAge < age || endAge > 120) { lifeEvents = null; break; }
+        if (!isNum(annualAmount) || annualAmount < 0) { lifeEvents = null; break; }
+        lifeEvents.push({ id, kind, age, endAge, annualAmount, label: "" });
+      } else {
+        lifeEvents = null;
+        break;
+      }
+    }
+  }
 
-  if (!baseline || !reverse || !loanNums || !rental || !monteCarloNums || !taxNums || !accumulation || !pension) {
+  if (!baseline || !reverse || !loanNums || !rental || !monteCarloNums || !taxNums || !accumulation || !pension || !lifeEvents) {
     return null;
   }
   if (!isNum(progress)) return null;
@@ -269,6 +328,7 @@ export function decodeShareState(hash: string): DecodeResult | null {
     accumulation: accumulation as unknown as AccumulationInput,
     progressCurrentAssets: progress,
     pension: pension as unknown as PensionInputs,
+    lifeEvents, // v5：事件切片（校验已完成，label 已置缺省空串）
   };
   return { state, strategyNormalizedFromLegacy };
 }

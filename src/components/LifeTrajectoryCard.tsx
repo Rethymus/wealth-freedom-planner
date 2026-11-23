@@ -30,6 +30,8 @@ export default function LifeTrajectoryCard() {
   const monthsSynced = useCalculatorStore((s) => s.pensionMonthsSynced);
   const loan = useCalculatorStore((s) => s.loanInputs);
   const rental = useCalculatorStore((s) => s.rentalInputs);
+  /** P9 事件切片：编辑器写 store 即经本 deps 项触发重算（hook 调用数不变、无新 calc* 调用） */
+  const lifeEvents = useCalculatorStore((s) => s.lifeEvents);
   const displayCode = useCalculatorStore((s) => s.currency.display);
   /** 金额展示绑定：读数卡 7 读数中全部金额经展示币种换算（§4.1 形态约束） */
   const { money } = useMoney(displayCode);
@@ -38,7 +40,9 @@ export default function LifeTrajectoryCard() {
   /** 计发月数联动：与 PensionPanel / 分享链接同一口径函数（禁两处内联重推） */
   const effectiveMonths = effectiveMonthsDivisor(pension.monthsDivisor, pension.retireAge, monthsSynced);
 
-  /** P8 唯一新增调用点（§4.4：hook 调用 8 → 9 处；防抖口径与既有面板一致 300 ms） */
+  /** P8 唯一新增调用点（§4.4：hook 调用 8 → 9 处；防抖口径与既有面板一致 300 ms；
+   *  P9：deps 六 → 七项 + lifeEvents，calcLifecycle 入参携事件切片——opts 不传（缺省
+   *  = 现状口径逐位一致，p9-spec §2.2-1） */
   const { loading, result } = useFinanceCall(
     () =>
       calcLifecycle({
@@ -47,8 +51,9 @@ export default function LifeTrajectoryCard() {
         pension: { ...pension, monthsDivisor: effectiveMonths },
         loan,
         rental,
+        lifeEvents,
       }),
-    [baseline, accumulation, pension, monthsSynced, loan, rental],
+    [baseline, accumulation, pension, monthsSynced, loan, rental, lifeEvents],
     { debounceMs: 300 },
   );
 
@@ -57,6 +62,26 @@ export default function LifeTrajectoryCard() {
   const summary = data?.summary ?? null;
   const lastRow = data && data.timeline.length > 0 ? data.timeline[data.timeline.length - 1] : null;
   const startRow = data?.timeline.find((row) => row.pensionStart) ?? null;
+  /** P9 购买力指标（§3.2）：哨兵 −1（域空未度量）与缺口行统一呈现 ppNotMeasured——
+   *  域空缺口 0 以「未度量」承载，不以 ¥0.00 冒充无缺口 */
+  const pp = summary?.purchasingPower ?? null;
+  /** P9 事件轴汇总：遍历 timeline[].events 生成逐事件文案（kind ＋ year；金额不进 aria
+   *  汇总行——逐年面板 withdrawal 读数已承载，避免 aria 冗长）。事件 ≤ 20 条且育儿区间
+   *  ≤ 18 行 ⇒ 标记总数有界（20×18+20 上界 ~380 条，pathological 上界已封顶） */
+  const eventMarks = data
+    ? data.timeline.flatMap((row) =>
+        row.events.map((ev) =>
+          ev.kind === "homePurchase"
+            ? t("life.eventMarkHome", { year: ev.year })
+            : ev.kind === "childBirth"
+              ? t("life.eventMarkChild", { year: ev.year })
+              : t("life.eventMarkHealth", { year: ev.year }),
+        ),
+      )
+    : [];
+  const eventKinds = data
+    ? new Set(data.timeline.flatMap((row) => row.events.map((ev) => ev.kind)))
+    : new Set<string>();
   /** FI 首达行（fiFirstYear ≥ 1 时取对应行年龄；0 = 期初已达标、−1 = 未达成无对应行） */
   const fiRow = data && summary && summary.fiFirstYear >= 1 ? data.timeline[summary.fiFirstYear - 1] : null;
   const fiValue =
@@ -135,6 +160,26 @@ export default function LifeTrajectoryCard() {
               ),
             },
             {
+              // P9 购买力两行（插在「确定性期末资产」后、存续双指标前，p9-spec §5.4）：
+              // 达标率行 label 插值支取年数，metShare = −1（域空）显「未度量」
+              label: t("life.ppMetLabel", { count: summary.purchasingPower.withdrawalYears }),
+              value: (
+                <span className="wf-nowrap">
+                  {summary.purchasingPower.metShare >= 0
+                    ? probabilityText(summary.purchasingPower.metShare)
+                    : t("life.ppNotMeasured")}
+                </span>
+              ),
+            },
+            {
+              label: t("life.ppGapLabel"),
+              value: (
+                <span className="wf-nowrap">
+                  {pp !== null && pp.withdrawalYears > 0 ? money(pp.cumulativeGap) : t("life.ppNotMeasured")}
+                </span>
+              ),
+            },
+            {
               // 存续双指标（引用口径）：标签复用既有 accumulation 键值作 {{label}}；
               // 仅 sustainYears > 0 展示存续项（bridge.ts:515-519 哨兵，Rust 无 −1 特判）
               label: t("life.sameSeedRef", { label: t("accumulation.fiLabel") }),
@@ -168,7 +213,7 @@ export default function LifeTrajectoryCard() {
         </div>
       ) : null}
 
-      {/* 读数 7：事件标记轴（本轮唯一施工标记 = pensionStart；events[] 恒空——WF-04）。
+      {/* 读数 7：事件标记轴（P9 起 events[] 非空；pensionStart 既有块不动，§5.4）。
           非视觉替代文本：容器 role="img" + aria-label 汇总标记（§5 红线 3） */}
       {startRow ? (
         <div
@@ -180,6 +225,21 @@ export default function LifeTrajectoryCard() {
           <Text type="secondary" className="wf-nowrap" style={{ marginLeft: 8 }}>
             {t("life.pensionStartAt", { year: startRow.year, age: startRow.age })}
           </Text>
+        </div>
+      ) : null}
+
+      {/* P9 事件轴 aria 汇总行：遍历 timeline[].events 逐事件文案可听读（金额不进 aria
+          ——逐年面板 withdrawal 读数已承载）；可见面 = eventsAxisLabel Tag 一枚（逐年明细
+          由透镜面板 Tag 行承载，§5.5）；无事件不渲染不占位 */}
+      {eventMarks.length > 0 ? (
+        <div
+          style={{ marginTop: 8 }}
+          role="img"
+          aria-label={`${t("life.eventsAxisLabel")}：${eventMarks.join("；")}`}
+        >
+          {eventKinds.has("homePurchase") ? <Tag>{t("life.eventKindHome")}</Tag> : null}
+          {eventKinds.has("childBirth") ? <Tag>{t("life.eventKindChild")}</Tag> : null}
+          {eventKinds.has("healthPhase") ? <Tag>{t("life.eventKindHealth")}</Tag> : null}
         </div>
       ) : null}
 

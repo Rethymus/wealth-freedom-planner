@@ -43,6 +43,10 @@ const { Text } = Typography;
  *  不与读数卡 useFinanceCall 共用实例——wf04-spec §3 红线 2） */
 const OVERLAY_DEBOUNCE_MS = 300;
 
+/** P9 基准列伪条目 id（wf06 F4「当前参数」基准列；不入 entries、不入情景库 localStorage、
+ *  不入叠影图——恒两线裁定不动） */
+const BASE_COL_ID = "__base__";
+
 /** 叠影数据态（组件局部、只读——情景切片不写 store，§4 条 7/8）：null = 未就绪/解码失败 */
 interface OverlayData {
   base: YearRow[];
@@ -140,6 +144,8 @@ export default function ScenarioPanel() {
   const monthsSynced = useCalculatorStore((s) => s.pensionMonthsSynced);
   const loan = useCalculatorStore((s) => s.loanInputs);
   const rental = useCalculatorStore((s) => s.rentalInputs);
+  /** P9 事件切片：编辑器写入即触发对比表/叠影同步刷新（§5.6 deps 扩展） */
+  const lifeEvents = useCalculatorStore((s) => s.lifeEvents);
   const reducedMotion = usePrefersReducedMotion();
   /** CNY → 展示币种数值（叠影图数据同源一次换算；rate 不可用恒等） */
   const convert = (v: number): number => (display.rate !== null ? cnyToDisplay(v, display.rate) : v);
@@ -158,19 +164,32 @@ export default function ScenarioPanel() {
     reload();
   }, []);
 
-  /** 对比表复算：条目集 / 换算率 / 语言变化后逐景重算（毫秒级 × ≤12 情景；过期结果丢弃） */
+  /** 对比表复算：条目集 / 换算率 / 语言变化后逐景重算（毫秒级 × ≤12 情景；过期结果丢弃）。
+   *  P9 基准列（wf06 F4）：列首「当前参数」= 伪情景走既有 computeColumn 全管线（decode →
+   *  五确定性调用 → 八指标——零新计算路径、零新 calc* 调用，p9-spec §5.6）；payload 在
+   *  compute 时刻自 store.getState().buildShareState() 现取（伪条目不入 entries、不入情景
+   *  库 localStorage）；deps 扩入七切片（与 LifeTrajectoryCard 同构）——手动改任意业务输入
+   *  或事件即同表同步刷新；额外成本 = 每次重算多一列的 5 个毫秒级确定性调用（「毫秒级 ×
+   *  ≤12」预算口径内） */
   useEffect(() => {
     let stale = false;
     void (async () => {
-      const computed = await Promise.all(
-        entries.map((e) => computeColumn(e, money, moneyFixed, t("units.yearUnit"))),
-      );
+      const pseudo: ScenarioEntry = {
+        id: BASE_COL_ID,
+        name: t("scenario.baseColName"),
+        payload: encodeShareState(useCalculatorStore.getState().buildShareState()),
+        createdAt: 0,
+      };
+      const computed = await Promise.all([
+        computeColumn(pseudo, money, moneyFixed, t("units.yearUnit")),
+        ...entries.map((e) => computeColumn(e, money, moneyFixed, t("units.yearUnit"))),
+      ]);
       if (!stale) setCols(computed);
     })();
     return () => {
       stale = true;
     };
-  }, [entries, money, moneyFixed, t]);
+  }, [entries, money, moneyFixed, t, baseline, accumulation, pension, monthsSynced, loan, rental, lifeEvents]);
 
   /** WF-04 T3 叠影重算（wf04-spec §1-T3 / research §2.3 八裁定）：触发源仅三种——开关
    *  置位 / 情景选中变更 / 基准六切片落定帧；独立 300ms 防抖 + stale 布尔闭包丢弃过期
@@ -211,6 +230,7 @@ export default function ScenarioPanel() {
           pension: { ...s.pensionInputs, monthsDivisor: effMonths },
           loan: s.loanInputs,
           rental: s.rentalInputs,
+          lifeEvents: s.lifeEvents, // P9：叠加基准路径随事件重算（§5.6）
         }),
         calcLifecycle({
           base: shared.baseline,
@@ -218,6 +238,7 @@ export default function ScenarioPanel() {
           pension: shared.pension,
           loan: shared.loan,
           rental: shared.rental,
+          lifeEvents: shared.lifeEvents, // P9 v5：情景入参由 decode 切片映射自动携带事件
         }),
       ]);
       if (stale) return;
@@ -236,7 +257,7 @@ export default function ScenarioPanel() {
       stale = true;
       window.clearTimeout(timer);
     };
-  }, [overlayOn, overlayId, entries, baseline, accumulation, pension, monthsSynced, loan, rental]);
+  }, [overlayOn, overlayId, entries, baseline, accumulation, pension, monthsSynced, loan, rental, lifeEvents]);
 
   const onSave = () => {
     const trimmed = Array.from(name.trim())
@@ -270,9 +291,10 @@ export default function ScenarioPanel() {
 
   /** ③ 导出图片（p4-spec §8）：Canvas 2D 手绘对比表 → toBlob → <a download>；
    *  values 已是 ⑤ 换算后的屏显字符串，导出与屏显逐字符一致；配色取当前生效令牌
-   *  （含色盲友好档语义色），三语文案随界面语言；零新依赖。valid 列数为 0 时按钮禁用 */
+   *  （含色盲友好档语义色），三语文案随界面语言；零新依赖。valid 列数为 0 时按钮禁用。
+   *  P9：导出自动携带基准列（shownCols = 基准列 + 存档情景列，屏显同源） */
   const onExport = () => {
-    const exportCols = validCols.map((c) => ({ name: c.name, failed: c.failed, values: c.values }));
+    const exportCols = shownCols.map((c) => ({ name: c.name, failed: c.failed, values: c.values }));
     if (exportCols.length === 0) return;
     const canvas = buildScenarioTableBitmap({
       title: t("app.title"),
@@ -295,11 +317,15 @@ export default function ScenarioPanel() {
   };
 
   /** 对比表数据：行 = 指标、列 = 合法情景（§4.3「对每条合法情景解码后复算」；
-   *  解码失败的条目在场景库列表标记 versionMismatch，不入对比列）；失败列整列「—」 */
-  const validCols = cols.filter((c) => c.valid);
+   *  解码失败的条目在场景库列表标记 versionMismatch，不入对比列）；失败列整列「—」。
+   *  P9 基准列（wf06 F4）：validCols = 存档情景列（不含伪条目——叠影/空态判定均按存档
+   *  口径）；baseCol = 「当前参数」伪列，恒列首；shownCols = 屏显与导出的统一列序 */
+  const validCols = cols.filter((c) => c.valid && c.id !== BASE_COL_ID);
+  const baseCol = cols.find((c) => c.id === BASE_COL_ID && c.valid) ?? null;
+  const shownCols = baseCol ? [baseCol, ...validCols] : validCols;
   const tableColumns = [
     { title: "", dataIndex: "metric", width: 150 },
-    ...validCols.map((c) => ({
+    ...shownCols.map((c) => ({
       title: (
         <Text style={{ color: c.failed ? themeTokens.fall : undefined }} bold={!c.failed}>
           {c.name}
@@ -309,18 +335,18 @@ export default function ScenarioPanel() {
     })),
   ];
   const tableData = [
-    /* F1 情景输入档案首行：展示各情景保存的「年支出（基期）」输入值（仅驱动蒙特卡洛模拟，
+    /* F1 情景输入档案首行：展示各情景保存的「年支出（基期）」输入值（仅驱动蒙特卡洛模拟,
      *  不参与下方 8 项确定性指标复算——口径见 spendRowNote）。纯展示，零复算逻辑改动 */
     (() => {
       const row: Record<string, string> = { metric: t("mc.annualSpend") };
-      for (const c of validCols) {
+      for (const c of shownCols) {
         row[c.id] = c.failed ? "—" : c.spend;
       }
       return row;
     })(),
     ...METRIC_KEYS.map((key, rowIdx) => {
       const row: Record<string, string> = { metric: t(key) };
-      for (const c of validCols) {
+      for (const c of shownCols) {
         if (c.failed) row[c.id] = "—";
         else row[c.id] = c.values[rowIdx] ?? "—";
       }
@@ -446,7 +472,7 @@ export default function ScenarioPanel() {
         >
           {t("scenario.export")}
         </Button>
-        {cols.filter((c) => c.valid).length === 0 ? (
+        {validCols.length === 0 ? (
           /* T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入；
              文案改写为「缺什么——下一步」句式（改值不增键） */
           <Empty

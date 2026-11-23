@@ -1830,6 +1830,32 @@ textarea,
   height: 20px;
   background: var(--wf-fall);
 }
+/* P9 事件标记（p9-spec §5.5；≤3 新形状，全部 aria-hidden 装饰层，读法由轨 valuetext +
+   读数卡事件轴 aria 汇总行承载）：购房 = 实心菱形（单年）；育儿/医疗 = 区间带双高变体
+   （12px / 5px——形状通道独立于颜色，S10 同构纪律）。全部引用既有令牌（零新令牌键、
+   零新主题组键）；零动效（无过渡无动画，reduced-motion 两模式行为一致） */
+.wf-lens-diamond {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  background: var(--wf-accent-teal);
+  border: 1px solid var(--wf-bg-surface);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.wf-lens-band {
+  position: absolute;
+  top: 50%;
+  height: 12px;
+  transform: translateY(-50%);
+  background: var(--wf-accent-copper-graphic);
+  opacity: 0.55;
+}
+.wf-lens-band-health {
+  height: 5px;
+  background: var(--wf-accent-slate-graphic);
+  opacity: 0.85;
+}
 /* 拖动反馈自始静态高亮（research §3.1）：选中年恰为里程碑时该点描边强调，静态无过渡 */
 .wf-lens-on {
   box-shadow: 0 0 0 2px var(--wf-primary);

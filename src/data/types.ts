@@ -53,6 +53,10 @@ export interface InputLimits {
   targetRetireAge: NumberInputLimit;
   /** 存续验证年数（P7/P0-2 双指标；0 = 关闭） */
   sustainYears: NumberInputLimit;
+  /** P9 人生事件锚年龄（整数 [16, 120]，与 pension currentAge 上限不同域、有意放宽） */
+  lifeEventAge: NumberInputLimit;
+  /** P9 收入增长（百分点对称域 −100–100） */
+  salaryGrowthPct: NumberInputLimit;
 }
 
 // ---------------------------------------------------------------------------
