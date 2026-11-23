@@ -2,19 +2,23 @@
 /**
  * ============================================================================
  * P8 生命周期引擎算例断言 L1–L6（docs/p8-spec.md §3/§3.8；验收 ①②⑤⑥⑦ 计时）
+ * ＋ P9 事件算例断言 L7–L13（docs/p9-spec.md §4；算例①–⑦ 一一对应）
  * 零新依赖——esbuild 随 vite 在依赖树内（check-share.mjs 同款路径）+ node:assert。
  * ============================================================================
  *
  * 结构：
  *  - 纯函数断言（L2 / L6-a / L6-b）直接调用 finance.ts 导出纯函数
  *    assembleTimeline / deriveTimelineSummary（§1.3 测试缝，无 wasm 依赖）；
- *  - wasm 断言（L1 / L3 / L4 / L5 / L6-c）以 init(await readFile(
+ *  - wasm 断言（L1 / L3 / L4 / L5 / L6-c / L7–L13）以 init(await readFile(
  *    "src/wasm/pkg/finance_core_bg.wasm")) 注入真实二进制后调用 service
  *    （§3.8：桩只能证明管道、不能证明字节——禁静默降级为桩替身）；
  *    esbuild 仅打包 finance.ts（glue 以 external 保留相对导入 → 与脚本直接
  *    import 的 glue 为同一模块实例，先 init 后调用即完成注入）。
- *  - 期望值全部为独立推导（docs/p8-spec.md §3 + §3.7 修订对照 D1–D5），
+ *  - 期望值全部为独立推导（docs/p8-spec.md §3 + §3.7 修订对照 D1–D5；
+ *    docs/p9-spec.md §4 + docs/research-p9-cases.md §1–§7 手算口径），
  *    不以实现输出为真值；断言容差 ±0.01 元（恰零行 ±0.005）。
+ *  - P9 红线：L1–L6 六组断言区段零 diff（g = 0 逐位回归的承载——L1–L6 全部输入均为
+ *    缺省 opts / 无事件，重跑逐字节零变化即「缺省 = 现状」的硬验收，p9-spec §4.2）。
  *
  * 用法：node scripts/check-lifecycle.mjs（或 npm run check:lifecycle）
  */
@@ -474,7 +478,461 @@ try {
     console.log("[check-lifecycle] L6 通过：公式层同构（a/b）+ 引用层同 seed 逐位（c，sustain 0/10 两组）+ 三不变引用印证（d）");
   }
 
-  console.log(`[check-lifecycle] L1–L6 全部通过（断言 ${passed} 项 + 逐行断言若干）。`);
+  // =========================================================================
+  // P9 L7（算例①）：购房第 5 年付 120 万（docs/p9-spec.md §4.1 / research-p9-cases §1）
+  // 独立推导：P₅ = 1,200,000×1.02⁵ = 1,324,896.96（基期名义 × 行通胀因子，非原值）；
+  // 基线闭式 A_t = 1,000,000×1.045^t ＋ 60,120×S_t（S_t = Σ 1.02^k·1.045^{t−k}）；
+  // 事件路径差分闭式 Δ_t = −P₅×1.045^{t−5}（t ≥ 5，付款后差分只按回报复利）；
+  // 基线首达 7（1,881,307.89 ≥ 目标 1,878,330.80、行 6 1,734,209.48 ＜ 1,841,500.79）；
+  // 事件首达 23（2,708,967.47 ≥ 2,578,545.68、行 22 2,501,592.61 ＜ 2,527,985.96）——
+  // 推迟 16 行。变体 B（默认 50 万基座）：行 5 全精度 closing = 866,289.89×1.045 ＋
+  // 66,377.34 − 1,324,896.96 = −353,246.69 ≤ 0 → 耗尽落第 5 行、行 6–40 恒 0、fi = −1。
+  // =========================================================================
+  {
+    const loan = { principal: 1000000, annualRatePct: 3.9, years: 30, method: "equal_payment" };
+    const rental = { price: 1500000, downPaymentPct: 30, loanAnnualRatePct: 3.9, loanYears: 30, monthlyRent: 4000, vacancyRatePct: 5, maintenanceAnnualRatePct: 1, propertyFeeMonthly: 300, otherAnnualCost: 0, rentTaxRatePct: 5 };
+    const mkInput = (events) => ({
+      base: { ...BASELINE_DEFAULTS },
+      accum: { ...ACCUMULATION_DEFAULTS, currentAssets: 1000000 },
+      pension: { ...PENSION_DEFAULTS },
+      loan,
+      rental,
+      ...(events ? { lifeEvents: events } : {}),
+    });
+    const P5 = 1200000 * Math.pow(1.02, 5); // = 1,324,896.96384
+    const resBase = await calcLifecycle(mkInput());
+    assert.equal(resBase.ok, true, "L7 前置：基线 calcLifecycle 应成功");
+    const resEv = await calcLifecycle(mkInput([{ id: "p9-l7-home", kind: "homePurchase", age: 34, amount: 1200000 }]));
+    assert.equal(resEv.ok, true, `L7 前置：事件 calcLifecycle 应成功（${resEv.ok ? "" : resEv.error}）`);
+    const { timeline: rowsB, summary: sumB } = resBase.data;
+    const { timeline: rowsE, summary: sumE } = resEv.data;
+    // ① 行 5 withdrawal 恰 = P₅（基期名义 × 行通胀因子，非 120 万原值）
+    near(rowsE[4].withdrawal, 1324896.96, 0.01, "L7① 行 5 withdrawal = P₅ = 1,324,896.96");
+    ok(rowsE[4].events.length === 1 && rowsE[4].events[0].kind === "homePurchase", "L7⑤ 行 5 tag 恰一条 homePurchase");
+    near(rowsE[4].events[0].amount, 1324896.96, 0.01, "L7⑤ tag amount = 行内名义流出值（§1.3 裁定）");
+    // ② 行 1–4 两路径逐行相等（无事件 ⇒ 逐字节同）；行 5 起 Δ 逐行 = −P₅×1.045^{t−5}
+    for (let t = 1; t <= 4; t++) {
+      assert.equal(rowsE[t - 1].closingAssets, rowsB[t - 1].closingAssets, `L7② 行 ${t} 两路径逐字节相等`);
+    }
+    for (let t = 5; t <= 40; t++) {
+      near(rowsE[t - 1].closingAssets - rowsB[t - 1].closingAssets, -P5 * Math.pow(1.045, t - 5), 0.01, `L7② 行 ${t} Δ = −P₅×1.045^{t−5}`);
+    }
+    near(rowsE[39].closingAssets - rowsB[39].closingAssets, -6183754.94, 0.01, "L7② 行 40 Δ 锚 = −6,183,754.94");
+    // ③ fiFirstYear 基线 7 → 事件 23（首触不提前，research §0.9）
+    assert.equal(sumB.fiFirstYear, 7, "L7③ 基线 fiFirstYear 应 = 7");
+    assert.equal(sumE.fiFirstYear, 23, "L7③ 事件 fiFirstYear 应 = 23（推迟 16 行）");
+    // ⑤ pensionStart 仍在行 31（事件不触碰养老金族）
+    ok(rowsE[30].pensionStart && !rowsE.slice(0, 30).some((r) => r.pensionStart), "L7⑤ pensionStart 仍在行 31");
+    // ④ 变体 B（默认 50 万基座）：耗尽落第 5 行、当行投入/支取仍记值、行 6–40 恒 0
+    const resB = await calcLifecycle({
+      base: { ...BASELINE_DEFAULTS },
+      accum: { ...ACCUMULATION_DEFAULTS },
+      pension: { ...PENSION_DEFAULTS },
+      loan,
+      rental,
+      lifeEvents: [{ id: "p9-l7b-home", kind: "homePurchase", age: 34, amount: 1200000 }],
+    });
+    assert.equal(resB.ok, true, "L7④ 变体 B 前置：calcLifecycle 应成功");
+    const { timeline: rowsVB, summary: sumVB } = resB.data;
+    assert.equal(sumVB.depletedYear, 5, "L7④ 变体 B depletedYear 应 = 5");
+    assert.equal(sumVB.fiFirstYear, -1, "L7④ 变体 B fiFirstYear 应 = −1");
+    near(rowsVB[4].contribution, 66377.34, 0.01, "L7④ 行 5 投入仍按公式记值 66,377.34");
+    near(rowsVB[4].withdrawal, 1324896.96, 0.01, "L7④ 行 5 支取仍按公式记值 1,324,896.96");
+    near(rowsVB[4].realWithdrawal, 1324896.96 / Math.pow(1.02, 5), 0.01, "L7④ 行 5 realWithdrawal = 支取 ÷ cumInfl");
+    for (let t = 6; t <= 40; t++) {
+      const r = rowsVB[t - 1];
+      ok(r.openingAssets === 0 && r.contribution === 0 && r.withdrawal === 0 && r.closingAssets === 0 && r.events.length === 0 && r.realWithdrawal === 0, `L7④ 变体 B 行 ${t} 全字段恒 0`);
+    }
+    ok(rowsE.every((r) => Number.isFinite(r.realWithdrawal)), "L7 realWithdrawal 全程有限数（cumInfl ＞ 0 无除零路径）");
+    const t7 = performance.now();
+    console.log(`[check-lifecycle] L7 通过：P₅=1,324,896.96（非原值）、Δ 闭式逐行、fi 7→23、变体 B 耗尽行 5 语义（装配计时 ${(performance.now() - t7).toFixed(1)} ms）`);
+  }
+
+  // =========================================================================
+  // P9 L8（算例②）：育儿第 3 年出生（docs/p9-spec.md §4.1 / research-p9-cases §2）
+  // 独立推导：出生行 t₀ = 3（行首 32 岁 = 孩子 0 岁）→ 成本行 [3, 20]（0–17 岁恰 18 行，
+  // CHILD_COST_YEARS = 18）；base.costPerChild 覆写 540,000（E1：事件体不存金额——单一
+  // 事实来源）→ 年成本 = 540,000÷18 = 30,000（基期）；成本行 withdrawal = 30,000×1.02^t
+  // （行 3 = 31,836.24、行 20 = 44,578.42 末行闭区间）；行 21 起 Δ 增量 = Δ₂₀×0.045
+  // （止后只按回报复利）。基线首达 14 → 事件 20（18 行成本恰横跨首触前最后一段）。
+  // =========================================================================
+  {
+    const loan = { principal: 1000000, annualRatePct: 3.9, years: 30, method: "equal_payment" };
+    const rental = { price: 1500000, downPaymentPct: 30, loanAnnualRatePct: 3.9, loanYears: 30, monthlyRent: 4000, vacancyRatePct: 5, maintenanceAnnualRatePct: 1, propertyFeeMonthly: 300, otherAnnualCost: 0, rentTaxRatePct: 5 };
+    const mkInput = (events) => ({
+      base: { ...BASELINE_DEFAULTS, costPerChild: 540000 },
+      accum: { ...ACCUMULATION_DEFAULTS },
+      pension: { ...PENSION_DEFAULTS },
+      loan,
+      rental,
+      ...(events ? { lifeEvents: events } : {}),
+    });
+    const resBase = await calcLifecycle(mkInput());
+    assert.equal(resBase.ok, true, "L8 前置：基线 calcLifecycle 应成功");
+    const resEv = await calcLifecycle(mkInput([{ id: "p9-l8-child", kind: "childBirth", age: 32 }]));
+    assert.equal(resEv.ok, true, "L8 前置：事件 calcLifecycle 应成功");
+    const { timeline: rowsB, summary: sumB } = resBase.data;
+    const { timeline: rowsE, summary: sumE } = resEv.data;
+    // ① 成本行数恰 18、withdrawal = 30,000×1.02^t 逐行、行 2/21 = 0
+    const costRows = rowsE.filter((r) => r.events.some((e) => e.kind === "childBirth"));
+    assert.equal(costRows.length, 18, "L8① 成本行数恰 18（CHILD_COST_YEARS）");
+    ok(rowsE[1].withdrawal === 0 && rowsE[20].withdrawal === 0, "L8① 行 2/行 21 支取 = 0（起止年推算落位）");
+    for (let t = 3; t <= 20; t++) {
+      near(rowsE[t - 1].withdrawal, 30000 * Math.pow(1.02, t), 0.01, `L8① 行 ${t} 支取 = 30,000×1.02^${t}`);
+    }
+    // ② 行 20 是成本末行且当行仍计成本（闭区间口径）
+    near(rowsE[19].withdrawal, 44578.42, 0.01, "L8② 行 20 末行 44,578.42（闭区间含入）");
+    ok(rowsE[19].events.length === 1 && rowsE[19].events[0].kind === "childBirth", "L8② 行 20 tag = childBirth");
+    near(rowsE[19].events[0].annualCost, 44578.42, 0.01, "L8② tag annualCost = 行内名义值");
+    // ③ fiFirstYear 基线 14 → 事件 20
+    assert.equal(sumB.fiFirstYear, 14, "L8③ 基线 fiFirstYear 应 = 14");
+    assert.equal(sumE.fiFirstYear, 20, "L8③ 事件 fiFirstYear 应 = 20");
+    // ④ 行 21 Δ 增量 = Δ₂₀×0.045（成本止后差分只按回报复利，无新流出）
+    const d20 = rowsE[19].closingAssets - rowsB[19].closingAssets;
+    const d21 = rowsE[20].closingAssets - rowsB[20].closingAssets;
+    near(d21 - d20 * 1.045, 0, 0.01, "L8④ 行 21 Δ 增量 = Δ₂₀×0.045");
+    // ⑤ 孩子年龄映射：行 3 → 0 岁、行 20 → 17 岁、行 21 → 18 岁（不入账）
+    assert.equal(rowsE[2].age, 32, "L8⑤ 行 3 行首年龄 32 = 孩子 0 岁");
+    assert.equal(rowsE[19].age, 49, "L8⑤ 行 20 行首年龄 49 = 孩子 17 岁");
+    assert.equal(rowsE[20].withdrawal, 0, "L8⑤ 行 21（孩子 18 岁）不入账");
+    console.log("[check-lifecycle] L8 通过：成本行 [3,20] 恰 18 行、行 3 = 31,836.24 / 行 20 = 44,578.42 闭区间、fi 14→20");
+  }
+
+  // =========================================================================
+  // P9 L9（算例③）：医疗阶段 10–15 年每年 +3 万（docs/p9-spec.md §4.1 / cases §3）
+  // 独立推导：t₁ = 39−30+1 = 10、t₂ = 44−30+1 = 15（闭区间 [10,15] 恰 6 行，端点含入）；
+  // 每行附加 30,000×1.02^t（行 10 = 36,569.83、行 15 = 40,376.05）；行 16 Δ 增量 =
+  // Δ₁₅×0.045（区间外无新流出）；基线首达 14 → 事件 16（医疗段恰横跨基线首触年 14）。
+  // A₀ = 500,000 全程 closing ＞ 0（min = 583,822.40 行 1——不触发耗尽）。
+  // =========================================================================
+  {
+    const loan = { principal: 1000000, annualRatePct: 3.9, years: 30, method: "equal_payment" };
+    const rental = { price: 1500000, downPaymentPct: 30, loanAnnualRatePct: 3.9, loanYears: 30, monthlyRent: 4000, vacancyRatePct: 5, maintenanceAnnualRatePct: 1, propertyFeeMonthly: 300, otherAnnualCost: 0, rentTaxRatePct: 5 };
+    const mkInput = (events) => ({
+      base: { ...BASELINE_DEFAULTS },
+      accum: { ...ACCUMULATION_DEFAULTS },
+      pension: { ...PENSION_DEFAULTS },
+      loan,
+      rental,
+      ...(events ? { lifeEvents: events } : {}),
+    });
+    const mkHealth = (withLabel) => ({
+      id: "p9-l9-health",
+      kind: "healthPhase",
+      age: 39,
+      endAge: 44,
+      annualAmount: 30000,
+      ...(withLabel ? { label: "治疗期（本地备注）" } : {}),
+    });
+    const resBase = await calcLifecycle(mkInput());
+    assert.equal(resBase.ok, true, "L9 前置：基线 calcLifecycle 应成功");
+    const resEv = await calcLifecycle(mkInput([mkHealth(false)]));
+    assert.equal(resEv.ok, true, "L9 前置：事件 calcLifecycle 应成功");
+    const { timeline: rowsB, summary: sumB } = resBase.data;
+    const { timeline: rowsE, summary: sumE } = resEv.data;
+    // ① 区间界精确落位（端点含入）：行 9/16 = 0、行 10–15 = 30,000×1.02^t
+    ok(rowsE[8].withdrawal === 0 && rowsE[15].withdrawal === 0, "L9① 行 9/行 16 支取 = 0（区间外零影响）");
+    for (let t = 10; t <= 15; t++) {
+      near(rowsE[t - 1].withdrawal, 30000 * Math.pow(1.02, t), 0.01, `L9① 行 ${t} 支取 = 30,000×1.02^${t}`);
+      ok(rowsE[t - 1].events.length === 1 && rowsE[t - 1].events[0].kind === "healthPhase", `L9① 行 ${t} tag = healthPhase`);
+    }
+    near(rowsE[9].withdrawal, 36569.83, 0.01, "L9① 行 10 = 36,569.83");
+    near(rowsE[14].withdrawal, 40376.05, 0.01, "L9① 行 15 = 40,376.05（末行）");
+    // ② Δ 行 16 增量恰 = Δ₁₅×0.045（区间外无新流出）
+    const d15 = rowsE[14].closingAssets - rowsB[14].closingAssets;
+    const d16 = rowsE[15].closingAssets - rowsB[15].closingAssets;
+    near(d16 - d15 * 1.045, 0, 0.01, "L9② 行 16 Δ 增量 = Δ₁₅×0.045");
+    // ③ fiFirstYear 基线 14 → 事件 16
+    assert.equal(sumB.fiFirstYear, 14, "L9③ 基线 fiFirstYear 应 = 14");
+    assert.equal(sumE.fiFirstYear, 16, "L9③ 事件 fiFirstYear 应 = 16");
+    // ④ phase 串不存在于契约（E3 重界）：label 不入引擎——有/无 label 时间线逐字节一致
+    const resLabeled = await calcLifecycle(mkInput([mkHealth(true)]));
+    assert.equal(resLabeled.ok, true, "L9④ 带 label 输入应成功");
+    assert.equal(
+      JSON.stringify(resLabeled.data.timeline),
+      JSON.stringify(resEv.data.timeline),
+      "L9④/E3 label 不入引擎：有/无 label 时间线逐字节一致",
+    );
+    // ⑤ 全程 closing ＞ 0（min = 583,822.40 行 1——事件流出自行 10 起，不触发耗尽）
+    ok(rowsE.every((r) => r.closingAssets > 0), "L9⑤ 全程 closing ＞ 0");
+    near(Math.min(...rowsE.map((r) => r.closingAssets)), 583822.4, 0.01, "L9⑤ min closing = 583,822.40（行 1）");
+    console.log("[check-lifecycle] L9 通过：区间 [10,15] 端点含入、fi 14→16、label 存而不传不入引擎、全程不耗尽");
+  }
+
+  // =========================================================================
+  // P9 L10（算例④）：收入增长 4% vs 0%（docs/p9-spec.md §4.1 / cases §4；E5 定稿式）
+  // 独立推导：g=0 关闭分支 = 60,120×1.02^t（行 1 恰 61,322.40，P8 现状锚）；g=4% 开启
+  // 分支 = 96,000×1.0608^t − 35,880×1.02^t（收入单独随 (1+i)(1+g) 上行、支出只随 i——
+  // 「支出不联动」；行 1 = 101,836.80 − 36,597.60 = 65,239.20）。行 30 期末 6,616,453.35
+  // vs 12,767,892.35（差恰 6,151,439.00）；fi 14 → 11（提前 3 行）；行 31+ 两路恒 0
+  // （停工即止）；目标族与 g 无关（只改到达速度，不改购买力底线）。
+  // =========================================================================
+  {
+    const loan = { principal: 1000000, annualRatePct: 3.9, years: 30, method: "equal_payment" };
+    const rental = { price: 1500000, downPaymentPct: 30, loanAnnualRatePct: 3.9, loanYears: 30, monthlyRent: 4000, vacancyRatePct: 5, maintenanceAnnualRatePct: 1, propertyFeeMonthly: 300, otherAnnualCost: 0, rentTaxRatePct: 5 };
+    const mkInput = (opts) => ({
+      base: { ...BASELINE_DEFAULTS },
+      accum: { ...ACCUMULATION_DEFAULTS },
+      pension: { ...PENSION_DEFAULTS },
+      loan,
+      rental,
+      ...(opts ? { opts } : {}),
+    });
+    const resG0 = await calcLifecycle(mkInput({ salaryGrowthPct: 0 }));
+    const resG4 = await calcLifecycle(mkInput({ salaryGrowthPct: 4 }));
+    assert.equal(resG0.ok, true, "L10 前置：g=0 calcLifecycle 应成功");
+    assert.equal(resG4.ok, true, "L10 前置：g=4% calcLifecycle 应成功");
+    const { timeline: rows0, summary: sum0 } = resG0.data;
+    const { timeline: rows4, summary: sum4 } = resG4.data;
+    // ① 储蓄行两式逐行（±0.01）：g=0 = 60,120×1.02^t；g=4% = 96,000×1.0608^t − 35,880×1.02^t
+    for (let t = 1; t <= 30; t++) {
+      near(rows0[t - 1].contribution, 60120 * Math.pow(1.02, t), 0.01, `L10① g=0 行 ${t} 储蓄 = 60,120×1.02^${t}`);
+      near(rows4[t - 1].contribution, 96000 * Math.pow(1.0608, t) - 35880 * Math.pow(1.02, t), 0.01, `L10① g=4% 行 ${t} 储蓄闭式`);
+    }
+    near(rows0[0].contribution, 61322.4, 0.01, "L10① g=0 行 1 恰 61,322.40（P8 现状锚）");
+    near(rows4[0].contribution, 65239.2, 0.01, "L10① g=4% 行 1 恰 65,239.20");
+    // ② 行 30 期末两路 ＋ 差值恰锚
+    near(rows0[29].closingAssets, 6616453.35, 0.01, "L10② g=0 行 30 期末 6,616,453.35");
+    near(rows4[29].closingAssets, 12767892.35, 0.01, "L10② g=4% 行 30 期末 12,767,892.35");
+    near(rows4[29].closingAssets - rows0[29].closingAssets, 6151439.0, 0.01, "L10② 两路差恰 6,151,439.00");
+    // ③ fiFirstYear 14 → 11（g 增大只提前或不推迟——contribution 随 g 单调增）
+    assert.equal(sum0.fiFirstYear, 14, "L10③ g=0 fiFirstYear 应 = 14");
+    assert.equal(sum4.fiFirstYear, 11, "L10③ g=4% fiFirstYear 应 = 11（提前 3 行）");
+    // ④ 行 31 起两路 contribution 恒 0（停工即止）
+    ok(rows0.slice(30).every((r) => r.contribution === 0) && rows4.slice(30).every((r) => r.contribution === 0), "L10④ 行 31+ 两路储蓄恒 0");
+    // ⑤ 目标族逐行相同（target×1.02^t 与 g 无关）——两路 targetValue 同源、判定只受
+    //    closing 影响；g=0 行首触 14 恰为基线值即证（本行 + ③）
+    // ⑥ g=0 关闭分支逐字节回归（§2.2-1 结构性承载）：缺省 opts 与显式 0 全输出一致
+    const resDefault = await calcLifecycle(mkInput());
+    assert.equal(resDefault.ok, true, "L10⑥ 前置：缺省 opts 应成功");
+    assert.equal(
+      JSON.stringify(resDefault.data),
+      JSON.stringify(resG0.data),
+      "L10⑥ 缺省 opts 与显式 salaryGrowthPct: 0 输出逐字节一致（关闭分支同一路径）",
+    );
+    console.log("[check-lifecycle] L10 通过：g=4% 储蓄闭式全链（65,239.20 / 12,767,892.35 / fi 14→11 / 停工即止）、g=0 逐字节回归");
+  }
+
+  // =========================================================================
+  // P9 L11（算例⑤）：购买力底线口径 ＋ derivePurchasingPower（docs/p9-spec.md §4.1/§3.3）
+  // A（FI 判定实口径）：r = i = 2 → R_t = 500,000 ＋ 60,120t 精确线性（工作段行 1–30）；
+  //   fiFirstYear = 19（行 19 名义 2,392,491.85 ≥ 上行目标 2,382,177.63）；行 13 名义
+  //   1,657,834.51 ≥ 基期名义目标 1,635,200 但判定必须未达标（名义错觉反例硬断言——
+  //   实际购买力 1,281,560 仅达底线 78.4%，误用将提前 6 行误报）。
+  //   注：行 31–40 为领取段净支取（34,104.36/1.02^t 实口径递减）→ 线性断言域限于
+  //   工作段 t ≤ workEnd = 30（research §5 表断言行均 ≤ 19，同域）。
+  // B（实口径恒值域）：p8 §3.4 输入 A 同形（A₀ 1,435,200 / 月收入 0 / r = i = 2 /
+  //   targetRetireAge 30 → base 2.0/2.0 乘数族错误分支 → pensionMonthly 0 → 支取 =
+  //   生活费全额）→ realWithdrawal = 35,880 恒值；minLiving 缺省 35,880 →
+  //   withdrawalYears = 40、metShare = 1、gap = 0；minLiving = 40,000 → metShare = 0、
+  //   gap = 40×(40,000−35,880) = 164,800。
+  // C（域空哨兵）：targetRetireAge 75 → workEnd 45 ＞ horizon 40 → 全行 t ≤ workEnd
+  //   → 支取域空 → withdrawalYears = 0、metShare = −1、gap = 0。
+  // 变体 i = 0：cumInfl ≡ 1、实 = 名、底线退化为名义恒值（合法输入无除零）。
+  // =========================================================================
+  {
+    const loan = { principal: 1000000, annualRatePct: 3.9, years: 30, method: "equal_payment" };
+    const rental = { price: 1500000, downPaymentPct: 30, loanAnnualRatePct: 3.9, loanYears: 30, monthlyRent: 4000, vacancyRatePct: 5, maintenanceAnnualRatePct: 1, propertyFeeMonthly: 300, otherAnnualCost: 0, rentTaxRatePct: 5 };
+    const baseRi2 = { ...BASELINE_DEFAULTS, nominalReturnPct: 2.0, inflationPct: 2.0 };
+    const mkInput = (p = {}) => ({
+      base: p.base ?? { ...BASELINE_DEFAULTS },
+      accum: { ...ACCUMULATION_DEFAULTS, ...(p.accum ?? {}) },
+      pension: { ...PENSION_DEFAULTS, ...(p.pension ?? {}) },
+      loan,
+      rental,
+      ...(p.opts ? { opts: p.opts } : {}),
+    });
+    // ---- A：FI 判定实口径 ----
+    const resA = await calcLifecycle(mkInput({ accum: { nominalReturnMeanPct: 2 } }));
+    assert.equal(resA.ok, true, "L11-A 前置：calcLifecycle 应成功");
+    const { timeline: rowsA, summary: sumA } = resA.data;
+    assert.equal(sumA.fiFirstYear, 19, "L11① A fiFirstYear 应 = 19（实口径底线）");
+    // ② R_t 精确线性（工作段 t ≤ 30；判定域与 research §5 同域）
+    {
+      let f = 1;
+      for (let t = 1; t <= 30; t++) {
+        f *= 1.02; // 与引擎同序的重复乘法（pow 与连乘可差 ULP，判定层禁两套口径）
+        near(rowsA[t - 1].closingAssets / f, 500000 + 60120 * t, 0.01, `L11② A 行 ${t} R_t = 500,000 ＋ 60,120t`);
+      }
+    }
+    // ③ 行 13 名义 ≥ 基期名义目标但判定必须未达标（错觉反例硬断言）
+    near(rowsA[12].closingAssets, 1657834.51, 0.01, "L11③ 行 13 名义 1,657,834.51");
+    ok(rowsA[12].closingAssets >= 1635200, "L11③ 行 13 名义 ≥ 基期名义目标 1,635,200（错觉前提成立）");
+    ok(sumA.fiFirstYear !== 13 && sumA.fiFirstYear > 13, "L11③ 判定未在行 13 达标（禁用名义错觉判定）");
+    near(rowsA[12].closingAssets / Math.pow(1.02, 13), 1281560.0, 0.01, "L11③ 行 13 实口径 R₁₃ = 1,281,560.00（仅达底线 78.4%）");
+    // ④ 行 19 三锚（名义 / 实口径 / 上行目标）
+    near(rowsA[18].closingAssets, 2392491.85, 0.01, "L11④ 行 19 名义 2,392,491.85");
+    near(rowsA[18].closingAssets / Math.pow(1.02, 19), 1642280.0, 0.01, "L11④ 行 19 实口径 R₁₉ = 1,642,280.00");
+    near(1635200 * Math.pow(1.02, 19), 2382177.63, 0.01, "L11④ 上行目标 2,382,177.63");
+    ok(rowsA[18].closingAssets >= 1635200 * Math.pow(1.02, 19), "L11④ 行 19 达标（两等价判定同域）");
+    // ---- B：实口径恒值域（乘数族错误分支 → pensionMonthly 0 → 支取 = 生活费全额）----
+    const resB = await calcLifecycle(mkInput({
+      base: baseRi2,
+      accum: { currentAssets: 1435200, monthlyIncome: 0, nominalReturnMeanPct: 2, years: 40 },
+      pension: { targetRetireAge: 30 },
+    }));
+    assert.equal(resB.ok, true, "L11-B 前置：calcLifecycle 应成功");
+    assert.equal(resB.data.summary.pensionMonthly, 0, "L11-B 前置：乘数族错误分支 pensionMonthly = 0");
+    const ppB = resB.data.summary.purchasingPower;
+    for (let t = 1; t <= 40; t++) {
+      near(resB.data.timeline[t - 1].realWithdrawal, 35880, 0.01, `L11④-B 行 ${t} realWithdrawal 恒值 35,880`);
+    }
+    assert.equal(ppB.withdrawalYears, 40, "L11④-B withdrawalYears 应 = 40");
+    assert.equal(ppB.metShare, 1, "L11④-B metShare 应 = 1（恒值 ≥ 缺省最低生活线）");
+    near(ppB.cumulativeGap, 0, 0.01, "L11④-B 缺省最低生活线 gap = 0");
+    const resB40k = await calcLifecycle(mkInput({
+      base: baseRi2,
+      accum: { currentAssets: 1435200, monthlyIncome: 0, nominalReturnMeanPct: 2, years: 40 },
+      pension: { targetRetireAge: 30 },
+      opts: { minLivingAnnual: 40000 },
+    }));
+    assert.equal(resB40k.ok, true, "L11-B 变体前置：minLiving 40,000 应成功");
+    const ppB40k = resB40k.data.summary.purchasingPower;
+    assert.equal(ppB40k.withdrawalYears, 40, "L11④-B 变体 withdrawalYears 应 = 40");
+    assert.equal(ppB40k.metShare, 0, "L11④-B 变体 metShare 应 = 0");
+    near(ppB40k.cumulativeGap, 164800, 0.01, "L11④-B 变体 gap = 40×4,120 = 164,800");
+    // ---- C：域空哨兵 ----
+    const resC = await calcLifecycle(mkInput({ pension: { targetRetireAge: 75 } }));
+    assert.equal(resC.ok, true, "L11-C 前置：calcLifecycle 应成功");
+    const ppC = resC.data.summary.purchasingPower;
+    assert.equal(ppC.withdrawalYears, 0, "L11⑤-C withdrawalYears 应 = 0（workEnd 45 ＞ horizon 40）");
+    assert.equal(ppC.metShare, -1, "L11⑤-C metShare 应 = −1（域空未度量哨兵）");
+    assert.equal(ppC.cumulativeGap, 0, "L11⑤-C 域空 gap = 0");
+    // ---- 变体 i = 0：cumInfl ≡ 1、实 = 名 ----
+    const resI0 = await calcLifecycle(mkInput({ accum: { inflationMeanPct: 0 } }));
+    assert.equal(resI0.ok, true, "L11⑥ 前置：i = 0 应成功");
+    ok(resI0.data.timeline.every((r) => r.realWithdrawal === r.withdrawal), "L11⑥ i=0 cumInfl ≡ 1、实 = 名（无除零路径）");
+    console.log("[check-lifecycle] L11 通过：fi 19 ＋ 行 13 名义错觉反例、R_t 工作段线性、恒值域 metShare 1/0 ＋ gap 164,800、域空哨兵 −1、i=0 实=名");
+  }
+
+  // =========================================================================
+  // P9 L12（算例⑥）：多事件重叠年叠加（docs/p9-spec.md §4.1 / cases §6；E1/E6 承载）
+  // 独立推导：行 5 = (30,000＋1,200,000)×1.02⁵ = 1,358,019.39（合并闭式）；行 10–15 =
+  // 60,000×1.02^t（行 10 = 73,139.67、行 15 = 80,752.10）；行 5 低谷 168,021.64 ＞ 0 →
+  // fiFirstYear = −1 且 depletedYear = −1（不耗尽但永不达标，两哨兵并存）。
+  // E1：childBirth 事件体不存金额——base.costPerChild 覆写 540,000（年成本 30,000）。
+  // E6：行 5 = 两枚 tag（childBirth ＋ homePurchase）；行内 events[] 按 kind 字典序
+  // 稳定排列（childBirth ＜ healthPhase ＜ homePurchase）——排列不变性在标记层逐字节
+  // 成立（实现按 kind 固定序分组求和与装配 ⇒ f64 结合序固定）。
+  // =========================================================================
+  {
+    const loan = { principal: 1000000, annualRatePct: 3.9, years: 30, method: "equal_payment" };
+    const rental = { price: 1500000, downPaymentPct: 30, loanAnnualRatePct: 3.9, loanYears: 30, monthlyRent: 4000, vacancyRatePct: 5, maintenanceAnnualRatePct: 1, propertyFeeMonthly: 300, otherAnnualCost: 0, rentTaxRatePct: 5 };
+    const evChild = { id: "p9-l12-child", kind: "childBirth", age: 32 };
+    const evHome = { id: "p9-l12-home", kind: "homePurchase", age: 34, amount: 1200000 };
+    const evHealth = { id: "p9-l12-health", kind: "healthPhase", age: 39, endAge: 44, annualAmount: 30000 };
+    const mkInput = (events) => ({
+      base: { ...BASELINE_DEFAULTS, costPerChild: 540000 },
+      accum: { ...ACCUMULATION_DEFAULTS, currentAssets: 1000000 },
+      pension: { ...PENSION_DEFAULTS },
+      loan,
+      rental,
+      ...(events ? { lifeEvents: events } : {}),
+    });
+    const resBase = await calcLifecycle(mkInput());
+    assert.equal(resBase.ok, true, "L12 前置：基线 calcLifecycle 应成功");
+    const t12 = performance.now();
+    const resAll = await calcLifecycle(mkInput([evChild, evHome, evHealth]));
+    assert.equal(resAll.ok, true, "L12 前置：三事件 calcLifecycle 应成功");
+    const perfAll = performance.now() - t12;
+    const { timeline: rowsB } = resBase.data;
+    const { timeline: rowsAll, summary: sumAll } = resAll.data;
+    // ① 重叠行 withdrawal 恰合并闭式
+    near(rowsAll[4].withdrawal, 1358019.39, 0.01, "L12① 行 5 = 1,230,000×1.02⁵ = 1,358,019.39");
+    near(rowsAll[9].withdrawal, 73139.67, 0.01, "L12① 行 10 = 60,000×1.02^10 = 73,139.67");
+    near(rowsAll[14].withdrawal, 80752.1, 0.01, "L12① 行 15 = 60,000×1.02^15 = 80,752.10");
+    near(rowsAll[4].closingAssets, 168021.64, 0.01, "L12④ 行 5 低谷 168,021.64 ＞ 0");
+    // ④ fiFirstYear = −1 且 depletedYear = −1（两哨兵并存）
+    assert.equal(sumAll.fiFirstYear, -1, "L12④ fiFirstYear 应 = −1（永不达标）");
+    assert.equal(sumAll.depletedYear, -1, "L12④ depletedYear 应 = −1（不耗尽）");
+    // ② Δ 组合 = Δ房＋Δ育＋Δ医 逐行（叠加线性；research 实测最大差 3.7×10⁻⁹）
+    const soloHome = (await calcLifecycle(mkInput([evHome]))).data.timeline;
+    const soloChild = (await calcLifecycle(mkInput([evChild]))).data.timeline;
+    const soloHealth = (await calcLifecycle(mkInput([evHealth]))).data.timeline;
+    for (let t = 1; t <= 40; t++) {
+      const combined = rowsAll[t - 1].closingAssets - rowsB[t - 1].closingAssets;
+      const sum = (soloHome[t - 1].closingAssets - rowsB[t - 1].closingAssets)
+        + (soloChild[t - 1].closingAssets - rowsB[t - 1].closingAssets)
+        + (soloHealth[t - 1].closingAssets - rowsB[t - 1].closingAssets);
+      near(combined, sum, 0.01, `L12② 行 ${t} Δ 组合 = Δ房＋Δ育＋Δ医`);
+    }
+    // ③ 三登记顺序 timeline 逐字节相等（含 events[] 标记层——kind 字典序稳定排列，E6）
+    const canon = JSON.stringify(rowsAll);
+    const permA = JSON.stringify((await calcLifecycle(mkInput([evHome, evChild, evHealth]))).data.timeline);
+    const permB = JSON.stringify((await calcLifecycle(mkInput([evHealth, evHome, evChild]))).data.timeline);
+    assert.equal(permA, canon, "L12③ 排列 (房,育,医) 与 (育,房,医) 逐字节相等");
+    assert.equal(permB, canon, "L12③ 排列 (医,房,育) 与 (育,房,医) 逐字节相等");
+    // ⑤ 行级 tag 计数全枚举（E6：行 5 两枚 child＋home）
+    const kinds = (r) => r.events.map((e) => e.kind).join("+");
+    assert.equal(kinds(rowsAll[2]), "childBirth", "L12⑤ 行 3 tag");
+    assert.equal(kinds(rowsAll[3]), "childBirth", "L12⑤ 行 4 tag");
+    assert.equal(kinds(rowsAll[4]), "childBirth+homePurchase", "L12⑤ 行 5 恰两枚（child＋home，E6）");
+    for (let t = 6; t <= 9; t++) assert.equal(kinds(rowsAll[t - 1]), "childBirth", `L12⑤ 行 ${t} tag`);
+    for (let t = 10; t <= 15; t++) assert.equal(kinds(rowsAll[t - 1]), "childBirth+healthPhase", `L12⑤ 行 ${t} 恰两枚（child＋health）`);
+    for (let t = 16; t <= 20; t++) assert.equal(kinds(rowsAll[t - 1]), "childBirth", `L12⑤ 行 ${t} tag`);
+    for (const t of [1, 2, 21, 30]) assert.equal(rowsAll[t - 1].events.length, 0, `L12⑤ 行 ${t} 无 tag`);
+    ok(rowsAll.every((r) => Number.isFinite(r.realWithdrawal)), "L12 realWithdrawal 全程有限数");
+    console.log(`[check-lifecycle] L12 通过：行 5 合并闭式 1,358,019.39、Δ 叠加线性、三序逐字节相等（E6）、两哨兵并存（含事件装配 ${perfAll.toFixed(1)} ms ≤ 50 ms 预算内实测值）`);
+    ok(perfAll <= 50, `L12 含事件装配性能实测 ${perfAll.toFixed(1)} ms ≤ 50 ms（§9② 验收记录）`);
+  }
+
+  // =========================================================================
+  // P9 L13（算例⑦）：P8 桥接组合 × 育儿（docs/p9-spec.md §4.1 / cases §7）
+  // 独立推导（基线 = research-p8-cases §1 算例①手算表，跨文档对表）：A₀ = 1,706,225.60、
+  // targetRetireAge 30 → workEnd 0、horizon 60；基线五行 1,746,408.15 / 1,787,666.97 /
+  // 3,559,230.95 / 3,687,209.22 / 10,282,865.09。组合行 3–20 withdrawal = 65,880×1.02^t
+  // （行 3 = 69,912.38、行 20 = 97,894.21——生活费 35,880＋育儿 30,000 同一通胀因子）；
+  // 行 21–30 回基线支取式；行 31+ = max(0, 生活费 − 34,104.36)。ΔA₆₀ = −5,779,062.96
+  // （10,282,865.09 → 4,503,802.13）。E1：base.costPerChild 覆写 540,000。
+  // =========================================================================
+  {
+    const loan = { principal: 1000000, annualRatePct: 3.9, years: 30, method: "equal_payment" };
+    const rental = { price: 1500000, downPaymentPct: 30, loanAnnualRatePct: 3.9, loanYears: 30, monthlyRent: 4000, vacancyRatePct: 5, maintenanceAnnualRatePct: 1, propertyFeeMonthly: 300, otherAnnualCost: 0, rentTaxRatePct: 5 };
+    const mkInput = (events) => ({
+      base: { ...BASELINE_DEFAULTS, costPerChild: 540000 },
+      accum: { ...ACCUMULATION_DEFAULTS, currentAssets: 1706225.6, years: 60 },
+      pension: { ...PENSION_DEFAULTS, targetRetireAge: 30 },
+      loan,
+      rental,
+      ...(events ? { lifeEvents: events } : {}),
+    });
+    const resBase = await calcLifecycle(mkInput());
+    assert.equal(resBase.ok, true, "L13 前置：基线 calcLifecycle 应成功");
+    const resEv = await calcLifecycle(mkInput([{ id: "p9-l13-child", kind: "childBirth", age: 32 }]));
+    assert.equal(resEv.ok, true, "L13 前置：组合 calcLifecycle 应成功");
+    const { timeline: rowsB, summary: sumB } = resBase.data;
+    const { timeline: rowsE, summary: sumE } = resEv.data;
+    // ① bridgeYears 恒 30、pensionStart 恒行 31、pensionMonthly 恒 2,842.03（事件不触碰养老金族）
+    assert.equal(sumE.bridgeYears, 30, "L13① bridgeYears 恒 30");
+    assert.equal(sumE.pensionMonthly, 2842.03, "L13① pensionMonthly 恒 2,842.03");
+    ok(rowsE[30].pensionStart, "L13① pensionStart 恒行 31");
+    near(sumE.pensionMonthly, 2842.03, 0.01, "L13① pensionMonthly ±0.01");
+    // ② 基线五行逐值 = P8 §1 表 ±0.01（跨文档手算对表）
+    near(rowsB[0].closingAssets, 1746408.15, 0.01, "L13② 基线行 1 = 1,746,408.15");
+    near(rowsB[1].closingAssets, 1787666.97, 0.01, "L13② 基线行 2 = 1,787,666.97");
+    near(rowsB[29].closingAssets, 3559230.95, 0.01, "L13② 基线行 30 = 3,559,230.95");
+    near(rowsB[30].closingAssets, 3687209.22, 0.01, "L13② 基线行 31 = 3,687,209.22");
+    near(rowsB[59].closingAssets, 10282865.09, 0.01, "L13② 基线行 60 = 10,282,865.09");
+    // ③ 行 3–20 withdrawal = 65,880×1.02^t、行 21 起回基线支取式
+    for (let t = 3; t <= 20; t++) {
+      near(rowsE[t - 1].withdrawal, 65880 * Math.pow(1.02, t), 0.01, `L13③ 行 ${t} 支取 = 65,880×1.02^${t}（生活费＋育儿同一因子）`);
+    }
+    for (let t = 21; t <= 60; t++) {
+      const living = 35880 * Math.pow(1.02, t);
+      near(rowsE[t - 1].withdrawal, t >= 31 ? Math.max(0, living - 34104.36) : living, 0.01, `L13③ 行 ${t} 回基线支取式`);
+    }
+    near(rowsE[2].withdrawal, 69912.38, 0.01, "L13③ 行 3 = 69,912.38");
+    near(rowsE[19].withdrawal, 97894.21, 0.01, "L13③ 行 20 = 97,894.21（成本末行）");
+    // ④ ΔA₆₀ 恰锚
+    near(rowsE[59].closingAssets, 4503802.13, 0.01, "L13④ 组合 A₆₀ = 4,503,802.13");
+    near(rowsE[59].closingAssets - rowsB[59].closingAssets, -5779062.96, 0.01, "L13④ ΔA₆₀ = −5,779,062.96");
+    // ⑤ 全 60 行 closing ＞ 0 且 fiFirstYear = 0（期初已达标，事件不回写）
+    ok(rowsE.every((r) => r.closingAssets > 0), "L13⑤ 全 60 行 closing ＞ 0");
+    assert.equal(sumE.fiFirstYear, 0, "L13⑤ fiFirstYear = 0（t=0 判定，事件不回写）");
+    console.log("[check-lifecycle] L13 通过：基线五行 = P8 §1 跨文档对表、行 3–20 = 65,880×1.02^t、ΔA₆₀ = −5,779,062.96、养老金族零触碰");
+  }
+
+  console.log(`[check-lifecycle] L1–L13 全部通过（断言 ${passed} 项 + 逐行断言若干）。`);
 } finally {
   rmSync(BUNDLE_TMP, { force: true });
 }
