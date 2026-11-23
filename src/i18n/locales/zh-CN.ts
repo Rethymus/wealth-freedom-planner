@@ -445,6 +445,8 @@ const zhCN = {
     annualSpend: "年支出（基期）",
     annualSpendTooltip:
       "当前（基期）年度总支出；自第 1 年起每年按通胀率上行（第 1 年支出即含第 1 年通胀样本）。",
+    annualSpendMismatchHint: "与自由刻度「每月开销」×12（{{value}}/年）不一致",
+    annualSpendSyncButton: "同步为 {{value}}（自由刻度每月开销 ×12）",
     returnMean: "名义回报率均值",
     returnMeanTooltip: "长期平均年化收益率（未剔除通胀）。",
     returnStd: "名义回报率标准差",
@@ -535,6 +537,8 @@ const zhCN = {
     monthlyIncomeTooltip: "到手月收入（税后口径）；月储蓄 = 月收入 − 月支出，可为负。",
     monthlyExpense: "月支出",
     monthlyExpenseTooltip: "当前生活方式下平均每月总支出；自第 1 年起随通胀上行。",
+    expenseMismatchHint: "与自由刻度「每月开销」（{{value}}）不一致",
+    expenseSyncButton: "同步为自由刻度每月开销（{{value}}）",
     targetValue: "财富自由目标值（基期）",
     targetValueTooltip: "判定「达成」的资产门槛；判定时按通胀逐年上调（第 t 年目标 = 该值 × 累计通胀因子）。",
     syncButton: "与基础模式同步临界值",
@@ -613,6 +617,8 @@ const zhCN = {
     deleted: "已删除情景「{{name}}」",
     versionMismatch: "无法载入（版本或数据不符）",
     compareTitle: "关键指标对比（确定性计算核心逐景复算）",
+    spendRowNote:
+      "首行「年支出（基期）」为各情景保存时的输入值（仅驱动蒙特卡洛模拟）；其余 8 行为确定性指标复算，不随该值变化——需比较耗尽概率时，可载入情景后运行蒙特卡洛。",
     metricCritical: "财富自由参考线",
     metricRentalNet: "收租年净现金流",
     metricPayback: "收租回本年限",

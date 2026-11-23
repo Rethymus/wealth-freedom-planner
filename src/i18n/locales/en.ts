@@ -497,6 +497,8 @@ const en = {
     annualSpend: "Annual spending (base year)",
     annualSpendTooltip:
       "Total annual spending in the current (base) year; from year 1 on it rises each year by the inflation rate (year 1 spending already includes year 1's inflation sample).",
+    annualSpendMismatchHint: "Differs from the Freedom tab monthly expense × 12 ({{value}}/year)",
+    annualSpendSyncButton: "Sync to {{value}} (Freedom monthly expense × 12)",
     returnMean: "Mean nominal return rate",
     returnMeanTooltip:
       "The long-run average annualized return (not adjusted for inflation).",
@@ -598,6 +600,8 @@ const en = {
     monthlyExpense: "Monthly expense",
     monthlyExpenseTooltip:
       "Your average total monthly spending under the current lifestyle; it rises with inflation from year 1 on.",
+    expenseMismatchHint: "Differs from the Freedom tab monthly expense ({{value}})",
+    expenseSyncButton: "Sync to the Freedom tab monthly expense ({{value}})",
     targetValue: "Financial freedom target (base year)",
     targetValueTooltip:
       "The asset threshold for judging “reached”; it is raised year by year with inflation (year-t target = this value × the cumulative inflation factor).",
@@ -679,6 +683,8 @@ const en = {
     deleted: "Deleted scenario “{{name}}”",
     versionMismatch: "Cannot load (version or data mismatch)",
     compareTitle: "Key metric comparison (recomputed per scenario by the deterministic calculation core)",
+    spendRowNote:
+      "The first row, “Annual spending (base year)”, is each scenario's saved input (it only drives the Monte Carlo simulation); the remaining 8 rows are deterministic metrics recomputed per scenario and do not change with it — to compare depletion probabilities, load a scenario and run the simulation.",
     metricCritical: "Financial freedom reference line",
     metricRentalNet: "Rental net annual cash flow",
     metricPayback: "Rental payback period (years)",

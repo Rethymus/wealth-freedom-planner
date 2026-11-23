@@ -97,6 +97,9 @@ export default function MonteCarloPanel() {
   const strategyLegacyNotice = useCalculatorStore((s) => s.strategyLegacyNotice);
   const clearStrategyLegacyNotice = useCalculatorStore((s) => s.clearStrategyLegacyNotice);
   const setSeriesId = useCalculatorStore((s) => s.setMonteCarloSeriesId);
+  /** F1 支出口径一致性：自由刻度「每月开销」为支出口径锚点——仅用于一致性警示与显式
+   *  同步按钮（用户显式点击才写入），不引入静默联动（数据流零改动） */
+  const baseline = useCalculatorStore((s) => s.baselineInputs);
   const displayCode = useCalculatorStore((s) => s.currency.display);
   const colorBlindFriendly = useCalculatorStore((s) => s.colorBlindFriendly);
   const theme = useCalculatorStore((s) => s.theme);
@@ -303,6 +306,12 @@ export default function MonteCarloPanel() {
     inputs.currentAssets > 0
       ? `${formatNumber((inputs.annualSpend / inputs.currentAssets) * 100, 2)}%`
       : "—";
+
+  /** F1 支出口径一致性：MC「年支出（基期）」≠ 自由刻度「每月开销」×12 时给字段警示 +
+   *  一键同步（仅提示与显式动作，不自动改值——MONTE_CARLO_DEFAULTS.annualSpend 为
+   *  编译期常量，仅作初始值，不随 store 联动是既有口径，本处不改变该数据流） */
+  const baselineAnnualSpend = baseline.monthlyExpense * 12;
+  const spendMismatched = inputs.annualSpend !== baselineAnnualSpend;
 
   /** 序列窗口数（seq.note1 的 {{count}}：滚动窗起点数 = 序列长度 − 窗长 + 1） */
   const seqWindowsCount = Math.max(0, seqSeries.length - seqWindowYears + 1);
@@ -577,6 +586,11 @@ export default function MonteCarloPanel() {
           prefix={symbol}
           suffix={displayCode === "CNY" ? t("units.yuanPerYear") : undefined}
           convertRate={rate}
+          hint={
+            spendMismatched
+              ? t("mc.annualSpendMismatchHint", { value: money(baselineAnnualSpend) })
+              : undefined
+          }
         />
         {/* 自助抽样模式下名义回报均值/标准差不参与计算（分布由所选序列决定），隐藏两个字段；
             通胀均值/标准差保留（通胀仍按正态分布抽样） */}
@@ -644,6 +658,19 @@ export default function MonteCarloPanel() {
           suffix="#"
         />
       </FieldRow>
+
+      {/* F1 支出口径一致性一键同步：仅在不一致时渲染（显式动作，不自动改值）；
+          字段显示刷新走 NumberField 的外部值重挂载机制（fields.ts inputEpoch） */}
+      {spendMismatched ? (
+        <Button
+          size="small"
+          style={{ marginBottom: 12 }}
+          onClick={() => setInputs({ annualSpend: baselineAnnualSpend })}
+          className="wf-pressable"
+        >
+          {t("mc.annualSpendSyncButton", { value: money(baselineAnnualSpend) })}
+        </Button>
+      ) : null}
 
       {/* P5 冗长治理：bootstrap 模式的独立 seriesNote 段落删除——口径全文已并入上方
           收益序列 FieldTip（出处类信息经 tooltip 承载，面板 note 收敛 ≤2） */}

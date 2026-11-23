@@ -212,6 +212,9 @@ export default function AccumulationPanel() {
   /** 图表实际绘制的路径条数（契约 50 条；按返回数据兜底） */
   const chartPathCount = data ? Math.min(MAX_CHART_PATHS, data.samplePaths.length) : 0;
 
+  /** F1 支出口径一致性：面板「月支出」与自由刻度「每月开销」不一致即警示（字段 hint）+
+   *  一键同步按钮（显式动作，不自动改值——手动输入不被静默覆盖的既有语义不变） */
+  const expenseMismatched = inputs.monthlyExpense !== baseline.monthlyExpense;
   /** 月储蓄（可为负；负值以跌色展示，正值以涨色展示） */
   const saving = inputs.monthlyIncome - inputs.monthlyExpense;
   const savingText = money(saving);
@@ -309,6 +312,11 @@ export default function AccumulationPanel() {
           prefix={symbol}
           suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
           convertRate={rate}
+          hint={
+            expenseMismatched
+              ? t("accumulation.expenseMismatchHint", { value: money(baseline.monthlyExpense) })
+              : undefined
+          }
         />
         <AmountField
           key={`target-sync-${targetSyncEpoch}`}
@@ -426,6 +434,19 @@ export default function AccumulationPanel() {
       >
         {t("accumulation.syncButton")}
       </Button>
+
+      {/* F1 支出口径一致性一键同步：仅在不一致时渲染；点击写回自由刻度基准值，
+          字段显示由 NumberField 的外部值重挂载机制刷新（fields.ts inputEpoch） */}
+      {expenseMismatched ? (
+        <Button
+          size="small"
+          style={{ marginBottom: 12, marginLeft: 8 }}
+          onClick={() => setInputs({ monthlyExpense: baseline.monthlyExpense })}
+          className="wf-pressable"
+        >
+          {t("accumulation.expenseSyncButton", { value: money(baseline.monthlyExpense) })}
+        </Button>
+      ) : null}
 
       {mode === "forward" ? (
         <>

@@ -59,6 +59,9 @@ interface CompareCol {
   failed: boolean;
   /** 8 项指标值（§4.3 表行序；valid=false / failed=true 时为空数组） */
   values: string[];
+  /** F1 情景输入档案·「年支出（基期）」保存值（非复算指标，纯展示——只改年支出保存的
+   *  情景不再与基准「一模一样」；decode 失败时为空串不入列） */
+  spend: string;
 }
 
 /** 指标行定义（§4.3 表序：行名键见 §8 组 3） */
@@ -81,7 +84,7 @@ async function computeColumn(
   moneyFixed: (v: number) => string,
   yearUnit: string,
 ): Promise<CompareCol> {
-  const invalid: CompareCol = { id: entry.id, name: entry.name, valid: false, failed: false, values: [] };
+  const invalid: CompareCol = { id: entry.id, name: entry.name, valid: false, failed: false, values: [], spend: "" };
   // P7：decodeShareState 返回 DecodeResult（state + 策略正名规范化信号）；
   // 对比列复算只消费切片本体，规范化信号由「载入」路径经 store 置一次性提示
   const decoded = decodeShareState(entry.payload);
@@ -94,7 +97,15 @@ async function computeColumn(
     calcTax(shared.tax),
     calcReverse(shared.reverse),
   ]);
-  const failedCol: CompareCol = { id: entry.id, name: entry.name, valid: true, failed: true, values: [] };
+  const failedCol: CompareCol = {
+    id: entry.id,
+    name: entry.name,
+    valid: true,
+    failed: true,
+    values: [],
+    // 档案值与确定性复算解耦：复算失败列仍展示保存的年支出输入值
+    spend: money(shared.monteCarlo.annualSpend),
+  };
   if (!baselineR.ok || !rentalR.ok || !pensionR.ok || !taxR.ok || !reverseR.ok) return failedCol;
   const saving = shared.accumulation.monthlyIncome - shared.accumulation.monthlyExpense;
   const payback = rentalR.data.paybackYears;
@@ -109,7 +120,7 @@ async function computeColumn(
     // 月储蓄（打工口径）：TS 显示算术，可负（列内固定两位小数与其他金额列对齐）
     moneyFixed(saving),
   ];
-  return { id: entry.id, name: entry.name, valid: true, failed: false, values };
+  return { id: entry.id, name: entry.name, valid: true, failed: false, values, spend: money(shared.monteCarlo.annualSpend) };
 }
 
 export default function ScenarioPanel() {
@@ -297,14 +308,25 @@ export default function ScenarioPanel() {
       dataIndex: c.id,
     })),
   ];
-  const tableData = METRIC_KEYS.map((key, rowIdx) => {
-    const row: Record<string, string> = { metric: t(key) };
-    for (const c of validCols) {
-      if (c.failed) row[c.id] = "—";
-      else row[c.id] = c.values[rowIdx] ?? "—";
-    }
-    return row;
-  });
+  const tableData = [
+    /* F1 情景输入档案首行：展示各情景保存的「年支出（基期）」输入值（仅驱动蒙特卡洛模拟，
+     *  不参与下方 8 项确定性指标复算——口径见 spendRowNote）。纯展示，零复算逻辑改动 */
+    (() => {
+      const row: Record<string, string> = { metric: t("mc.annualSpend") };
+      for (const c of validCols) {
+        row[c.id] = c.failed ? "—" : c.spend;
+      }
+      return row;
+    })(),
+    ...METRIC_KEYS.map((key, rowIdx) => {
+      const row: Record<string, string> = { metric: t(key) };
+      for (const c of validCols) {
+        if (c.failed) row[c.id] = "—";
+        else row[c.id] = c.values[rowIdx] ?? "—";
+      }
+      return row;
+    }),
+  ];
 
   return (
     <div>
@@ -434,6 +456,11 @@ export default function ScenarioPanel() {
           />
         ) : (
           <>
+            {/* F1 口径注：说明首行为情景输入档案、8 项指标不受年支出驱动（改年支出对比
+                「无变化」不再是静默行为） */}
+            <div style={{ marginTop: 4 }}>
+              <Text type="secondary">{t("scenario.spendRowNote")}</Text>
+            </div>
             {/* D7 滑动提示：仅非空分支渲染（无表可滚不虚示）；<675.9 档由样式层放行 */}
             <Text type="secondary" className="wf-swipe-hint">{t("common.swipeHint")}</Text>
             {/* D7 两层结构：渐隐 ::after 挂在不滚动的外层上（挂在内层滚动容器会随内容滚走） */}
