@@ -78,6 +78,9 @@ const zhHant = {
     "ruleOrigin": "攢夠「月開銷 × 乘數」的本金後，僅靠投資收益（扣除通脹）即可覆蓋每月開銷。按默認參數（名義回報率 {{nominal}}、通脹率 {{inflation}}），實際回報率為 {{real}}、對應乘數 {{multiplier}}，「480 法則」由此得名。",
     "multiplierExactLabel": "精確乘數（費雪口徑）",
     "criticalExactLabel": "精確口徑參考線",
+    // P10 §7 新鍵（F7 葉B 步驟條兩步標籤；docs/p10-spec.md §1.1）
+    "stepDesire": "欲望",
+    "stepAssumption": "假設與資產",
     "fisherNote":
       "實際回報率按精確費雪式 (1+r_nom)/(1+π)−1 計算；近似式 r≈r_nom−π 僅供教學對照，兩者差 ≈ π×實際回報率。",
     "formulaRow": "480 法則公式解構"
@@ -107,12 +110,15 @@ const zhHant = {
       "transport": "行",
       "communication": "通訊",
       "other": "其他"
-    }
+    },
+    // P10 §7 新鍵（§3.4 子女預留折疊態文案：預設歸因 / custom 態 +「啟用」按鈕）
+    "childFoldedPreset": "子女預留未啟用（預設）",
+    "childFolded": "子女預留未啟用",
+    "childEnable": "啟用"
   },
   "progress": {
     "assetsLabel": "已有資產（選填）",
     "assetsTooltip": "你目前已經攢下的可投資資產；填寫後在大字號旁展示相對參考線的進度環。",
-    "caption": "已有資產約為參考線的 {{pct}}%",
     "ariaLabel": "自由刻度進度環：已有資產約為參考線的 {{pct}}%",
     "emptyHint": "填入已有資產，點亮第一檔刻度"
   },
@@ -161,7 +167,15 @@ const zhHant = {
     },
     "migrate": {
       "notice": "默認視圖已換為四任務導航，原九面板收入專業模式"
-    }
+    },
+    // P10 §7 新鍵（L1 life 頁 5 組新分段標籤：規劃 = 積累+養老組、資產 = 負債+收租組）
+    "lifeGroupPlan": "規劃",
+    "lifeGroupAsset": "資產",
+    // P10 §7 新鍵（槽切換條通用兩段標籤：圖 / 參數，跨 L4/K3/R4 復用）
+    "slotChart": "圖表",
+    "slotParams": "參數",
+    // 骨架修復輪新鍵（A1 顯式回退橫幅，紅線 9——不支持零捲動的高度回退捲動並明示）
+    "scrollFallback": "視窗高度不足，本頁已回退為可捲動檢視。"
   },
   "insights": {
     "formulaTitle": "公式推導",
@@ -207,6 +221,12 @@ const zhHant = {
     "looseBody": "寬鬆版：允許資產在後期緩慢下降，換取更高的當期開銷。對應蒙特卡洛面板「閾值帶調整」與「餘額比例」兩類支取策略——可在模擬中觀察耗盡概率與末年購買力的權衡。",
     "evidenceTitle": "數據核證標註說明",
     "evidenceShort": "官方核證 = 直讀原文；媒體核證 = 兩家以上獨立媒體一致；視頻口徑 = 未獨立查證。",
+    // P10 §7 新鍵（原理檔案 5 條目標籤 E1–E5；docs/p10-spec.md §1.4 P1）
+    "entryFormula": "公式與口徑",
+    "entryChain": "假設鏈條",
+    "entryData": "數據與來源",
+    "entryEvidence": "醫療與證據",
+    "entryNotice": "聲明",
     "evidenceNote1": "標註說明：「官方核證」= 官方原文頁面已直讀；「媒體核證」= 官方發佈數字經兩家及以上獨立媒體轉載覈對一致；「視頻口徑」= 僅見於原視頻或屬分析假設、未找到獨立權威來源。",
     "evidenceNote2": "各條年份與口徑以行內標註為準；查證記錄見 docs/research-video-data.md。"
   },
@@ -286,6 +306,9 @@ const zhHant = {
     "exampleBNote": "算例 B 原視頻稱結果約 0.9 萬/月（含約 10% 的額外折讓，來源無法復算）；本工具按同一口徑如實給出 1.0 萬/月，不按 0.9 萬修正。",
     "perpetuityWarning":
       "永續口徑在模型假設內成立（實際回報恆正、支出隨模型上行）；真實序列風險可破壞該結論——參照 Morningstar 2026 年度研究：30 年期、90% 成功率、股票權重 30%–50% 組合的起始安全支取率為 3.9%（固定實際支取基線，排除養老金等外部收入；歷年數值隨市場假設在 3.3%–4.0% 間浮動）。該數值基於美國市場假設，不構成任何環境下的保證值。",
+    // P10 §7 新鍵（F8 反向卡雙態切換「估算結果 ⇄ 編輯參數」；修訂對照輪二⑧）
+    "viewResult": "估算結果",
+    "editParams": "編輯參數"
   },
   "loan": {
     "principal": "貸款金額",
@@ -485,7 +508,11 @@ const zhHant = {
       "支取策略正名：預設與 fixed 均為按通脹樣本逐年上調（等價固定實際購買力支出），歷史名「固定名義」已棄用——數值口徑從未改變。閾值帶：文獻最優參數 ±20%／±10%／末段 15 年不降支（更小的閾值或更大的降支幅度不再改善成功率）。餘額比例：按實際口徑年金化攤還到規劃終點，構造上不破產，購買力風險看「末年支取額」分位數。",
     "strategyNote2": "算術錨：資產 −25% 時同額支取的支取率由 4.00% 升至 5.33%——壞年前期的支取率反彈是序列風險傳導的核心。",
     "chartAria": "蒙特卡洛模擬圖：{{paths}} 條路徑模擬 {{years}} 年，耗盡概率 {{prob}}%、中位終值 {{median}}",
-    "doneAria": "模擬完成：資產耗盡概率 {{prob}}，中位終值 {{median}}"
+    "doneAria": "模擬完成：資產耗盡概率 {{prob}}，中位終值 {{median}}",
+    // P10 §7 新鍵（§4.3 MC 均值「跟隨核心參數」鎖標：aria / hint / 恢復聯動按鈕）
+    "meanSyncLockAria": "跟隨核心參數，點擊解鎖",
+    "meanSyncHint": "跟隨基礎模式核心參數；鎖態顯示與運行值隨核心參數同步",
+    "meanSyncRestore": "恢復跟隨核心參數"
   },
   "accumulation": {
     "currentAssets": "當前資產",
@@ -623,7 +650,6 @@ const zhHant = {
     "benchmarkAbove": "你的月開銷明顯高於{{region}}人均消費水平（約 {{anchor}} 元/月，{{year}} 年國家統計局口徑），請確認數值是否為高消費城市口徑。",
     "benchmarkNoticePrefix": "非阻斷提示：",
     "benchmarkInfoCny": "偏離檢測按中國城鎮人均消費口徑（國家統計局）為錨，僅作提示、不阻斷使用。",
-    "benchmarkInfoOther": "月開銷偏離檢測以人民幣口徑（中國城鎮人均消費）為錨，切換幣種後暫不比對；默認參數以人民幣口徑給出。",
     "benchmarkEmpty": "區域人均消費參考（regional.ts）暫為佔位空數據，偏離檢測將在數據填充後自動啓用。",
     "engelLabel": "你的恩格爾係數（選填）",
     "engelHint": "食品支出 ÷ 總支出，數值越低通常代表生活水平越高",
@@ -638,10 +664,6 @@ const zhHant = {
   },
   "sensitivity": {
     "title": "月開銷敏感性",
-    "expand": "展開",
-    "collapse": "收起",
-    "plusTitle": "調高月開銷（更貴的生活）",
-    "minusTitle": "調低月開銷（更省的生活）",
     "plusRow": "+{{pct}}%",
     "minusRow": "−{{pct}}%",
     "note": "同一乘數下參考線與月開銷線性同比例：月開銷每變動 {{pct}}%，參考線約變動 {{delta}}；育兒、健康與重大投入預留不受月開銷影響——「慾壑難填」在這裏就是參考線的抬升幅度。",
@@ -653,7 +675,6 @@ const zhHant = {
   },
   "share": {
     "copy": "複製分享鏈接",
-    "copyShort": "複製分享",
     "copiedShort": "已複製",
     "copyTooltip":
       "把當前全部業務輸入（不含主題／語言／幣種等介面偏好）編碼進鏈接；貼給他人打開即為同一套參數。鏈接內容為可逆編碼（編碼 ≠ 加密），任何取得鏈接的人可讀出全部業務輸入——請勿在鏈接中攜帶不願公開的數字。",

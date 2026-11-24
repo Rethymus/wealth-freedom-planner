@@ -38,6 +38,9 @@ export interface NumberFieldProps {
   hint?: string;
   /** md 断点栅格跨度（默认 24 = 单列；高级面板传 12 = 两列） */
   md?: number;
+  /** xs 断点栅格跨度（默认 24 = 单列；P10 槽内紧凑两列布局传 12——槽内字段恒两列
+   *  与视口断点解耦，docs/p10-spec.md §1.1 F8 槽内 2×52 行预算口径） */
+  xs?: number;
   disabled?: boolean;
   /** 展示换算率（1 CNY = rate 展示币种；p4-spec §3.6）。省略或 null = 不换算（现状行为）。
    *  传入时：显示值 = cnyToDisplay(value, rate)；用户编辑经 displayToCny 回写 onChange；
@@ -63,6 +66,7 @@ export function NumberField({
   suffix,
   hint,
   md = 24,
+  xs = 24,
   disabled,
   convertRate,
   highlighted,
@@ -123,7 +127,7 @@ export function NumberField({
   };
 
   return (
-    <Col xs={24} md={md}>
+    <Col xs={xs} md={md}>
       <div className={highlighted ? "wf-field wf-anatomy-target" : "wf-field"}>
         <div className="wf-field-label">
           <Text id={labelId} bold={highlighted || undefined}>
@@ -203,10 +207,10 @@ export function IntField({ min = LIMITS.int.min, max = LIMITS.int.max, ...rest }
   return <NumberField {...rest} limit={limit} />;
 }
 
-/** 高级面板的表单行：两列（md 起）→ 窄屏单列 */
-export function FieldRow({ children }: { children: ReactNode }) {
+/** 高级面板的表单行：两列（md 起）→ 窄屏单列；P10 槽内紧凑栅格经 className 扩展 */
+export function FieldRow({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <Row gutter={[16, 0]} className="wf-field-row">
+    <Row gutter={[16, 0]} className={className ? `wf-field-row ${className}` : "wf-field-row"}>
       {children}
     </Row>
   );

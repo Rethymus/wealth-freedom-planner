@@ -1,6 +1,14 @@
 /**
- * 应用骨架：顶栏（币种切换 + 色盲友好配色开关 + 语言切换 + 主题切换）、基础计算（默认首屏）、
- * 高级估算（Collapse）、底部免责声明。全部界面文案经 react-i18next 三语化。
+ * 应用骨架（P10 §2 100dvh 锁定 + flex 区域）：顶栏（币种切换 + 色盲友好配色开关 + 语言切换 +
+ * 主题切换）、任务切换条、五任务页（freedom / life / risk / principles / pro）。
+ * P10 骨架变更登记（§2.1/§2.2）：Layout height 100vh→100dvh 覆写（CSS .wf-layout）；
+ * Header sticky 退役（T1，静态 flex 行）；Content flex:1 + min-height:0 + overflow:hidden
+ * （内滚兜底禁断）；Footer 元素退役（T11，声明全文迁 principles E5 条目——信息先迁移后删）；
+ * 任务切换 scrollIntoView 复位退役（T8，focus preventScroll 保留）；迁移提示 Alert →
+ * Message 气泡（覆盖层零布局高度）；换算提示 Alert → 顶栏币种 Select 旁 info 触发器
+ * （tooltip 承载汇率+时点全文）；wasm 引导失败 Alert 保留（异常态横幅，A1 例外路径）；
+ * 页头 h2 标题退役（信息由 C2 活动任务标签承载，键值不变——登记注记）。
+ * 全部界面文案经 react-i18next 三语化。
  */
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -17,16 +25,15 @@ import { persistRoute, replaceUrlRoute, resolveInitialRoute } from "./services/r
 import type { AtlasRoute, AtlasTaskId } from "./services/routeState";
 import { useCalculatorStore } from "./store/useCalculatorStore";
 import { useDisplayRate, usePrefersReducedMotion } from "./components/hooks";
+import { FieldTip } from "./components/fields";
 import BasicCalculator from "./components/BasicCalculator";
 import AdvancedPanel from "./components/AdvancedPanel";
 import TaskSwitcher from "./components/TaskSwitcher";
 import LifeTaskPage from "./components/TaskPages";
-import ReversePanel from "./components/advanced/ReversePanel";
-import MonteCarloPanel from "./components/advanced/MonteCarloPanel";
-import ScenarioPanel from "./components/advanced/ScenarioPanel";
+import RiskPage from "./components/RiskPage";
 import InsightsPanel from "./components/advanced/InsightsPanel";
 
-const { Header, Content, Footer } = Layout;
+const { Header, Content } = Layout;
 const { Text, Title } = Typography;
 
 /** 数字键分域（wf03-spec §2.4）：1–4 → 四任务；5 → 专业模式。task=pro 时任务键整组
@@ -90,6 +97,60 @@ export type WasmBootstrapStatus =
 interface AppProps {
   /** 缺省按 pending 处理（不显示 bootstrap 提示） */
   wasmBootstrap?: WasmBootstrapStatus;
+}
+
+/**
+ * A1 显式回退守卫（p10-spec §1.0a / 红线 9；骨架修复轮新增）：轮询活动页根
+ * （.atlas-page:not([hidden])）的 scrollHeight > clientHeight——内容栈超出页框即挂
+ * .wf-fallback-scroll（页根放行 overflow-y:auto，样式层承载）并置位横幅态。
+ * 「不支持零滚动」的高度（IME 深收缩、env>0 机型、清单外极矮视口）由此回退为
+ * 可滚动视图 + 明示横幅，替代 overflow:hidden 静默裁切；六验收视口内容收口后
+ * 不触发。轮询口径：定时器 + resize + 任务切换重排（页内状态切换 600ms 内收敛，
+ * 单次检查为一次 querySelector + 两整数比较，开销可忽略）。返回横幅挂载态。
+ */
+function useZeroScrollFallback(activeTask: string): boolean {
+  const [fallback, setFallback] = useState(false);
+  useEffect(() => {
+    let timer = 0;
+    let timer2 = 0;
+    /** 双确认防抖：挂载瞬态（wasm 引导/首帧布局未定）可能短暂超框——首次检出只记
+     *  候选并在 ~320ms 后复核，复核仍溢出才回退；退避即时（一测非溢出立即撤）。 */
+    let pending = false;
+    const check = () => {
+      const page = document.querySelector<HTMLElement>(".atlas-page:not([hidden])");
+      if (!page) {
+        pending = false;
+        setFallback(false);
+        return;
+      }
+      const over = page.scrollHeight > page.clientHeight + 1;
+      if (over && !pending) {
+        pending = true;
+        timer2 = window.setTimeout(check, 320);
+        return;
+      }
+      pending = over && pending && page.scrollHeight > page.clientHeight + 1;
+      page.classList.toggle("wf-fallback-scroll", pending);
+      setFallback(pending);
+    };
+    const schedule = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(check, 280);
+    };
+    schedule();
+    window.addEventListener("resize", schedule);
+    const periodic = window.setInterval(schedule, 600);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(timer2);
+      window.clearInterval(periodic);
+      window.removeEventListener("resize", schedule);
+      document
+        .querySelectorAll(".atlas-page.wf-fallback-scroll")
+        .forEach((el) => el.classList.remove("wf-fallback-scroll"));
+    };
+  }, [activeTask]);
+  return fallback;
 }
 
 export default function App({ wasmBootstrap }: AppProps = {}) {
@@ -173,6 +234,9 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
     setRoute({ ...next, explicit: true, canonical: true });
   };
 
+  /** A1 显式回退守卫（useZeroScrollFallback，本文件上方）：随活动任务重排 */
+  const zeroScrollFallback = useZeroScrollFallback(route.task);
+
   /** 深链规范化：URL 显式携带参数但非 canonical 形态（越界值 / 冗余写法 / 多余参数序）
    *  → 挂载即 replaceState 规范化，静默无提示（路由无数据损失，§4.3 与分享损坏警示分级）；
    *  状态已在初始化器按同一解析链落位，本效果只修 URL 表现层，仅挂载跑一次。 */
@@ -182,16 +246,14 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
     }
   }, []); // 仅挂载规范化一次（深链落地修 URL；切换动作已实时同步）
 
-  /** 切换反馈（§2.1）：滚动复位至切换条（.atlas-switch-anchor scroll-margin-top 令牌化，
-   *  顶栏不遮挡）+ 焦点移至新页根（tabpanel tabIndex=0 可聚焦，routing §1.3）；首挂载
-   *  不动作（prev 空哨兵）。滚动为瞬时——动效纪律约束动画属性，滚动复位属导航原语。 */
+  /** 切换反馈（P10 §2.1 修订）：滚动复位 scrollIntoView 退役（T8——零滚动骨架下无滚动
+   *  可复位），焦点迁移保留——焦点移至新页根（tabpanel tabIndex=0 可聚焦，routing §1.3）；
+   *  首挂载不动作（prev 空哨兵）。 */
   const prevTaskRef = useRef<AtlasTaskId | null>(null);
-  const switcherAnchorRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const prev = prevTaskRef.current;
     prevTaskRef.current = route.task;
     if (prev === null || prev === route.task) return;
-    switcherAnchorRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
     document.getElementById(`atlas-${route.task}`)?.focus({ preventScroll: true });
   }, [route.task]);
 
@@ -228,9 +290,14 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
     }
   };
 
-  /** 一次性迁移说明（§8.5 ②）：默认视图换四任务导航的提示；显隐为会话级瞬态
-   *  （不入盘——wf-route §2.3「瞬态 UI 不入盘」同口径），关闭后本会话不再出现。 */
-  const [migrateNoticeVisible, setMigrateNoticeVisible] = useState(true);
+  /** 一次性迁移说明（§8.5 ②；P10 §2.1 迁移登记）：Alert 布局横幅 → Message 气泡
+   *  （覆盖层，零布局高度——内容与键值不变）；会话级瞬态不入盘（wf-route §2.3 同口径），
+   *  仅挂载时提示一次。 */
+  useEffect(() => {
+    Message.info(t("atlas.migrate.notice"));
+    // 仅首挂载提示一次（键随语言切换不入依赖——瞬态提示与既有语义一致）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** 动态层令牌注入 + 主题属性联动：取色统一经 resolveThemeTokens（按主题选组 + 涨跌语义色
    * 随「色盲友好」开关替换，全应用唯一主题取色入口）；写入 documentElement（组件库弹层挂在
@@ -392,7 +459,7 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
   };
 
   return (
-    <Layout style={{ minHeight: "100vh" }}>
+    <Layout className="wf-layout">
       {/* A1 跳过链接（p4-spec §7）：置 Layout 首个子元素（Header 之前）——须先于重复块成为
           首 Tab 停留点方有效；Enter 后焦点落 #wf-main（Content tabIndex={-1}） */}
       <a className="wf-skip-link" href="#wf-main">
@@ -423,6 +490,22 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
             options={currencyOptions}
             onChange={(v: string) => setCurrency({ base: v, display: v })}
           />
+          {/* P10 §2.1 换算提示迁移（原内容区 Alert → 顶栏 info 触发器，覆盖层零布局高度）：
+              非 CNY 且 loading 不渲染（防先撒谎后翻转）；落定可用 → tooltip 承载汇率+时点
+              全文；落定不可用 → 符号-only 回退说明全文。FieldTip 键盘可达（A5 先例） */}
+          {displayCode !== "CNY" && !rateInfo.loading ? (
+            <FieldTip
+              text={
+                rateInfo.rate !== null
+                  ? t("app.currencyNotice", {
+                      rate: formatNumber(rateInfo.rate, 4),
+                      code: rateInfo.code,
+                      time: formatTimestamp(rateInfo.updatedAt, t("currency.noTimestamp")),
+                    })
+                  : t("app.currencyFallback")
+              }
+            />
+          ) : null}
           <Text className="wf-header-label wf-header-label-cb">{t("app.colorBlindLabel")}</Text>
           {/* 点击区扩展包装：small 档开关本体 16px，+28px 命中区扩展达 44px 触控目标（无条件包装） */}
           <span className="wf-touch-target-sm">
@@ -467,21 +550,16 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
         </div>
       </Header>
 
-      {/* box-sizing 必须显式声明：组件库无全局 border-box 重置，content-box 下
-          width:100% + 水平 padding 会在窄视口溢出（375px 实测 scrollWidth 392）。
-          maxWidth 同步 +32（padding），保持桌面端 1080 内容宽度不变。 */}
-      <Content
-        role="main"
-        id="wf-main"
-        tabIndex={-1}
-        style={{
-          boxSizing: "border-box",
-          width: "100%",
-          maxWidth: 1112,
-          margin: "0 auto",
-          padding: "24px 16px",
-        }}
-      >
+      {/* P10 §2.1：Content = flex:1 + min-height:0 + overflow:hidden（.wf-main，样式层承载）；
+          box-sizing 必须显式声明（组件库无全局 border-box 重置，375px 实测 scrollWidth 392
+          历史缺陷注记保留）；maxWidth 1112 保留（padding 同步 +32）。padding 8/16（<768）
+          与 16/16（≥768）由样式层按 §1.0a 内容栈预算承载。 */}
+      <Content role="main" id="wf-main" tabIndex={-1} className="wf-main">
+        {/* A1 显式回退横幅（红线 9：不静默裁切——覆盖层零布局高度，不进入页栈预算；
+            aria 默认 alert 语义随组件库 Alert 承载） */}
+        {zeroScrollFallback ? (
+          <Alert type="warning" className="wf-fallback-banner" content={t("atlas.scrollFallback")} />
+        ) : null}
         {wasmBootstrap?.phase === "failed" ? (
           <Alert
             type="error"
@@ -490,42 +568,15 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
             content={t("app.wasmFailed", { message: wasmBootstrap.message })}
           />
         ) : null}
-        {/* ⑤ 换算提示三态（p4-spec §3.7）：CNY 恒不渲染；loading 不渲染（防先撒谎后翻转）；
-            落定可用 → 换算说明（{{rate}}/{{time}}/{{code}} 占位）；落定不可用 → 符号-only 回退说明 */}
-        {displayCode !== "CNY" && !rateInfo.loading && rateInfo.rate !== null ? (
-          <Alert
-            type="info"
-            style={{ marginBottom: 16 }}
-            content={t("app.currencyNotice", {
-              rate: formatNumber(rateInfo.rate, 4),
-              code: rateInfo.code,
-              time: formatTimestamp(rateInfo.updatedAt, t("currency.noTimestamp")),
-            })}
-          />
-        ) : null}
-        {displayCode !== "CNY" && !rateInfo.loading && rateInfo.rate === null ? (
-          <Alert type="warning" style={{ marginBottom: 16 }} content={t("app.currencyFallback")} />
-        ) : null}
-        {/* WF-03 Atlas 任务区（§2.2）：任务切换条 → 五个任务页容器（四任务 + 专业模式）。
-            切换条恰 5 项（四任务主行 + 专业模式次级）；任务页 hidden 非卸载（§5.5：
-            已运行模拟结果 / 表单输入切换零丢失），页内布局归原型 §1–§4、life/risk
-            本轮单列聚合承载（§2.5，容器查询归 WF-04）。壳层（Header/Footer/Content
-            maxWidth 1112）零改动。 */}
+        {/* WF-03 Atlas 任务区（§2.2）+ P10 零滚动骨架：任务切换条 → 五个任务页容器。
+            任务页 hidden 非卸载（§5.5 红线 7：已运行模拟结果 / 表单输入切换零丢失）；
+            页头 h2 退役（信息由 C2 活动标签承载——登记注记）。 */}
         <div className="atlas-region" onKeyDown={handleAtlasKeyDown}>
-          <div className="atlas-switch-anchor" ref={switcherAnchorRef}>
-            {migrateNoticeVisible ? (
-              <Alert
-                type="info"
-                closable
-                className="atlas-migrate"
-                content={t("atlas.migrate.notice")}
-                onClose={() => setMigrateNoticeVisible(false)}
-              />
-            ) : null}
+          <div className="atlas-switch-anchor">
             <TaskSwitcher active={route.task} onSelect={selectTask} />
           </div>
-          {/* —— 自由刻度（默认落点）：L1/L2 基础公式 + L3 反向估算交叉工具卡（原型 §1.1；
-              双栏语义自 wf-workbench 迁入，容器查询首批 per §2.5） —— */}
+          {/* —— 自由刻度（默认落点）：P10 §1.1 切换树整壳（BasicCalculator 自持 F0–F9，
+              反向卡随叶B F8 槽 / 桌面右列——原 wf-workbench-secondary 承载退役） —— */}
           <div
             id="atlas-freedom"
             role="tabpanel"
@@ -534,23 +585,9 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
             hidden={route.task !== "freedom"}
             className="atlas-page atlas-freedom"
           >
-            <div className="atlas-freedom-layout">
-              <h2 className="atlas-page-title">{t("atlas.nav.freedom")}</h2>
-              {visitedTasks.has("freedom") ? (
-                <>
-                  <div className="wf-workbench-primary">
-                    <BasicCalculator />
-                  </div>
-                  <div className="wf-workbench-secondary">
-                    <section className="atlas-tool-card" aria-label={t("advanced.reverseTitle")}>
-                      <ReversePanel />
-                    </section>
-                  </div>
-                </>
-              ) : null}
-            </div>
+            {visitedTasks.has("freedom") ? <BasicCalculator /> : null}
           </div>
-          {/* —— 人生轨迹：五组单列聚合承载（组件壳 LifeTaskPage，§1 表 2–5/7 行） —— */}
+          {/* —— 人生轨迹：P10 §1.2 五组切换树（7 组 → 5 组收敛，TaskPages 承载） —— */}
           <div
             id="atlas-life"
             role="tabpanel"
@@ -559,10 +596,9 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
             hidden={route.task !== "life"}
             className="atlas-page atlas-life"
           >
-            <h2 className="atlas-page-title">{t("atlas.nav.life")}</h2>
             {visitedTasks.has("life") ? <LifeTaskPage /> : null}
           </div>
-          {/* —— 风险实验室：主模拟 + 情景库单列聚合承载（§1 表 6/8 行，容器查询归 WF-04） —— */}
+          {/* —— 风险实验室：P10 §1.3 两叶切换树（RiskPage：模拟 ⇄ 情景） —— */}
           <div
             id="atlas-risk"
             role="tabpanel"
@@ -571,19 +607,9 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
             hidden={route.task !== "risk"}
             className="atlas-page atlas-risk"
           >
-            <h2 className="atlas-page-title">{t("atlas.nav.risk")}</h2>
-            {visitedTasks.has("risk") ? (
-              <>
-                <section className="atlas-tool-card" aria-label={t("advanced.mcTitle")}>
-                  <MonteCarloPanel />
-                </section>
-                <section className="atlas-tool-card" aria-label={t("advanced.scenarioTitle")}>
-                  <ScenarioPanel />
-                </section>
-              </>
-            ) : null}
+            {visitedTasks.has("risk") ? <RiskPage /> : null}
           </div>
-          {/* —— 原理档案：纯阅读页（InsightsPanel 整壳迁挂，insights.ts 数据源零改动） —— */}
+          {/* —— 原理档案：P10 §1.4 条目切换（InsightsPanel 5 条目 E1–E5 + E5 声明迁入） —— */}
           <div
             id="atlas-principles"
             role="tabpanel"
@@ -592,15 +618,14 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
             hidden={route.task !== "principles"}
             className="atlas-page atlas-principles"
           >
-            <h2 className="atlas-page-title">{t("atlas.nav.principles")}</h2>
             {visitedTasks.has("principles") ? (
               <section className="atlas-principles-body">
                 <InsightsPanel />
               </section>
             ) : null}
           </div>
-          {/* —— 专业模式：原三组九面板整壳（AdvancedPanel 本体零改，仅接受受控初始
-              面板供 `?task=pro&panel=<key>` 落位，§4.1/§4.3） —— */}
+          {/* —— 专业模式：R1/R2 分段+标签两层树原样保留（AdvancedPanel 仅卡头退役登记；
+              `?task=pro&panel=<key>` 深链落位不变，§4.1/§4.3） —— */}
           <div
             id="atlas-pro"
             role="tabpanel"
@@ -618,15 +643,6 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
           </div>
         </div>
       </Content>
-
-      <Footer role="contentinfo" className="wf-footer" style={{ textAlign: "center", padding: "16px 24px" }}>
-        <div>
-          <Text type="secondary">{t("app.footerDisclaimer")}</Text>
-        </div>
-        <div>
-          <Text type="secondary">{t("app.footerPrivacy")}</Text>
-        </div>
-      </Footer>
     </Layout>
   );
 }

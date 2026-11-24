@@ -130,6 +130,24 @@ export function useIsWorkbenchViewport(): boolean {
   return isWorkbench;
 }
 
+/** 矮视口判定（视口高度 < 850px；P10 骨架修复轮新增）：高度维度的档位判定——
+ *  与 useIsNarrowViewport 同构（matchMedia 惰性初始化，首帧即得正确值）。
+ *  用途：双栏自由刻度在 1200×800 档的档位压缩（反向卡 228→190、进度环 72→56），
+ *  使双栏页栈回到 756 预算内（A1 判定①）。 */
+const SHORT_HEIGHT_MEDIA_QUERY = "(max-height: 849.9px)";
+
+export function useShortViewport(): boolean {
+  const [isShort, setIsShort] = useState(() => window.matchMedia(SHORT_HEIGHT_MEDIA_QUERY).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(SHORT_HEIGHT_MEDIA_QUERY);
+    const onChange = (e: MediaQueryListEvent) => setIsShort(e.matches);
+    setIsShort(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return isShort;
+}
+
 /** 图表响应式三档（响应研究 D5）：高度 <640:240 / 640–767:280 / ≥768:320；
  *  YAxis 宽 <640:56（刻度字号 12 保持，跌破可读下限的不再缩）/ 其余 72 */
 export interface ChartMetrics {

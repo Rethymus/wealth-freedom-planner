@@ -9,7 +9,8 @@
  * 图表 role="img" + aria 汇总句、未运行空态改用 Empty 组件。
  * 文案经 react-i18next 三语化；纵轴「万」刻度随语言切换（英文为 ×10k）。
  */
-import { Alert, Button, Descriptions, Empty, Grid, Progress, Radio, Select, Spin, Switch, Typography } from "@arco-design/web-react";
+import {Alert, Button, Descriptions, Empty, Grid, Progress, Radio, Select, Spin, Switch, Typography} from "@arco-design/web-react";
+import { IconLock } from "@arco-design/web-react/icon";
 import { useMemo, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
@@ -40,6 +41,7 @@ import type { IndexId, MonteCarloReturnMode } from "../../data/indexSeries";
 import type { MonteCarloOutput, SequenceDirection, SequenceSimOutput, WithdrawalStrategy } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, FieldTip, IntField, NumberField, PathsField, PercentField } from "../fields";
+import { SegBar, SlotBox, SlotPager } from "../slots";
 import { EmptyRulerArt } from "../EmptyRuler";
 import { compactXInterval, useAnimatedNumber, useChartMetrics, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
@@ -100,6 +102,33 @@ export default function MonteCarloPanel() {
   /** F1 支出口径一致性：自由刻度「每月开销」为支出口径锚点——仅用于一致性警示与显式
    *  同步按钮（用户显式点击才写入），不引入静默联动（数据流零改动） */
   const baseline = useCalculatorStore((s) => s.baselineInputs);
+  /** P10 §4 单源化：mcMeansSynced = true（默认锁态）时两均值显示层取 baseline 派生直显、
+   *  运行提交帧同帧解析覆盖（与 AccumulationPanel run() effectiveTarget「同一值、同一帧」
+   *  先例同构）；锁态零 monteCarloInputs 写入（数据流铁律）。解锁 = 显式动作：同时把当刻
+   *  核心值落入面板切片（消除解锁即见旧值的错位），此后与核心参数无关联 */
+  const mcMeansSynced = useCalculatorStore((s) => s.mcMeansSynced);
+  const setMcMeansSynced = useCalculatorStore((s) => s.setMcMeansSynced);
+  /** 锁态运行提交帧：两均值取 baseline 现值（inflationMean 两模式都参与正态抽样故两模式
+   *  都覆盖；returnMean 仅 normal 消费，bootstrap 下传入无害——分布由所选序列决定） */
+  const effectiveInputs = mcMeansSynced
+    ? { ...inputs, nominalReturnMeanPct: baseline.nominalReturnPct, inflationMeanPct: baseline.inflationPct }
+    : inputs;
+  /** 解锁（显式动作）：口径标志置 false + 当刻核心值落入切片（回场值即所见值，无错位） */
+  const unlockMeans = () => {
+    setMcMeansSynced(false);
+    setInputs({ nominalReturnMeanPct: baseline.nominalReturnPct, inflationMeanPct: baseline.inflationPct });
+  };
+  /** 锁标（解锁触发点；两字段共用同一按钮元素） */
+  const lockButton = (
+    <Button
+      size="mini"
+      type="text"
+      className="wf-pressable"
+      aria-label={t("mc.meanSyncLockAria")}
+      icon={<IconLock />}
+      onClick={unlockMeans}
+    />
+  );
   const displayCode = useCalculatorStore((s) => s.currency.display);
   const colorBlindFriendly = useCalculatorStore((s) => s.colorBlindFriendly);
   const theme = useCalculatorStore((s) => s.theme);
@@ -110,11 +139,37 @@ export default function MonteCarloPanel() {
   const convert = (v: number): number => (rate !== null ? cnyToDisplay(v, rate) : v);
   /** 窄视口下统计 Descriptions 切纵向堆叠（标签上/值下），避免长 label 挤压数值列 */
   const isNarrow = useIsNarrowViewport();
-  /** 图表响应式三档（docs/p3-spec.md §6.4 D5）：高度 240/280/320、YAxis 宽 56/72、紧凑档 X 刻度 ≤5 */
+  /** 图表响应式三档（docs/p3-spec.md §6.4 D5）：高度 240/280/320、YAxis 宽 56/72、紧凑档 X 刻度 ≤5。
+   *  P10 ≤480 紧档：槽内图 200（D5 320 紧档登记），槽 240 与分页行共存 */
   const { chartHeight, yAxisWidth, isCompact } = useChartMetrics();
 
   const [result, setResult] = useState<FinanceResult<MonteCarloOutput> | null>(null);
   const [running, setRunning] = useState(false);
+  /** P10 槽契约（§1.3 K2–K4；risk 模拟叶与 pro 分析组两宿主共用）：结果 ⇄ 参数 ⇄ 序列
+   *  三态等高互换（槽 260）；超行走槽内分页——结果 3 页（耗尽概率 + 统计前 6 行 / 统计后
+   *  4 行 + 策略口径 / 主图 240 D5 档）、参数 3 页（核心输入 / 均值标准差年限 / 路径种子
+   *  与策略参数）、序列 3 页（控制与运行 / 命运曲线 240 / 三联读数表）。第三段标签复用
+   *  seq.title 既有键（零新键，§7 预算不变） */
+  /** P10 §8 尺寸回收：结果/序列读数表共用同一形态入参（展开注入） */
+  const tbl = {
+    border: true,
+    size: "small" as const,
+    layout: "horizontal" as const,
+    column: { xs: 1, md: 2 } as { xs: number; md: number },
+  };
+  const [slot, setSlot] = useState<"out" | "params" | "seq">("out");
+  const [outPage, setOutPage] = useState(0);
+  const [paramPage, setParamPage] = useState(0);
+  const [seqPage, setSeqPage] = useState(0);
+  /** 骨架修复轮（F1/F9）：序列态分页档位化——≤480 紧档 4 页（0 模式方向 / 1 参数与
+   *  运行 / 2 命运图 / 3 读数表），其余 3 页（0 控制与运行 / 1 图 / 2 表）。
+   *  原 4 页中页 1/3 为空页的旧档退役；页码随档位钳制 */
+  const isCompactMc = isCompact;
+  const seqTotal = isCompactMc ? 4 : 3;
+  const seqPageFields = isCompactMc ? 1 : 0;
+  const seqPageChart = isCompactMc ? 2 : 1;
+  const seqPageTables = isCompactMc ? 3 : 2;
+  const safeSeqPage = Math.min(seqPage, seqTotal - 1);
 
   // 图表 SVG 属性经主题解析函数取解析值（规范第 8 节）：组件不感知主题，
   // 深浅选组与色盲友好替换均在函数内完成；主题切换即重渲染换色，
@@ -233,15 +288,17 @@ export default function MonteCarloPanel() {
 
   const run = () => {
     setRunning(true);
-    // 收益模式分支：自助抽样仅改变收益样本来源（序列有放回重抽）；正态参数与现状一致
+    // 收益模式分支：自助抽样仅改变收益样本来源（序列有放回重抽）；正态参数与现状一致。
+    // P10 §4：提交帧解析用 effectiveInputs——锁态两均值取 baseline 现值同帧覆盖
+    // （与 AccumulationPanel run() 的 effectiveTarget 同帧提交先例完全同构）；
     // （service 内部已捕获全部异常，此处仅兜底）
     const call =
       returnMode === "bootstrap"
         ? calcMonteCarloBootstrap({
-            ...inputs,
+            ...effectiveInputs,
             series: INDEX_SERIES[seriesId].annualReturnsPct,
           })
-        : calcMonteCarlo(inputs);
+        : calcMonteCarlo(effectiveInputs);
     call
       .then((r) => setResult(r))
       .catch((e: unknown) =>
@@ -419,9 +476,30 @@ export default function MonteCarloPanel() {
 
   return (
     <div ref={hostRef}>
+      {/* P10 §1.3 紧档登记：收益模式行 / 支取策略行 / bootstrap 注移入参数槽页 0（行属
+          参数语义；槽外固定区只留 K1 叶条 + 槽 + 运行钮 + C3 dock——页框实测回填）。 */}
+
+      {/* P10 L4 槽切换条（三态；段标签复用 advanced.mcTitle 语境既有键——图表/参数为 §7 新键，
+          序列段复用 seq.title） */}
+      <SegBar
+        name="wf-mc-slot"
+        ariaLabel={t("advanced.mcTitle")}
+        value={slot}
+        onChange={(v: string) => setSlot(v as "out" | "params" | "seq")}
+        options={[
+          { value: "out", label: t("atlas.slotChart") },
+          { value: "params", label: t("atlas.slotParams") },
+          { value: "seq", label: t("seq.title") },
+        ]}
+      />
+      <SlotBox height={200}>
+        {/* 参数态：p0 模式/策略行 + 核心输入 + 同步/恢复钮；p1 均值标准差年限；p2 路径种子；p3 策略参数 */}
+        {slot === "params" ? (
+          <div className="wf-slot-body">
       {/* 收益模式行（docs/p1-spec.md §4.6）：正态参数 / 历史自助抽样；自助抽样附加序列选择。
-          触控目标由样式层既有触屏媒体查询承担，不额外包命中区扩展层。
           A5：提示图标经 FieldTip（Tab 可聚焦 + focus 触发 Tooltip）；A7：Radio 组补 name */}
+      {paramPage === 0 ? (
+        <>
       <div className="wf-mc-mode">
         <Text>{t("mc.returnMode")}</Text>
         <FieldTip text={t("mc.returnModeTooltip")} />
@@ -434,22 +512,7 @@ export default function MonteCarloPanel() {
             { label: t("mc.modeBootstrap"), value: "bootstrap" },
           ]}
         />
-        {returnMode === "bootstrap" ? (
-          <>
-            <Text>{t("mc.seriesLabel")}</Text>
-            {/* P5 冗长治理：seriesNote 段落全文并入本提示（一句话出处内联由标签与选项名承载） */}
-            <FieldTip text={`${t("mc.seriesTooltip")}；${seriesNoteText}`} />
-            <Select
-              size="small"
-              value={seriesId}
-              options={INDEX_ORDER.map((id) => ({ label: t(INDEX_NAME_KEY[id]), value: id }))}
-              onChange={(v: IndexId) => setSeriesId(v)}
-              style={{ width: 190 }}
-            />
-          </>
-        ) : null}
       </div>
-      {/* P2-F1 支取策略行（docs/p2-spec.md §2.4 ①）：收益模式行下方；切换即按需物化参数 */}
       <div className="wf-mc-mode">
         <Text>{t("mc.strategy")}</Text>
         <Radio.Group
@@ -462,14 +525,27 @@ export default function MonteCarloPanel() {
             { label: t("mc.strategyPercent"), value: "percent" },
           ]}
         />
+        {returnMode === "bootstrap" ? (
+          <>
+            <FieldTip text={`${t("mc.seriesTooltip")}；${seriesNoteText}`} />
+            <Select
+              size="small"
+              value={seriesId}
+              options={INDEX_ORDER.map((id) => ({ label: t(INDEX_NAME_KEY[id]), value: id }))}
+              onChange={(v: IndexId) => setSeriesId(v)}
+              className="wf-input-full"
+            />
+          </>
+        ) : null}
       </div>
       {returnMode === "bootstrap" ? (
         <Text type="secondary">{t("mc.bootstrapModeNote")}</Text>
       ) : null}
-
+        </>
+      ) : null}
       {/* P2-F1 阈值带参数（strategy = "threshold"；四个带参数共用 mc.thresholdBandTooltip） */}
-      {inputs.strategy === "threshold" && inputs.threshold ? (
-        <FieldRow>
+      {paramPage === 3 && inputs.strategy === "threshold" && inputs.threshold ? (
+        <FieldRow className="wf-slot-row">
           <NumberField
             md={12}
             label={t("mc.thresholdExceedPct")}
@@ -532,8 +608,8 @@ export default function MonteCarloPanel() {
       ) : null}
 
       {/* P2-F1 余额比例参数（strategy = "percent"；地板 / 上限 0 = 关闭） */}
-      {inputs.strategy === "percent" && inputs.percent ? (
-        <FieldRow>
+      {paramPage === 3 && inputs.strategy === "percent" && inputs.percent ? (
+        <FieldRow className="wf-slot-row">
           <NumberField
             md={12}
             label={t("mc.percentRealReturn")}
@@ -568,7 +644,9 @@ export default function MonteCarloPanel() {
         </FieldRow>
       ) : null}
 
-      <FieldRow>
+      <FieldRow className="wf-slot-row">
+        {paramPage === 0 ? (
+          <>
         <AmountField
           label={t("mc.currentAssets")}
           tooltip={t("mc.currentAssetsTooltip")}
@@ -592,16 +670,23 @@ export default function MonteCarloPanel() {
               : undefined
           }
         />
+          </>
+        ) : paramPage === 1 ? (
+          <>
         {/* 自助抽样模式下名义回报均值/标准差不参与计算（分布由所选序列决定），隐藏两个字段；
-            通胀均值/标准差保留（通胀仍按正态分布抽样） */}
+            通胀均值/标准差保留（通胀仍按正态分布抽样）。
+            P10 §4 锁态字段形态：disabled + 派生值直显 + 尾部锁标（锁标即解锁触发点，
+            aria 与可见 hint 同源——§10 红线 8 禁 title-only）；unlocked → 现字段原样可编 */}
         {returnMode === "normal" ? (
           <PercentField
             md={12}
             label={t("mc.returnMean")}
             tooltip={t("mc.returnMeanTooltip")}
-            value={inputs.nominalReturnMeanPct}
+            value={mcMeansSynced ? baseline.nominalReturnPct : inputs.nominalReturnMeanPct}
             onChange={(v) => setInputs({ nominalReturnMeanPct: v })}
-            suffix="%"
+            disabled={mcMeansSynced}
+            hint={mcMeansSynced ? t("mc.meanSyncHint") : undefined}
+            suffix={mcMeansSynced ? lockButton : "%"}
           />
         ) : null}
         {returnMode === "normal" ? (
@@ -618,9 +703,11 @@ export default function MonteCarloPanel() {
           md={12}
           label={t("mc.inflationMean")}
           tooltip={t("mc.inflationMeanTooltip")}
-          value={inputs.inflationMeanPct}
+          value={mcMeansSynced ? baseline.inflationPct : inputs.inflationMeanPct}
           onChange={(v) => setInputs({ inflationMeanPct: v })}
-          suffix="%"
+          disabled={mcMeansSynced}
+          hint={mcMeansSynced ? t("mc.meanSyncHint") : undefined}
+          suffix={mcMeansSynced ? lockButton : "%"}
         />
         <PercentField
           md={12}
@@ -641,6 +728,9 @@ export default function MonteCarloPanel() {
           suffix={t("units.yearUnit")}
           hint={t("mc.yearsHint", { max: YEARS_LIMIT.max })}
         />
+          </>
+        ) : paramPage === 2 ? (
+          <>
         <PathsField
           md={12}
           label={t("mc.paths")}
@@ -657,27 +747,48 @@ export default function MonteCarloPanel() {
           onChange={(v) => setInputs({ seed: v })}
           suffix="#"
         />
+          </>
+        ) : (
+          <>
+        {/* 策略参数独立页（threshold 3 行 / percent 2 行；≤480 紧档槽 240 内可达） */}
+          </>
+        )}
       </FieldRow>
-
+      {/* 参数槽分页（4 页：核心 / 均值标准差年限 / 路径种子 / 策略参数）；页 0 = 同步/恢复按钮在位 */}
+      {paramPage === 0 ? (
+        <>
       {/* F1 支出口径一致性一键同步：仅在不一致时渲染（显式动作，不自动改值）；
           字段显示刷新走 NumberField 的外部值重挂载机制（fields.ts inputEpoch） */}
       {spendMismatched ? (
         <Button
           size="small"
-          style={{ marginBottom: 12 }}
           onClick={() => setInputs({ annualSpend: baselineAnnualSpend })}
           className="wf-pressable"
         >
           {t("mc.annualSpendSyncButton", { value: money(baselineAnnualSpend) })}
         </Button>
       ) : null}
+      {/* P10 §4 一键恢复联动（可选按钮，形态同 AccumulationPanel「恢复联动」）：
+          置回 locked；锁态字段 value 直接派生自 baseline，显示随受控值更新
+          （disabled 字段无用户键入，无 InputNumber 受控回写缺陷路径） */}
+      {!mcMeansSynced ? (
+        <Button size="small" onClick={() => setMcMeansSynced(true)} className="wf-pressable">
+          {t("mc.meanSyncRestore")}
+        </Button>
+      ) : null}
+        </>
+      ) : null}
+      <SlotPager label={t("advanced.mcTitle")} total={4} page={paramPage} onPage={setParamPage} />
+          </div>
+        ) : slot === "seq" ? (
+          <div className="wf-slot-body">
 
       {/* P5 冗长治理：bootstrap 模式的独立 seriesNote 段落删除——口径全文已并入上方
           收益序列 FieldTip（出处类信息经 tooltip 承载，面板 note 收敛 ≤2） */}
 
-      {/* P2-F2 序列风险对照子区（docs/p2-spec.md §3.4）：策略参数区之后、运行按钮之前；
-          独立 seqRunning，不复用 running 状态 */}
-      <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--wf-hairline-card, rgba(29,33,41,0.08))" }}>
+      {/* P2-F2 序列风险对照子区（docs/p2-spec.md §3.4）——P10 序列态承载：p0 控制与运行、
+          p1 命运曲线图 240、p2 三联/三序读数表；独立 seqRunning，不复用 running 状态 */}
+      <>
         <Text bold>
           {t("seq.title")}
           {/* P5 冗长治理：seq.note 段落全文（2 段拼接键）下沉本提示（确定性与「演示性质」
@@ -686,7 +797,9 @@ export default function MonteCarloPanel() {
         </Text>
         {/* A8 序列完成播报：绑 seqState 落定帧（运行中内容为空） */}
         <span className="wf-sr-only" aria-live="polite" aria-atomic="true">{seqAria}</span>
+        {safeSeqPage === 0 ? (
         <div className="wf-mc-mode" style={{ marginTop: 8 }}>
+        {/* 序列态 p0：模式/方向两组（≤480 紧档拆分——p1 序列/窗长/运行，p2 图，p3 表） */}
           {/* 对照模式选项自解释（起点滚动 / 三序对照），无独立标签键 */}
           <Radio.Group
             name="seq-mode"
@@ -722,7 +835,9 @@ export default function MonteCarloPanel() {
             style={{ width: 190 }}
           />
         </div>
-        <FieldRow>
+        ) : null}
+        {safeSeqPage === seqPageFields ? (
+        <FieldRow className="wf-slot-row">
           {seqMode === "rolling" ? (
             <IntField
               md={12}
@@ -754,6 +869,8 @@ export default function MonteCarloPanel() {
             />
           )}
         </FieldRow>
+        ) : null}
+        {safeSeqPage === seqPageFields ? (
         <div className="wf-mc-actions">
           <Button loading={seqRunning} disabled={seqRunning} onClick={runSeq} className="wf-pressable">
             {t("seq.run")}
@@ -764,14 +881,17 @@ export default function MonteCarloPanel() {
             </span>
           ) : null}
         </div>
-        {seqError ? <Alert type="error" style={{ marginBottom: 8 }} content={seqError} /> : null}
+        ) : null}
+        {safeSeqPage === seqPageFields && seqError ? <Alert type="error" style={{ marginBottom: 8 }} content={seqError} /> : null}
         {seqState === null ? (
-          /* T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入 */
-          <Empty icon={<EmptyRulerArt size={56} />} description={t("seq.placeholder")} />
+          safeSeqPage === seqPageFields ? (
+            /* T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入 */
+            <Empty icon={<EmptyRulerArt size={56} />} description={t("seq.placeholder")} />
+          ) : null
         ) : seqState.kind === "rolling" ? (
           <>
             {/* 命运曲线图：最好 / 中位 / 最差三线（C4 双主题令牌 + C5 aria 汇总句） */}
-            {seqChartData.length > 0 ? (
+            {safeSeqPage === seqPageChart && seqChartData.length > 0 ? (
               <div
                 className="wf-mc-chart"
                 role="img"
@@ -780,7 +900,9 @@ export default function MonteCarloPanel() {
                   years: seqWindowYears,
                 })}
               >
-                <ResponsiveContainer width="100%" height={chartHeight}>
+                {/* P10 槽档：命运曲线图 ≤480 紧档 180（骨架修复轮 D5 再登记 200→180——
+                    320 档图+分页器 211>202 收口），其余 240 */}
+                <ResponsiveContainer width="100%" height={isCompact ? 180 : 240}>
                   {/* S25：与主线图同 syncId 联动（value 按年份值对齐） */}
                   <LineChart data={seqChartData} syncId="wf-mc" syncMethod="value" margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
                     {/* S25 读数气泡 */}
@@ -831,13 +953,12 @@ export default function MonteCarloPanel() {
                 </ResponsiveContainer>
               </div>
             ) : null}
-            {/* 三联数行（数据表替代，C5 口径）+ 窗口数标注 */}
+            {/* 三联数行（数据表替代，C5 口径）+ 窗口数标注——序列态读数表页 */}
+            {safeSeqPage === seqPageTables ? (
             <Descriptions
-              border
-              size="small"
-              style={{ marginTop: 8 }}
-              layout={isNarrow ? "vertical" : "horizontal"}
+              {...tbl}
               column={{ xs: 1, md: 3 }}
+              style={{ marginTop: 8 }}
               data={[
                 {
                   label: t("seq.fateBest", { year: seqState.windows[seqState.bestIndex]?.startYear ?? "—" }),
@@ -853,51 +974,39 @@ export default function MonteCarloPanel() {
                 },
               ]}
             />
+            ) : null}
             {/* P5 冗长治理：独立窗口数注删除——窗口数并入 seq.note（FieldTip）与
                 seq.chartAria（已有 {{count}} × {{years}} 信息），Descriptions 起点标签已有信息 */}
           </>
         ) : (
           <>
-            {/* 三序汇总表（顺序名 + 期末倍数 + 耗尽年；数据表替代，C5 口径） */}
+            {/* 三序汇总表（顺序名 + 期末倍数 + 耗尽年；数据表替代，C5 口径）——序列态读数表页 */}
+            {safeSeqPage === seqPageTables ? (
             <Descriptions
-              border
-              size="small"
-              style={{ marginTop: 8 }}
-              layout={isNarrow ? "vertical" : "horizontal"}
+              {...tbl}
               column={{ xs: 1, md: 3 }}
+              style={{ marginTop: 8 }}
               data={[
                 { label: t("seq.originalOrder"), value: reorderValue(seqState.original) },
                 { label: t("seq.worstFirst"), value: reorderValue(seqState.ascending) },
                 { label: t("seq.bestFirst"), value: reorderValue(seqState.descending) },
               ]}
             />
+            ) : null}
           </>
         )}
         {/* P5 冗长治理：seq.note 独立段落删除（全文已在子区标题 FieldTip 承载，
             面板 note 收敛 ≤2——见 §5 判据与 §8 #19） */}
-      </div>
-
-      <div className="wf-mc-actions">
-        <Button type="primary" loading={running} onClick={run} disabled={running} className="wf-pressable">
-          {t("mc.run")}
-        </Button>
-        {running ? (
-          <span className="wf-mc-running">
-            <Spin size={14} /> <Text type="secondary">{t("mc.running")}</Text>
-          </span>
-        ) : null}
-      </div>
-
-      {error ? <Alert type="error" style={{ marginTop: 8 }} content={error} /> : null}
-
-      {/* A8 完成播报（p4-spec §7）：视觉隐藏 live 节点绑 result 落定帧（data 派生自 settled
-          result，无动画中间帧），运行期间内容为空、完成时 polite 整句播报一次（防噪三规则） */}
-      <span className="wf-sr-only" aria-live="polite" aria-atomic="true">
-        {data ? t("mc.doneAria", { prob: formatNumber(depletionPercent, 1), median: money(data.medianTerminal) }) : ""}
-      </span>
-
+        {/* 序列槽分页（3 页：控制与运行 / 命运曲线 / 读数表） */}
+        <SlotPager label={t("advanced.mcTitle")} total={seqTotal} page={safeSeqPage} onPage={setSeqPage} />
+      </>
+          </div>
+        ) : (
+          <div className="wf-slot-body">
       {data ? (
         <>
+          {/* 结果态：p0 = 耗尽概率 + 统计前 4 行；p1 = 统计后 6 行 + 策略口径；p2 = 主图 240 */}
+          {outPage === 0 ? (
           <div className="wf-mc-progress">
             <Text>{t("mc.depletionLabel")}</Text>
             <Progress
@@ -907,17 +1016,17 @@ export default function MonteCarloPanel() {
               style={{ maxWidth: 420 }}
             />
           </div>
+          ) : null}
           <Descriptions
-            border
-            size="small"
+            {...tbl}
+            layout="horizontal"
             style={{ marginTop: 8 }}
-            layout={isNarrow ? "vertical" : "horizontal"}
-            column={{ xs: 1, md: 2 }}
-            data={[
+            data={outPage === 0 ? [
               { label: t("mc.medianTerminal"), value: <Text bold className="wf-nowrap">{money(animatedMedianTerminal)}</Text> },
               { label: t("mc.p5"), value: money(data.p5) },
               { label: t("mc.p25"), value: money(data.p25) },
               { label: t("mc.p75"), value: money(data.p75) },
+                ] : [
               { label: t("mc.p95"), value: money(data.p95) },
               {
                 label: `${t("mc.paths")} / ${t("mc.years")}`,
@@ -940,14 +1049,16 @@ export default function MonteCarloPanel() {
             ]}
           />
           {/* P2-F1 §2.4 ⑤ / P5 §5 冗长治理：策略口径压 ≤1 行短句内联，全文（2 段拼接键）
-              进 FieldTip（阈值带 / 余额比例 / 算术锚三段声明全文保留） */}
+              进 FieldTip（阈值带 / 余额比例 / 算术锚三段声明全文保留）——结果态页 1 */}
+          {outPage === 1 ? (
           <Text type="secondary" className="wf-panel-note">
             {t("mc.strategyNoteShort")}
             <FieldTip text={`${t("mc.strategyNote1")} ${t("mc.strategyNote2")}`} />
           </Text>
+          ) : null}
           {/* P7/P0-3（修订轮二 R4）：解码端把历史/外来载荷的 inflation_uplift 并入
               fixed 后的一次性提示——仅规范化标志在位时出现，关闭按钮或切换策略即清除 */}
-          {strategyLegacyNotice ? (
+          {outPage === 1 && strategyLegacyNotice ? (
             <Text type="secondary" className="wf-panel-note">
               {t("share.strategyLegacyNotice")}{" "}
               <Button
@@ -961,7 +1072,7 @@ export default function MonteCarloPanel() {
               </Button>
             </Text>
           ) : null}
-          {chartData.length > 0 ? (
+          {outPage === 2 && chartData.length > 0 ? (
             <div
               className="wf-mc-chart"
               role="img"
@@ -972,7 +1083,8 @@ export default function MonteCarloPanel() {
                 median: money(data.medianTerminal),
               })}
             >
-              <ResponsiveContainer width="100%" height={chartHeight}>
+              {/* P10 槽档：主图 ≤480 紧档 180（骨架修复轮 D5 再登记 200→180），其余 240 */}
+              <ResponsiveContainer width="100%" height={isCompact ? 180 : 240}>
                 <LineChart data={chartData} syncId="wf-mc" syncMethod="value" margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
                   {/* S25 读数气泡 */}
                   {renderMainTip()}
@@ -1035,6 +1147,30 @@ export default function MonteCarloPanel() {
           }
         />
       )}
+      {/* 结果槽分页（3 页） */}
+      <SlotPager label={t("advanced.mcTitle")} total={3} page={outPage} onPage={setOutPage} />
+          </div>
+        )}
+      </SlotBox>
+
+      <div className="wf-mc-actions">
+        <Button type="primary" loading={running} onClick={run} disabled={running} className="wf-pressable">
+          {t("mc.run")}
+        </Button>
+        {running ? (
+          <span className="wf-mc-running">
+            <Spin size={14} /> <Text type="secondary">{t("mc.running")}</Text>
+          </span>
+        ) : null}
+      </div>
+
+      {error ? <Alert type="error" style={{ marginTop: 4 }} content={error} /> : null}
+
+      {/* A8 完成播报（p4-spec §7）：视觉隐藏 live 节点绑 result 落定帧（data 派生自 settled
+          result，无动画中间帧），运行期间内容为空、完成时 polite 整句播报一次（防噪三规则） */}
+      <span className="wf-sr-only" aria-live="polite" aria-atomic="true">
+        {data ? t("mc.doneAria", { prob: formatNumber(depletionPercent, 1), median: money(data.medianTerminal) }) : ""}
+      </span>
 
       {/* D8 面板尾部 sticky-bottom 复用按钮（docs/p3-spec.md §6.7）：与既有运行按钮同 run 处理
           函数、同 loading/disabled 口径；<768 生效（样式层断点控制显隐），常驻拇指自然可达区 */}

@@ -15,7 +15,7 @@
  * - 标签悬停提示（title）显示描述副行（*Desc 键），信息不因重构丢失。
  * - 面板标题经 react-i18next 三语化。
  */
-import { Card, Radio, Tabs } from "@arco-design/web-react";
+import { Radio, Tabs } from "@arco-design/web-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -150,7 +150,10 @@ export default function AdvancedPanel({ initialPanelKey }: AdvancedPanelProps = 
   };
 
   return (
-    <Card title={t("advanced.cardTitle")} style={{ marginTop: 16 }}>
+    /* P10 登记注记：原 Card 壳（卡头 46px 标题行）退役——pro 页零滚动预算不含卡头
+        （R1/R2 = 分段 44 + 标签 40），标题信息由本区域 aria-label 承载
+        （advanced.cardTitle 键值不变，禁 title-only：aria 与读屏同源） */
+    <div className="wf-pro-panel" aria-label={t("advanced.cardTitle")}>
       <Radio.Group
         className="wf-adv-seg"
         type="button"
@@ -190,6 +193,6 @@ export default function AdvancedPanel({ initialPanelKey }: AdvancedPanelProps = 
           </Tabs>
         </div>
       ))}
-    </Card>
+    </div>
   );
 }

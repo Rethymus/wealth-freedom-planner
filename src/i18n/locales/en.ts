@@ -52,11 +52,11 @@ const en = {
     summarySuffixNone: ".",
     savePrefix: "Every additional ",
     saveSuffix: " saved buys 1 more of monthly spending.",
-    rowMultiplier: "Monthly expense × multiplier",
-    rowChildren: "Children reserve ({{children}} children)",
-    rowHealth: "Health reserve",
+    rowMultiplier: "Expense × mult.",
+    rowChildren: "Child reserve ({{children}})",
+    rowHealth: "Health",
     rowMajor: "Major investment",
-    rowTotal: "Total (reference line)",
+    rowTotal: "Total (ref.)",
     multTag: "covers {{n}} months of spending",
     multTagAria: "Multiplier reached {{mult}}: about {{n}} months of monthly spending covered",
     breakdownTitle: "Detailed breakdown",
@@ -82,27 +82,30 @@ const en = {
     healthReserve: "Lifetime health reserve",
     healthReserveTooltip:
       "A lump sum set aside once for medical spending such as serious illness and long-term care; set it as you see fit.",
-    majorInvestment: "Major outlays such as buying a home",
+    majorInvestment: "Major one-time outlay",
     majorInvestmentTooltip:
       "One-time spending such as a home down payment or large education costs; it does not affect the “multiplier × monthly expense” part and is simply added on top.",
     majorInvestmentHint:
       "Planning to rent for good? Leave this blank and count your monthly rent in the monthly expense instead.",
     coreParams: "Core Parameters (Returns and Inflation; defaults: nominal 4.5% / inflation 2%)",
-    nominalReturn: "Nominal return rate (annualized)",
+    nominalReturn: "Nominal return (annual)",
     nominalReturnTooltip:
       "The annualized return on investments before inflation is removed — the figure investment products usually advertise.",
-    inflation: "Inflation rate (annualized)",
+    inflation: "Inflation (annual)",
     inflationTooltip:
       "How fast prices rise each year; the higher inflation is, the less the same money buys in the future.",
     realReturn: "Real return rate (nominal − inflation): ",
     multiplierLine: "480 multiplier = 12 ÷ real return rate: ",
     ruleOrigin:
-      "Once you have saved a principal of “monthly expense × multiplier”, investment returns alone (net of inflation) can cover your monthly expenses. With the default parameters (nominal return {{nominal}}, inflation {{inflation}}), the real return rate is {{real}} and the corresponding multiplier is {{multiplier}} — hence the name “480 Rule”.",
-    multiplierExactLabel: "Exact multiplier (Fisher basis)",
-    criticalExactLabel: "Exact-basis reference line",
+      "Save up “monthly expense × multiplier” and returns net of inflation alone cover monthly spending. Defaults (nominal {{nominal}}, inflation {{inflation}}) give a real return of {{real}}, multiplier {{multiplier}} — hence “480 Rule”.",
+    multiplierExactLabel: "Exact (Fisher)",
+    criticalExactLabel: "Exact line",
+    // P10 §7 新键（F7 叶B 步骤条两步标签；docs/p10-spec.md §1.1）
+    stepDesire: "Desires",
+    stepAssumption: "Assumptions & assets",
     fisherNote:
       "The real return rate uses the exact Fisher relation (1+r_nom)/(1+π)−1; the approximation r≈r_nom−π is for teaching comparison only, and the gap between the two is ≈ π × the real return rate.",
-    formulaRow: "480 rule formula breakdown",
+    formulaRow: "480 formula anatomy",
   },
   anatomy: {
     varNote: "{{sym}} = {{name}}: contributes {{term}} to the formula",
@@ -118,10 +121,10 @@ const en = {
     cancelHint: "Click again to cancel this profile; basic parameters will fall back to their defaults",
     cancelled: "Cancelled the “{{name}}” profile; basic parameters fell back to their defaults",
     names: {
-      singleRenter: "Single renter",
-      coupleNoKids: "Couple without kids",
-      familyOneKid: "Family with one child",
-      zenFrugal: "Frugal minimal",
+      singleRenter: "Single",
+      coupleNoKids: "No kids",
+      familyOneKid: "One kid",
+      zenFrugal: "Frugal",
     },
     breakdown: {
       food: "Food",
@@ -130,12 +133,15 @@ const en = {
       communication: "Communication",
       other: "Other",
     },
+    // P10 §7 新键（§3.4 子女预留折叠态文案：预设归因 / custom 态 +「启用」按钮）
+    childFoldedPreset: "Child reserve off (preset)",
+    childFolded: "Child reserve off",
+    childEnable: "Enable",
   },
   progress: {
-    assetsLabel: "Existing assets (optional)",
+    assetsLabel: "Existing assets",
     assetsTooltip:
-      "The investable assets you have already saved up; once filled in, a progress ring relative to the reference line appears beside the big number.",
-    caption: "Existing assets are about {{pct}}% of the reference line",
+      "Optional. The investable assets you have already saved up; once filled in, a progress ring relative to the reference line appears beside the big number.",
     ariaLabel: "Freedom gauge: existing assets are about {{pct}}% of the reference line",
     emptyHint: "Enter your existing assets to light up the first gauge tick",
   },
@@ -185,6 +191,14 @@ const en = {
     migrate: {
       notice: "The default view now uses the four-task navigation; the original nine panels live in Pro mode.",
     },
+    // P10 §7 新键（L1 life 页 5 组新分段标签：规划 = 积累+养老组、资产 = 负债+收租组）
+    lifeGroupPlan: "Planning",
+    lifeGroupAsset: "Assets",
+    // P10 §7 新键（槽切换条通用两段标签：图 / 参数，跨 L4/K3/R4 复用）
+    slotChart: "Charts",
+    slotParams: "Parameters",
+    // 骨架修复轮新键（A1 显式回退横幅，红线 9——不支持零滚动的高度回退滚动并明示）
+    scrollFallback: "Viewport too short — switched to a scrollable view.",
   },
   insights: {
     formulaTitle: "Formula derivation",
@@ -244,6 +258,12 @@ const en = {
       "Loose version: allows assets to decline slowly in later years in exchange for higher spending today. It corresponds to the “threshold-band adjustment” and “percentage of balance” withdrawal strategies in the Monte Carlo panel — in the simulation you can watch the trade-off between depletion probability and end-of-period purchasing power.",
     evidenceTitle: "Data verification tag legend",
     evidenceShort: "Officially verified = read from the source page; media-verified = confirmed by 2+ independent outlets; video claim = not independently verified.",
+    // P10 §7 新键（原理档案 5 条目标签 E1–E5；docs/p10-spec.md §1.4 P1）
+    entryFormula: "Formula & terms",
+    entryChain: "Assumption chain",
+    entryData: "Data & sources",
+    entryEvidence: "Health & evidence",
+    entryNotice: "Statements",
     evidenceNote1:
       "Tag legend: “officially verified” = read directly from the official source page; “media-verified” = an officially published figure confirmed consistent by two or more independent media outlets; “video claim” = seen only in the original video or an analytical assumption, with no independent authoritative source found.",
     evidenceNote2:
@@ -345,6 +365,9 @@ const en = {
       "For Example B the original video claimed a result of about 9,000 yuan/month (including an extra discount of about 10%, whose source could not be reconstructed); on the same basis this tool faithfully reports 10,000 yuan/month and is not adjusted down to 9,000.",
     perpetuityWarning:
       "The perpetual basis holds within the model’s assumptions (returns always positive, spending rising with the model); real-world sequence risk can break it — cf. Morningstar 2026: a 30-year horizon with a 90% success rate and 30%–50% equity portfolios gives a 3.9% starting safe withdrawal rate (fixed-real-spending baseline, excluding pensions and other external income; the yearly figures have drifted between 3.3% and 4.0% with market assumptions). That figure is based on U.S. market assumptions and is not a guarantee in any environment.",
+    // P10 §7 新键（F8 反向卡双态切换「估算结果 ⇄ 编辑参数」；修订对照轮二⑧）
+    viewResult: "Results",
+    editParams: "Edit parameters",
   },
   loan: {
     principal: "Loan amount",
@@ -592,6 +615,10 @@ const en = {
     chartAria:
       "Monte Carlo simulation chart: {{paths}} paths simulated over {{years}} years, depletion probability {{prob}}%, median terminal value {{median}}",
     doneAria: "Simulation finished: depletion probability {{prob}}, median terminal value {{median}}",
+    // P10 §7 新键（§4.3 MC 均值「跟随核心参数」锁标：aria / hint / 恢复联动按钮）
+    meanSyncLockAria: "Follows core parameters; click to unlock",
+    meanSyncHint: "Tracks the basic-mode core parameters; while locked, display and run values follow them",
+    meanSyncRestore: "Restore core-parameter sync",
   },
   accumulation: {
     currentAssets: "Current assets",
@@ -753,8 +780,6 @@ const en = {
     benchmarkNoticePrefix: "Non-blocking notice: ",
     benchmarkInfoCny:
       "The deviation check is anchored to China's urban per-capita consumer spending (National Bureau of Statistics); it is advisory only and never blocks usage.",
-    benchmarkInfoOther:
-      "The monthly-expense deviation check is anchored to CNY terms (China's urban per-capita consumer spending) and is not compared for now after switching currencies; default parameters are given in CNY terms.",
     benchmarkEmpty:
       "The regional per-capita consumer spending reference (regional.ts) is still placeholder-empty data; the deviation check will turn on automatically once the data is filled in.",
     engelLabel: "Your Engel coefficient (optional)",
@@ -773,10 +798,6 @@ const en = {
   },
   sensitivity: {
     title: "Monthly-expense sensitivity",
-    expand: "Expand",
-    collapse: "Collapse",
-    plusTitle: "Raise the monthly expense (a costlier life)",
-    minusTitle: "Lower the monthly expense (a leaner life)",
     plusRow: "+{{pct}}%",
     minusRow: "−{{pct}}%",
     note: "At a given multiplier, the reference line moves linearly and proportionally with the monthly expense: for every {{pct}}% change in monthly expense the reference line moves by about {{delta}}; the children, health and major-investment reserves are unaffected by the monthly expense — the “appetite that can never be filled” shows up here exactly as how far the reference line rises.",
@@ -790,7 +811,6 @@ const en = {
   },
   share: {
     copy: "Copy share link",
-    copyShort: "Copy link",
     copiedShort: "Copied",
     copyTooltip:
       "Encodes all of your current business inputs (UI preferences such as theme / language / currency excluded) into the link; anyone who opens the pasted link gets the exact same parameter set. The link content is reversible encoding (encoding ≠ encryption): anyone holding the link can read every business input — do not carry numbers you would not share.",

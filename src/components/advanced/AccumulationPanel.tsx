@@ -9,7 +9,7 @@
  * 未运行空态改用 Empty 组件；折线图补 role="img" + aria 汇总句。
  * 文案经 react-i18next 三语化。
  */
-import { Alert, Button, Descriptions, Empty, Grid, Progress, Radio, Spin, Typography } from "@arco-design/web-react";
+import {Alert, Button, Descriptions, Empty, Grid, Progress, Radio, Spin, Typography} from "@arco-design/web-react";
 import { useMemo, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
@@ -30,9 +30,10 @@ import { cnyToDisplay } from "../../services/currency";
 import { LIMITS, MOTION_DURATIONS, resolveThemeTokens } from "../../data/defaults";
 import type { AccumulationOutput, RequiredSavingOutput } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
-import { AmountField, FieldRow, IntField, PathsField, PercentField } from "../fields";
+import { AmountField, FieldRow, FieldTip, IntField, PathsField, PercentField } from "../fields";
+import { SegBar, SlotBox, SlotPager } from "../slots";
 import { EmptyRulerArt } from "../EmptyRuler";
-import { compactXInterval, useAnimatedNumber, useChartMetrics, useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney, usePrefersReducedMotion } from "../hooks";
+import { compactXInterval, useAnimatedNumber, useChartMetrics, useFinanceCall, useIsCompactViewport, useIsNarrowViewport, useIsWorkbenchViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text, Title } = Typography;
 const { Col } = Grid;
@@ -77,7 +78,8 @@ export default function AccumulationPanel() {
    *  裁切、中位终值整列不可见）——workbench 形态统计表切单列 + fixed 布局
    *  （P5 BreakdownTable 同款先例），窄视口维持纵向堆叠既有口径 */
   const isWorkbench = useIsWorkbenchViewport();
-  /** 图表响应式三档（docs/p3-spec.md §6.4 D5）：高度 240/280/320、YAxis 宽 56/72、紧凑档 X 刻度 ≤5 */
+  /** 图表响应式三档（docs/p3-spec.md §6.4 D5）：高度 240/280/320、YAxis 宽 56/72、紧凑档 X 刻度 ≤5。
+   *  P10 ≤480 紧档：槽内图 200（D5 320 紧档登记） */
   const { chartHeight, yAxisWidth, isCompact } = useChartMetrics();
 
   /** P2-F4 模拟模式（docs/p2-spec.md §5.2）：本地 state，不随分享链接携带
@@ -237,9 +239,29 @@ export default function AccumulationPanel() {
    *  未就绪以 0 占位（hook 首值纪律：0→有值直接落值不滚动）；rAF 中间帧只进显示值、
    *  永不进 store（§6 红线 2）；submittedTarget 同帧快照（S15 锚点）不触碰 */
   const animatedRequiredSaving = useAnimatedNumber(revData ? revData.requiredMonthlySaving : 0, undefined, hostRef);
+  /** P10 槽契约（§1.2 L4/L5；life 规划组与 pro 人生规划组两宿主共用）：结果 ⇄ 参数两态
+   *  等高互换（槽 260）；超行走槽内分页——参数 3 页（基础四字段 / 均值标准差 / 模拟参数），
+   *  正向结果 4 页（达成概率 / 首达分布 / 期末分布 / 路径图 240 D5 档）；反推结果单页。
+   *  槽内字段两列由 .wf-slot-row 样式层承载（xs 断点解耦，§1.1 F8 槽内口径） */
+  /** P10 §8 尺寸回收：两张分位表共用同一形态入参（展开注入） */
+  const tbl = {
+    border: true,
+    size: "small" as const,
+    style: { marginTop: 8 },
+    layout: "horizontal" as const,
+    column: (isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }) as 1 | { xs: number; md: number },
+    tableLayout: (isWorkbench ? "fixed" : "auto") as "fixed" | "auto",
+  };
+  const [slot, setSlot] = useState<"out" | "params">("out");
+  const [outPage, setOutPage] = useState(0);
+  const [paramPage, setParamPage] = useState(0);
   /** S25 图表 hover 读数（p6-spec §2）：十字虚线 + 读数气泡（中位与展示口径目标线两行；
    *  50 条抽样路径不入气泡降噪）。金额与图轴同源（chartData 已按展示币种换算，formatMoney
    *  直出不再二次换算）；系列名复用既有键。触屏无 hover 无气泡，分位 Descriptions 兜底 */
+  const narrativeText = submittedTarget !== null && data
+    ? t("accumulation.medianNarrative", { years: formatNumber(data.yearsMedian, 1) })
+    : "";
+  const noteText = t("accumulation.chartNote", { count: chartPathCount });
   const renderAccTip = (): ReactElement => (
     <Tooltip
       cursor={{ stroke: themeTokens.textTertiary, strokeDasharray: "3 3" }}
@@ -282,7 +304,23 @@ export default function AccumulationPanel() {
         />
       </div>
 
-      <FieldRow>
+      {/* P10 L4 槽切换条（复用 atlas.slotChart / atlas.slotParams，零新键） */}
+      <SegBar
+        name="wf-acc-slot"
+        ariaLabel={t("advanced.accumulationTitle")}
+        value={slot}
+        onChange={(v: string) => setSlot(v as "out" | "params")}
+        options={[
+          { value: "out", label: t("atlas.slotChart") },
+          { value: "params", label: t("atlas.slotParams") },
+        ]}
+      />
+      <SlotBox height={200}>
+        {slot === "params" ? (
+          <div className="wf-slot-body">
+      <FieldRow className="wf-slot-row">
+        {paramPage === 0 ? (
+          <>
         <AmountField
           label={t("accumulation.currentAssets")}
           tooltip={t("accumulation.currentAssetsTooltip")}
@@ -332,6 +370,9 @@ export default function AccumulationPanel() {
           hint={synced ? t("accumulation.syncedHint") : undefined}
           convertRate={rate}
         />
+          </>
+        ) : paramPage === 1 ? (
+          <>
         {/* 反推模式为确定性口径：只消费均值，隐藏两个标准差字段（§5.2 字段清单） */}
         {mode === "forward" ? (
           <>
@@ -380,6 +421,9 @@ export default function AccumulationPanel() {
             suffix="%"
           />
         ) : null}
+          </>
+        ) : (
+          <>
         <IntField
           md={12}
           label={mode === "reverse" ? t("accumulation.yearsToTarget") : t("mc.years")}
@@ -419,36 +463,46 @@ export default function AccumulationPanel() {
           max={LIMITS.sustainYears.max}
           suffix={t("units.yearUnit")}
         />
+          </>
+        )}
       </FieldRow>
 
       {/* 目标值联动恢复按钮（模式同 ReversePanel 的同步按钮）；点击递增重挂载序号，
-          让目标值输入框回填当刻联动值（显示与运行口径一致，docs/p0-spec.md §4.8） */}
-      <Button
-        size="small"
-        style={{ marginBottom: 12 }}
-        onClick={() => {
-          setTargetSyncEpoch((c) => c + 1);
-          setSynced(true);
-        }}
-        className="wf-pressable"
-      >
-        {t("accumulation.syncButton")}
-      </Button>
-
-      {/* F1 支出口径一致性一键同步：仅在不一致时渲染；点击写回自由刻度基准值，
-          字段显示由 NumberField 的外部值重挂载机制刷新（fields.ts inputEpoch） */}
-      {expenseMismatched ? (
-        <Button
-          size="small"
-          style={{ marginBottom: 12, marginLeft: 8 }}
-          onClick={() => setInputs({ monthlyExpense: baseline.monthlyExpense })}
-          className="wf-pressable"
-        >
-          {t("accumulation.expenseSyncButton", { value: money(baseline.monthlyExpense) })}
-        </Button>
+          让目标值输入框回填当刻联动值（显示与运行口径一致，docs/p0-spec.md §4.8）＋
+          F1 支出口径一致性一键同步（仅不一致时渲染）——两钮随参数页 0 在位 */}
+      {paramPage === 0 ? (
+        <div className="wf-acc-sync-row">
+          <Button
+            size="small"
+            onClick={() => {
+              setTargetSyncEpoch((c) => c + 1);
+              setSynced(true);
+            }}
+            className="wf-pressable"
+          >
+            {t("accumulation.syncButton")}
+          </Button>
+          {expenseMismatched ? (
+            <Button
+              size="small"
+              onClick={() => setInputs({ monthlyExpense: baseline.monthlyExpense })}
+              className="wf-pressable"
+            >
+              {t("accumulation.expenseSyncButton", { value: money(baseline.monthlyExpense) })}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
+      {/* 参数槽分页（3 页：基础四字段 / 均值标准差 / 模拟参数） */}
+      <SlotPager label={t("advanced.accumulationTitle")} total={3} page={paramPage} onPage={setParamPage} />
+          </div>
+        ) : (
+          <div className="wf-slot-body">
 
-      {mode === "forward" ? (
+      {/* 结果槽（正向）：页 0 = 月储蓄口径行 + 达成/存续双指标 + 空态；页 1 = 首达分布；
+          页 2 = 期末分布 + 目标线叙事与图注（S15 落点约束：叙事行随图容器迁至同槽）；
+          页 3 = 路径图（D5 档） */}
+      {mode === "forward" && outPage === 0 ? (
         <>
           {/* 月储蓄口径行：储蓄数值按正负着色（负 = 跌色，正 = 涨色） */}
           <div>
@@ -465,17 +519,6 @@ export default function AccumulationPanel() {
                 savingLine
               )}
             </Text>
-          </div>
-
-          <div className="wf-acc-actions">
-            <Button type="primary" loading={running} onClick={run} disabled={running} className="wf-pressable">
-              {t("mc.run")}
-            </Button>
-            {running ? (
-              <span className="wf-acc-running">
-                <Spin size={14} /> <Text type="secondary">{t("mc.running")}</Text>
-              </span>
-            ) : null}
           </div>
         </>
       ) : (
@@ -538,9 +581,9 @@ export default function AccumulationPanel() {
         </>
       )}
 
-      {error ? <Alert type="error" style={{ marginTop: 8 }} content={error} /> : null}
+      {error ? <Alert type="error" style={{ marginTop: 4 }} content={error} /> : null}
 
-      {data && mode === "forward" ? (
+      {data && mode === "forward" && outPage === 0 ? (
         <>
           <div className="wf-acc-progress">
             <Text>{t("accumulation.fiLabel")}</Text>
@@ -569,13 +612,12 @@ export default function AccumulationPanel() {
               </Text>
             </div>
           ) : null}
+        </>
+      ) : null}
+      {data && mode === "forward" && outPage === 1 ? (
+        <>
           <Descriptions
-            border
-            size="small"
-            style={{ marginTop: 8 }}
-            layout={isNarrow ? "vertical" : "horizontal"}
-            column={isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }}
-            tableLayout={isWorkbench ? "fixed" : "auto"}
+            {...tbl}
             title={t("accumulation.yearsTitle")}
             data={[
               { label: t("mc.p5"), value: <span className="wf-nowrap">{formatYearsValue(data.yearsP5)}</span> },
@@ -585,13 +627,12 @@ export default function AccumulationPanel() {
               { label: t("mc.p95"), value: <span className="wf-nowrap">{formatYearsValue(data.yearsP95)}</span> },
             ]}
           />
+        </>
+      ) : null}
+      {data && mode === "forward" && outPage === 2 ? (
+        <>
           <Descriptions
-            border
-            size="small"
-            style={{ marginTop: 8 }}
-            layout={isNarrow ? "vertical" : "horizontal"}
-            column={isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }}
-            tableLayout={isWorkbench ? "fixed" : "auto"}
+            {...tbl}
             title={t("accumulation.finalTitle")}
             data={[
               { label: t("mc.p5"), value: <span className="wf-nowrap">{money(data.finalAssetPercentiles.p5)}</span> },
@@ -610,8 +651,23 @@ export default function AccumulationPanel() {
               },
             ]}
           />
-          {chartData.length > 0 ? (
-            <div
+          {/* T15 叙事行 + 图注（S15 落点约束：随图容器同槽承载——页 2 与期末分布同页；
+              无目标快照不渲染叙事行）。≤480 紧档下沉 FieldTip（P5 口径，信息路径保留） */}
+          {submittedTarget !== null && data.yearsMedian >= 0 ? (
+            <Text type="secondary" className="wf-panel-note">
+              {narrativeText}
+              {isCompact ? <FieldTip text={narrativeText} /> : null}
+            </Text>
+          ) : null}
+          <Text type="secondary" className={isCompact ? "wf-panel-note wf-sr-only" : "wf-panel-note"}>
+            {noteText}
+            {isCompact ? <FieldTip text={noteText} /> : null}
+          </Text>
+        </>
+      ) : null}
+      {data && mode === "forward" && outPage === 3 && chartData.length > 0 ? (
+        <>
+          <div
               className="wf-acc-chart"
               role="img"
               aria-label={t("accumulation.chartAria", {
@@ -620,7 +676,7 @@ export default function AccumulationPanel() {
                 prob: formatNumber(Math.round(data.fiProbability * 1000) / 10, 1),
               })}
             >
-              <ResponsiveContainer width="100%" height={chartHeight}>
+              <ResponsiveContainer width="100%" height={isCompact ? 180 : chartHeight}>
                 <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
                   {/* S25 读数气泡 */}
                   {renderAccTip()}
@@ -689,23 +745,33 @@ export default function AccumulationPanel() {
                   />
                 </LineChart>
               </ResponsiveContainer>
-              {/* T15 叙事行：中位首达年（与 Descriptions 同源字段 data.yearsMedian，同一
-                  submittedTarget 快照下算出）；无目标快照不渲染整行 */}
-              {submittedTarget !== null && data.yearsMedian >= 0 ? (
-                <Text type="secondary" className="wf-panel-note">
-                  {t("accumulation.medianNarrative", { years: formatNumber(data.yearsMedian, 1) })}
-                </Text>
-              ) : null}
-              <Text type="secondary" className="wf-panel-note">
-                {t("accumulation.chartNote", { count: chartPathCount })}
-              </Text>
             </div>
-          ) : null}
         </>
-      ) : mode === "forward" ? (
+      ) : null}
+      {mode === "forward" && !data && outPage === 0 ? (
         /* C6 空态组件化：未运行空态从 Alert 改为 Empty（复用现有键，改写句式）；
            T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入 */
         <Empty style={{ marginTop: 8 }} icon={<EmptyRulerArt size={56} />} description={t("accumulation.placeholder")} />
+      ) : null}
+      {/* 结果槽分页（正向 4 页 / 反推单页不渲染分页器） */}
+      {mode === "forward" ? (
+        <SlotPager label={t("advanced.accumulationTitle")} total={4} page={outPage} onPage={setOutPage} />
+      ) : null}
+          </div>
+        )}
+      </SlotBox>
+      {/* 运行区：C3 dock 之外的面板主运行钮（正向）；反推验证钮在结果态单页内 */}
+      {mode === "forward" ? (
+        <div className="wf-acc-actions">
+          <Button type="primary" loading={running} onClick={run} disabled={running} className="wf-pressable">
+            {t("mc.run")}
+          </Button>
+          {running ? (
+            <span className="wf-acc-running">
+              <Spin size={14} /> <Text type="secondary">{t("mc.running")}</Text>
+            </span>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

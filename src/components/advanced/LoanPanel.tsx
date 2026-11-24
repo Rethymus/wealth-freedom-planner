@@ -12,7 +12,8 @@ import { formatNumber } from "../../services/format";
 import { LIMITS } from "../../data/defaults";
 import type { AmortizeRow } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
-import { AmountField, FieldRow, IntField, PercentField } from "../fields";
+import { AmountField, FieldRow, FieldTip, IntField, PercentField } from "../fields";
+import { SegBar, SlotBox, SlotPager } from "../slots";
 import { useAnimatedNumber, useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney } from "../hooks";
 
 const { Text } = Typography;
@@ -50,6 +51,10 @@ export default function LoanPanel() {
   const equalPrincipal = inputs.method === "equal_principal";
   /** S18 面板主数渐近滚动（p6-spec §2）：rAF 中间帧只进显示值、永不进 store（§6 红线 2） */
   const animatedMonthlyPayment = useAnimatedNumber(data?.monthlyPayment ?? 0, undefined, hostRef);
+  /** P10 槽契约（§1.2 L4/L5；life 与 pro 两宿主共用）：结果 ⇄ 参数两态等高互换，超行走
+   *  槽内分页（结果 = 摘要页 / 摊销表页 6 行×2 页；参数单页） */
+  const [slot, setSlot] = useState<"out" | "params">("out");
+  const [outPage, setOutPage] = useState(0);
 
   /** 贷款类型选项（文案随语言切换） */
   const loanKindOptions = [
@@ -74,107 +79,133 @@ export default function LoanPanel() {
 
   return (
     <div ref={hostRef}>
-      <FieldRow>
-        <AmountField
-          label={t("loan.principal")}
-          tooltip={t("loan.principalTooltip")}
-          value={inputs.principal}
-          onChange={(v) => setInputs({ principal: v })}
-          prefix={symbol}
-          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
-          convertRate={rate}
-        />
-        <PercentField
-          label={t("loan.annualRate")}
-          tooltip={t("loan.annualRateTooltip")}
-          value={inputs.annualRatePct}
-          onChange={(v) => setInputs({ annualRatePct: v })}
-          suffix="%"
-        />
-        <IntField
-          label={t("loan.years")}
-          tooltip={t("loan.yearsTooltip")}
-          value={inputs.years}
-          onChange={(v) => setInputs({ years: v })}
-          min={LOAN_YEARS_LIMIT.min}
-          max={LOAN_YEARS_LIMIT.max}
-          suffix={t("units.yearUnit")}
-          hint={t("loan.yearsHint", { max: LOAN_YEARS_LIMIT.max })}
-        />
-        <Col xs={24} className="wf-field">
-          <div className="wf-field-label">
-            <Text>{t("loan.loanType")}</Text>
-          </div>
-          <Select
-            value={loanKind}
-            options={loanKindOptions}
-            onChange={(v: LoanKind) => setLoanKind(v)}
-            style={{ width: 180 }}
-            className="wf-pressable"
-          />
-          <div className="wf-field-hint">
-            <Text type="secondary">
-              {loanKind === "housing_fund" ? t("loan.housingFundHint") : t("loan.commercialHint")}
-            </Text>
-          </div>
-        </Col>
-        <Col xs={24} className="wf-field">
-          <div className="wf-field-label">
-            <Text>{t("loan.repayMethod")}</Text>
-            <Text type="secondary" style={{ marginLeft: 8 }}>
-              {t("loan.repayMethodHint")}
-            </Text>
-          </div>
-          <Radio.Group
-            name="loan-method"
-            value={inputs.method}
-            onChange={(v) => setInputs({ method: v as typeof inputs.method })}
-          >
-            <Radio value="equal_payment">{t("loan.equalPayment")}</Radio>
-            <Radio value="equal_principal">{t("loan.equalPrincipal")}</Radio>
-          </Radio.Group>
-        </Col>
-      </FieldRow>
-
       {loading ? <Text type="secondary">{t("common.computing")}</Text> : null}
-      {data ? (
-        <>
-          <Descriptions
-            border
-            size="small"
-            style={{ marginTop: 8 }}
-            layout={isNarrow ? "vertical" : "horizontal"}
-            column={isWorkbench ? 1 : { xs: 1, md: 3 }}
-            data={[
-              {
-                label: equalPrincipal ? t("loan.monthlyPaymentFirst") : t("loan.monthlyPaymentFixed"),
-                value: <Text bold className="wf-nowrap">{moneyFixed(animatedMonthlyPayment)}</Text>,
-              },
-              { label: t("loan.totalInterest"), value: moneyFixed(data.totalInterest) },
-              {
-                label: t("loan.totalRepayment"),
-                value: moneyFixed(inputs.principal + data.totalInterest),
-              },
-            ]}
-          />
-          <div style={{ marginTop: 12 }}>
-            {/* D7 滑动提示：置于表格上方（docs/p3-spec.md §6.6）；<675.9 档由样式层放行 */}
-            <Text type="secondary" className="wf-swipe-hint">{t("common.swipeHint")}</Text>
-            <Table
-              columns={columns}
-              data={data.rows.slice(0, 12)}
-              pagination={false}
-              size="small"
-              border={{ wrapper: true, cell: true }}
-              className="wf-amortize-table"
-            />
-            <Text type="secondary" className="wf-panel-note">
-              {t("loan.rowsNote", { total: formatNumber(data.rows.length, 0) })}
-            </Text>
+      {error ? <Alert type="error" style={{ marginBottom: 4 }} content={error} /> : null}
+      {/* L4 槽切换条（复用 atlas.slotChart / atlas.slotParams，零新键） */}
+      <SegBar
+        name="wf-loan-slot"
+        ariaLabel={t("advanced.loanTitle")}
+        value={slot}
+        onChange={(v: string) => setSlot(v as "out" | "params")}
+        options={[
+          { value: "out", label: t("atlas.slotChart") },
+          { value: "params", label: t("atlas.slotParams") },
+        ]}
+      />
+      <SlotBox height={200}>
+        {slot === "out" ? (
+          <div className="wf-slot-body">
+            {data && outPage === 0 ? (
+              <>
+                <Descriptions
+                  border
+                  size="small"
+                  layout="horizontal"
+                  column={isWorkbench ? 1 : { xs: 1, md: 3 }}
+                  data={[
+                    {
+                      label: equalPrincipal ? t("loan.monthlyPaymentFirst") : t("loan.monthlyPaymentFixed"),
+                      value: <Text bold className="wf-nowrap">{moneyFixed(animatedMonthlyPayment)}</Text>,
+                    },
+                    { label: t("loan.totalInterest"), value: moneyFixed(data.totalInterest) },
+                    { label: t("loan.totalRepayment"), value: moneyFixed(inputs.principal + data.totalInterest) },
+                  ]}
+                />
+                <Text type="secondary" className="wf-panel-note">
+                  {t("loan.rowsNote", { total: formatNumber(data.rows.length, 0) })}
+                </Text>
+              </>
+            ) : null}
+            {data && outPage === 1 ? (
+              <>
+                {/* D7 滑动提示：置于表格上方（docs/p3-spec.md §6.6）；<675.9 档由样式层放行。
+                    P10 槽内分页：Table 自带 pagination 6 行/页（前 12 期 = 2 页，槽 260 内可达；
+                    槽内禁止内滚兜底——A1 判定 ②） */}
+                <Text type="secondary" className="wf-swipe-hint">{t("common.swipeHint")}</Text>
+                <Table
+                  columns={columns}
+                  data={data.rows.slice(0, 12)}
+                  pagination={{ pageSize: 6, size: "mini", simple: true }}
+                  size="small"
+                  border={{ wrapper: true, cell: true }}
+                  className="wf-amortize-table"
+                />
+              </>
+            ) : null}
+            <SlotPager label={t("advanced.loanTitle")} total={2} page={outPage} onPage={setOutPage} />
           </div>
-        </>
-      ) : null}
-      {error ? <Alert type="error" style={{ marginTop: 8 }} content={error} /> : null}
+        ) : (
+          <div className="wf-slot-body">
+            {/* 参数槽单页：两列紧凑栅格（xs=12 与视口断点解耦） */}
+            <FieldRow className="wf-slot-row">
+              <AmountField
+                xs={12}
+                md={12}
+                label={t("loan.principal")}
+                tooltip={t("loan.principalTooltip")}
+                value={inputs.principal}
+                onChange={(v) => setInputs({ principal: v })}
+                prefix={symbol}
+                suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+                convertRate={rate}
+              />
+              <PercentField
+                xs={12}
+                md={12}
+                label={t("loan.annualRate")}
+                tooltip={t("loan.annualRateTooltip")}
+                value={inputs.annualRatePct}
+                onChange={(v) => setInputs({ annualRatePct: v })}
+                suffix="%"
+              />
+              <IntField
+                xs={12}
+                md={12}
+                label={t("loan.years")}
+                tooltip={t("loan.yearsTooltip")}
+                value={inputs.years}
+                onChange={(v) => setInputs({ years: v })}
+                min={LOAN_YEARS_LIMIT.min}
+                max={LOAN_YEARS_LIMIT.max}
+                suffix={t("units.yearUnit")}
+                hint={t("loan.yearsHint", { max: LOAN_YEARS_LIMIT.max })}
+              />
+              <Col xs={12} md={12} className="wf-field">
+                <div className="wf-field-label">
+                  <Text>{t("loan.loanType")}</Text>
+                </div>
+                <Select
+                  value={loanKind}
+                  options={loanKindOptions}
+                  onChange={(v: LoanKind) => setLoanKind(v)}
+                  style={{ width: "100%" }}
+                  className="wf-pressable"
+                />
+                <div className="wf-field-hint">
+                  <Text type="secondary">
+                    {loanKind === "housing_fund" ? t("loan.housingFundHint") : t("loan.commercialHint")}
+                  </Text>
+                </div>
+              </Col>
+              <Col xs={24} md={24} className="wf-field">
+                <div className="wf-field-label">
+                  <Text>{t("loan.repayMethod")}</Text>
+                  {/* P10 槽态：方式注下沉 FieldTip（信息路径零丢失） */}
+                  <FieldTip text={t("loan.repayMethodHint")} />
+                </div>
+                <Radio.Group
+                  name="loan-method"
+                  value={inputs.method}
+                  onChange={(v) => setInputs({ method: v as typeof inputs.method })}
+                >
+                  <Radio value="equal_payment">{t("loan.equalPayment")}</Radio>
+                  <Radio value="equal_principal">{t("loan.equalPrincipal")}</Radio>
+                </Radio.Group>
+              </Col>
+            </FieldRow>
+          </div>
+        )}
+      </SlotBox>
     </div>
   );
 }

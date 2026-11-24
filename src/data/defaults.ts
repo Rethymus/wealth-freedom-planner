@@ -17,6 +17,7 @@ import {
   PENSION_AVG_WAGE_ANCHOR_CNY,
   PENSION_MONTHS_TABLE,
 } from "./pensionParams";
+import { TAX_TABLES } from "./taxTables";
 import type { PensionInputs } from "./pensionParams";
 import type {
   AppCopy,
@@ -155,11 +156,16 @@ export const MONTE_CARLO_STRATEGY_DEFAULTS: {
   },
 };
 
-/** 税务估算面板默认输入（bands 待接 taxTables.ts 的 TAX_TABLES，当前为空 → 仅供联调） */
+/** 税务估算面板默认输入（F6 修复轮：默认税表 = 税表数据层中国表——面板默认选中 CN，
+ *  对比列/情景存档/分享载荷的税切片与面板同源；此前 bands 空仅供联调，致对比列
+ *  税后收入恒 ¥0。taxTables.ts 仅依赖 ./types，无循环导入） */
+const CN_TAX_TABLE = TAX_TABLES.find((tbl) => tbl.countryCode === "CN") ?? null;
+
 export const TAX_ESTIMATE_DEFAULTS: EstimateTaxInput = {
   grossAnnualIncome: 200000,
-  standardDeduction: 60000, // 占位：按中国个税年减除费用口径，待税表确认
-  bands: [],
+  // 中国个税年减除费用口径（与 CN 税表 standardDeduction 同源；表缺失时回落占位值）
+  standardDeduction: CN_TAX_TABLE ? CN_TAX_TABLE.standardDeduction : 60000,
+  bands: CN_TAX_TABLE ? CN_TAX_TABLE.bands : [],
 };
 
 /** 自由刻度输入类型与默认值（currentAssets = 0 视为未填写 → 进度环隐藏） */

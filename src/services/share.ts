@@ -33,6 +33,12 @@ import type { LifeEventInput } from "./finance";
 const MAX_LIFE_EVENTS = 20;
 
 /** 分享链接版本（切片形状或字段语义变更时递增；解码端仅接受当前版本）。
+ * v6：ShareState 新增第 13 键 mcMeansSynced（P10 §4 MC 回报均值/通胀均值「跟随核心参数」
+ *   口径标志——布尔，业务输入切片的一部分；不入载荷则接收方会在锁态显示下看到 payload
+ *   里的旧均值，发送方所见 ≠ 接收方所得，违反本文件纪律）。解码端严格布尔校验：
+ *   缺键 / 非 true|false → 整体 null（禁止部分恢复）；v5 及更早链接与情景库存档一次性
+ *   失效，需重新生成/重存——延续 v1→v2→v3→v4→v5 既有决策（形状变更即递增、版本单点闸
+ *   自动承载、无迁移代码）；
  * v5：ShareState 新增第 12 键 lifeEvents（P9 人生事件切片入载荷——事件是业务输入切片，
  *   不入载荷则分享/情景库发送方与接收方轨迹静默失真，违反「发送方所见 = 接收方所得」；
  *   必填键、缺键 → 整体 null，空事件 = []；healthPhase 的 label 为 UI 本地态「存而不传」
@@ -50,7 +56,7 @@ const MAX_LIFE_EVENTS = 20;
  * 链接一次性失效，需重新生成分享链接——延续 v1 → v2 升级的既有决策，见本注释先例）；
  * v2：pension.monthsDivisor 编码值改为「联动态取面板所见表值」（effectiveMonthsDivisor
  * 口径），发送方所见与接收方所得一致；v1 链接按损坏处理（静默回落默认 + 提示） */
-export const SHARE_LINK_VERSION = 5;
+export const SHARE_LINK_VERSION = 6;
 
 /** hash 前缀（#s=<payload>） */
 const HASH_PREFIX = "#s=";
@@ -75,6 +81,8 @@ export interface ShareState {
   /** P9 人生事件切片（v5；必填键——缺键 → 整体 null 禁止部分恢复；空事件 = []。
    *  healthPhase 的 label 仅 UI 本地态：编码端剥除、解码端置缺省空串，不入载荷） */
   lifeEvents: LifeEventInput[];
+  /** P10 §4 MC 均值口径标志（v6 新增第 13 键；必填，严格布尔——缺键/非布尔 → 整体 null） */
+  mcMeansSynced: boolean;
 }
 
 interface SharePayload extends ShareState {
@@ -302,6 +310,10 @@ export function decodeShareState(hash: string): DecodeResult | null {
   if (!baseline || !reverse || !loanNums || !rental || !monteCarloNums || !taxNums || !accumulation || !pension || !lifeEvents) {
     return null;
   }
+  // ---- P10 v6：mcMeansSynced 必填键严格布尔校验（缺键 / 非 true|false → 整体 null，
+  //      禁止部分恢复；与 freezeOnLoss 同款布尔口径）----
+  const mcMeansSynced = obj["mcMeansSynced"];
+  if (mcMeansSynced !== true && mcMeansSynced !== false) return null;
   if (!isNum(progress)) return null;
   if (method !== "equal_payment" && method !== "equal_principal") return null;
   if (returnMode !== "normal" && returnMode !== "bootstrap") return null;
@@ -329,6 +341,7 @@ export function decodeShareState(hash: string): DecodeResult | null {
     progressCurrentAssets: progress,
     pension: pension as unknown as PensionInputs,
     lifeEvents, // v5：事件切片（校验已完成，label 已置缺省空串）
+    mcMeansSynced, // v6：MC 均值口径标志（严格布尔校验已完成）
   };
   return { state, strategyNormalizedFromLegacy };
 }

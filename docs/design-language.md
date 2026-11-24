@@ -122,6 +122,23 @@
 | S25 | ✅ 已落地 | 5 图 Tooltip：BasicCalculator.tsx:168、MonteCarloPanel.tsx:327/:351（共享气泡组件）与 :752/:927（`syncId="wf-mc"`）、RentalPanel.tsx:349、AccumulationPanel.tsx:237；global.css:1435 起 `.wf-chart-tip` | 无 |
 | S26 | ⛔ 降档未落地 | —（hooks.ts:7 留降档注释） | 整项裁撤（门禁降档第 1 项）；定义保留 |
 
+**P10 零滚动轮收口核验（2026-11-24；受影响项逐项标注，其余项不动）**
+
+> 零滚动骨架重组中 §2 清单的处置按 p10-spec.md §6 迁移登记表执行：**迁移 3 项（S18/S20/S21）、退役维持 3 项（S17/S23/S26，本轮零新增退役）、其余不动**；S 编号语义零变化，仅宿主/触发条件随骨架落位。
+
+| # | 状态 | 落点（收口实测） | 说明 |
+| --- | --- | --- | --- |
+| S1/S2/S9/S16 | ✅ 不动 | BasicCalculator 输出卡恒驻区（F1/F2 读数窗） | 防抖落定谓词驱动，输出卡恒驻后触发语义不变；「S2 全站唯一 expressive」纪律不变 |
+| S6 | ✅ 不动 | 五宿主空态随各面板落位 | 空态语义零变化 |
+| S15 | ✅ 不动（落点约束） | 叙事行随图入 L5 槽——**随图不随页** | 数值复用既有字段，同帧快照语义不变 |
+| S17 | ⛔ 退役维持 | —（无代码落点） | P6 降档未落地；零滚动下 hover 联动价值更低，维持退役，复活须走 §5.1 |
+| S18 | ✅ 宿主迁移落点 | hooks.ts:223 `useAnimatedNumber`（hostRef 参数）；宿主重挂到骨架卡容器（含反向卡双态容器） | hook 与可见性闸保留；零滚动下 IntersectionObserver 退化为恒可见 |
+| S19 | ✅ 触发条件简化（T12，§5 登记注记） | global.css:2236 `.wf-output-card:hover`（`:not(.wf-is-stuck)` 条件退役，:2230 注释） | 吸附态不复存在 → hover 全状态生效；视觉/降级零变化 |
+| S20 | ✅ 宿主迁移落点 | AdvancedPanel.tsx:182 `animation={{ inkBar: true, tabPane: true }}` | 随组内 Tabs 实例迁挂（R2 树原样保留） |
+| S21 | ✅ 宿主迁移落点 | AdvancedPanel.tsx:116/:175 `makeTabsKeyDown` | 数字键 1/2/3 ＋显式输入豁免守卫随分段控件迁挂；role="slider" 豁免扩展维持 |
+| S25 | ✅ 不动 | 图域内气泡 ＋ 明细行兜底随 F4/L5/K4/R5 槽内可达 | 触屏兜底路径保持卡内可达 |
+| S26 | ⛔ 退役维持 | —（无代码落点） | dock 静态恒驻进一步降低磁吸价值；维持退役 |
+
 ---
 
 ## 3. 组件规范（应用规则；参数对照表 = research-design-language.md §3）
@@ -191,4 +208,5 @@
    - P8 实施收口（统一生命周期现金流引擎轮——WF-04 前置兑现，2026-11-22）：`calcLifecycle` 编排既有 estimate_pension / simulate_accumulation ＋ TS 侧确定性年度行装配（零 Rust 导出面增量、pass1/pass2 锁区零触碰）＋ 人生轨迹读数卡（LifeTrajectoryCard，纯读数卡 D9 同构）挂入 life 页首组（组数 5 → 6 为本轮有意变更登记）；life.* 新键 16 ×3 语。**零签名元素增删、零新视觉令牌、零新动效，§5.1 本轮零申请**；S1–S26 零回退（`global.css` 不在改动清单）。门禁七道 + 禁词复跑全绿（cargo 75 零变化锁定、check:lifecycle L1–L6、尺寸 1,997,245 B 余量 2,755 B——紧张，后续轮先回收）；残留与偏差见 `docs/p8-spec.md`「实施结果与收口记录」。
    - WF-04 实施收口（三巧思施工轮——时间透镜 / 公式解构 / 情景叠影，2026-11-23）：brief §三 前三交互巧思按两研究文档立项（`research-wf04-lens.md` / `research-wf04-anatomy-overlay.md`）＋ `wf04-spec.md` 落规范后实施——**T1 时间透镜**（`lens/LifeLensTrack` 嵌人生轨迹读数卡：刻度轨 role="slider" 44px 命中＋常驻逐年读数面板，读数 = timeline 纯内存索引零 wasm，里程碑形状通道独立于颜色（S10 同构），零动效零降级分支）、**T2 公式解构**（`FormulaAnatomyRow` 挂自由刻度输入卡：公式行变量 token 点击 → 目标字段静态描边＋label 加粗，纯展示态零 store 写入，落 S16 重挂域外三条款共存）、**T3 情景叠影**（`ScenarioOverlayChart` 挂专业模式多情景对比：基准实线 vs 情景虚线恒两线，S25 第 6 个消费图，独立 300ms 防抖恰 2 个 calcLifecycle、开关未置位零调用）。**签名元素清单零增删（三巧思不新增 S 编号——分别为图表读数 / 静态强调 / 比较语境的交互延伸，动效纪律全遵 §3.5）；零新视觉令牌（全部引用既有令牌键）、零新动效通道，§5.1 本轮零申请**。S21 豁免集合扩展 role="slider"（显式输入豁免语义同构）；S25 单图无 syncId 口径维持。尺寸触发降档：D1 并合＋D2①—④ 全执行（差异表与 Area 填充裁撤、透镜两读数字段裁撤），三巧思全量净增 +14,533 B；期间实测破线曾特批 2,010,000 B（附回滚触发器），裁决 C 以 wasm-opt 真实回收（−30,809 B）触发归档——门禁线恢复 2,000,000 原值。收口复跑门禁九道全绿（build 1395 modules / dist 1,980,789 B 余量 19,211 B / wasm 356,864 B / cargo 15+60 / check:lifecycle L1–L6 / share 六组 / data 九组 / currency 五组 / a11y 63 组）；S1–S26 零回退。实施结果与偏差见 `docs/wf04-spec.md`「实施结果与收口记录」。
    - WF-06 可用性收敛轮（双人格独立走查 + 最小侵入修复，2026-11-23）：双独立走查员（初次使用者 / 熟悉投资概念者）各 4 任务**全完成（8/8）**、判 PASS ×2（逐帧 PNG 取证；初用者 ≈29 分钟 / 熟悉者 ≈37 分钟），13 条 findings（P1×3 / P2×10）。**修复全部为文案/警示/展示层最小侵入，零签名元素增删、零新视觉令牌、零新动效、零数据流/公式/导航改动，§5.1 本轮零申请**：`accumulation`/`monteCarlo` 两面板支出口径与自由刻度不一致时字段警示 + 显式一键同步按钮（不自动改值，`AccumulationPanel.tsx`/`MonteCarloPanel.tsx`）；多情景对比表新增「年支出（基期）」输入档案首行 + 口径注（`ScenarioPanel.tsx`）——改年支出存情景不再是静默无效对比。新 i18n 键 5 ×3 语（accumulation.expenseMismatchHint/expenseSyncButton、mc.annualSpendMismatchHint/annualSpendSyncButton、scenario.spendRowNote；对比首行行名复用 mc.annualSpend），三语抽查与切换往返无残留。**S1–S26 零回退**（独立复验抽查 S1/S3/S6/S10/S14/S15 六项在位）。独立复验 3/3 被修场景同路径重走 PASS（证据 `gui-test-screenshots-recheck/` 55 张）；修复自验门禁记录全绿。残留 12 项：P2 记录不修 10 + IA 级移交主会话裁决 2（MC↔情景跨面板联通、支出口径同源联动/双口径呈现分层——超最小侵入授权不硬改）。改版前后对照与局限声明（无真实用户样本、走查员为同模型不同任务书，**结论为走查级非实证级**）见 `docs/wf06-report.md`。
+   - P10 实施收口（五任务页零滚动切换树轮，2026-11-24）：**100dvh 零滚动骨架**（Layout `height` 100vh→100dvh 覆写、Content `flex:1`+`min-height:0`+`overflow:hidden`、页内禁滚动兜底）＋ 五任务页 30 节点切换树与槽契约（`slots.tsx` SegBar/SlotBox 等高互换——复用 Radio.Group 既有语义，零新交互词汇）＋ **吸附机制退役与迁移登记兑现（§2-T1–T12）**：顶栏 sticky、输出卡吸附三件套（`.wf-output-sticky`/`wf-is-stuck`/观察器）、穿透三层、左列 sticky+内滚、scroll-margin 双处、Footer 元素全退役；**D9 吸附态紧凑减法退役**（`<640` 环 56 保留，其承载由读数窗恒驻兑现）；底 dock 改 flex 静态行；S19 触发条件简化（T12）。**S18/S20/S21 宿主随骨架迁移（语义保留），S17/S23/S26 维持退役、本轮零新增退役**——逐项核验见 §2.1「P10 零滚动轮收口核验」。**单源化**：MC 回报均值/通胀均值「跟随核心参数」派生锁定（store 布尔 `mcMeansSynced`，share v6 第 13 键严格布尔闸；`accumulationTargetSynced` 同形先例，零新交互词汇）。**零新签名元素、零新视觉令牌、零新动效通道，§5.1 本轮零申请**；A1 显式回退守卫兑现红线 9「明示回退」（页根溢出 → `wf-fallback-scroll` ＋三语警示横幅）。门禁九道全过（cargo 75 零变化、a11y 63 组、share v6 八组、lifecycle L1–L13、tsc、尺寸 1,994,561 B 净 −2,220 B）；零滚动实测 **zh-CN 40 组 39 过**（六视口×五页×亮色全量＋深色两端抽样；唯一挂组 risk@375×667 槽裁切，登记残留）、**en 15 组残留**（页级溢出与槽裁切——语言维度未入脚本矩阵，既定跟进）；明细与残留见 `docs/p10-spec.md`「实施结果与收口记录」。
 6. **例外登记**：跨断点/跨形态有意不对称的样式须在此登记并给理由；未登记的不对称视同缺陷。当前登记：移动端底部动作 dock 的「复制分享」为主按钮（type="primary"、全宽），桌面同功能为次要文字按钮——移动端分享是核心闭环动作且触达目标更大（P5.1 V6 登记）。

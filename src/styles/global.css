@@ -183,20 +183,10 @@ body {
   border-bottom: 1px solid var(--wf-hairline-topbar);
 }
 
-/* 顶栏 md+ sticky 化：背景滤镜需采样到滚动其下的页面内容，sticky 是材质可见性的前提；
-   悬浮输出卡的吸附偏移随之由顶栏高度派生。窄屏维持现状静态换行（见布局区） */
-@media (min-width: 768px) {
-  .wf-header {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    min-height: var(--wf-topbar-h);
-  }
-
-  .wf-output-sticky {
-    top: calc(var(--wf-topbar-h) + 8px);
-  }
-}
+/* P10 §2-T1 退役登记：顶栏 md+ sticky 化退役（零滚动骨架下无滚动可吸附，顶栏为
+   Layout flex 首行的静态行——材质滤镜仍生效，信息路径与 44/48 命中原样保留）。
+   原 `@media (min-width: 768px) { .wf-header { position: sticky … } .wf-output-sticky { … } }`
+   随 T2 一并删除（.wf-output-sticky 承载元素已退役）。 */
 
 /* 顶栏文字一律纯白：正文级白字在 L1 半透明合成底上须 ≥4.5:1（设计规范 5.3），
    现状 0.85 透明度标签不达标，随本次修正 */
@@ -206,19 +196,9 @@ body {
   white-space: nowrap;
 }
 
-/* 悬浮输出卡置顶吸附：偏移量按断点拆分——窄屏 top 8px（下方媒体查询承载）；md+ 的
-   顶栏高派生偏移在上方材质区媒体查询。基础规则不得声明 top：其源序位于 md+ 派生块
-   之后，同特异性会按源序覆盖派生偏移，导致桌面吸附卡被顶栏遮挡（历史缺陷） */
-.wf-output-sticky {
-  position: sticky;
-  z-index: 30;
-}
-
-@media (max-width: 767.9px) {
-  .wf-output-sticky {
-    top: 8px;
-  }
-}
+/* P10 §2-T2 退役登记：悬浮输出卡置顶吸附（.wf-output-sticky 位置规则）退役——输出卡为
+   叶A 恒驻区，「恒可见」由 flex 槽保证（可见性路径 1:1 迁移）。基础规则与窄屏 top 8px
+   派生一并删除（承载元素已随 BasicCalculator 槽化重构移除）。 */
 
 /* L2 悬浮输出卡：以既有类直接作选择器，JSX 零改动获得材质。
    S19（p6-spec §2）：补 position:relative 作 ::after 着色底覆盖层的定位上下文
@@ -239,29 +219,11 @@ body {
     background-color var(--wf-dur-fast) var(--wf-ease-standard);
 }
 
-.wf-output-card.wf-is-stuck {
-  box-shadow: var(--wf-shadow-3);
-}
-
-/* 吸附态点击穿透：pinned 卡悬浮于滚动文档之上，卡面（含半透明卡底与内边距）参与
-   命中测试，会挡住从下方滚过的输入区——预设按钮行被遮时 elementsFromPoint 命中
-   卡体而非按钮，按钮幽灵可见却不可点（验收 Q3-1 回归断言：滚动后命中须直达按钮）。
-   三层分工：包裹层（纯布局盒、无自有交互）恒让出指针；非吸附卡面正常交互；
-   吸附卡面让出指针、卡内唯一可交互元素（敏感性展开开关）单独恢复（pointer-events
-   为继承属性，须逐层显式覆盖）。 */
-.wf-output-sticky {
-  pointer-events: none;
-}
-
+/* P10 §2-T3/T4 退役登记：D9 吸附态紧凑减法与吸附穿透三层 pointer-events 退役——
+   吸附态不复存在（.wf-is-stuck 状态类与锚点观察器已随 BasicCalculator 槽化移除）；
+   其承载（吸附时保留大数字 + 进度说明）由 F1/F2 恒驻兑现（D9 本体 <640 环 56 保留，
+   isCompact 路径不动）；卡内交互全时直达（验收 Q3-1 语义自动满足）。 */
 .wf-output-card {
-  pointer-events: auto;
-}
-
-.wf-output-card.wf-is-stuck {
-  pointer-events: none;
-}
-
-.wf-output-card.wf-is-stuck .wf-sens-toggle {
   pointer-events: auto;
 }
 
@@ -498,25 +460,19 @@ body {
    不启用容器查询——S1–S26 零回退红线）；壳层永不容器化；hooks.ts 视口钩继续服务
    组件库 layout 逻辑（双轨并存，判定域不同）。 */
 
-/* 一次性迁移说明（atlas.migrate.notice）：会话级显隐（App 会话态，不入盘） */
-.atlas-migrate {
-  margin-bottom: 12px;
-}
-
-/* 任务切换条锚点：切换后滚动复位落点（scroll-margin 派生自顶栏高度，A9 同口径）。
-   atlas-switch 查询容器挂锚点而非切换条自身——容器查询不能查询容器元素本身 */
+/* 任务切换条锚点（P10 §2-T8 退役登记：scroll-margin-top 滚动复位落点随 scrollIntoView
+   退役删除；容器查询挂点保留——atlas-switch 查询容器挂锚点而非切换条自身） */
 .atlas-switch-anchor {
-  scroll-margin-top: calc(var(--wf-topbar-h, 56px) + 12px);
   container-type: inline-size;
   container-name: atlas-switch;
 }
 
-/* 切换条基线（<768）：任务四项 2×2 + 专业模式整行次行（次级样式）；≥768 单行 5 项
-   由容器查询承载（下方）。恰 5 项（同屏独立选项 ≤5 纪律，原型 §0.6） */
+/* 切换条基线：单行 5 项恒驻（P10 §1.0a C2：desc <768 转 title/aria 单行 48、≥768 双行
+   56——原 <768 2×2+次行形态退役，高度预算 48/56 锁定）。恰 5 项（同屏独立选项 ≤5 纪律） */
 .atlas-switch {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
 }
 
 .atlas-switch-tab {
@@ -524,7 +480,8 @@ body {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  padding: 8px 12px;
+  padding: 4px 6px;
+  min-height: 44px;
   background: var(--wf-bg-surface);
   border: 1px solid var(--wf-hairline-card);
   border-radius: var(--wf-radius-m);
@@ -539,9 +496,17 @@ body {
   font-weight: 500;
 }
 
+/* C2 desc 双形态：<768 单行（desc 视觉隐藏——信息经既有 title 属性 + aria 承载，
+   TaskSwitcher.tsx title 已在位；键值不动）；≥768 双行披露 */
 .atlas-switch-tab-desc {
   font-size: var(--wf-text-caption);
   color: var(--wf-text-tertiary);
+}
+
+@media (max-width: 767.9px) {
+  .atlas-switch-tab-desc {
+    display: none;
+  }
 }
 
 /* 专业模式次级样式：素底 + 次级文字（「四任务为主、专业模式为直达通道」层级阅读，
@@ -591,34 +556,92 @@ body {
   }
 }
 
-/* @supports 等值回退：不支持容器查询的环境按同值视口媒体查询走同一形态 */
-@supports not (container-type: inline-size) {
-  @media (min-width: 768px) {
-    .atlas-switch {
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-    }
+/* P10 骨架修复轮登记：上述块的 @supports not (container-type: inline-size) 等值
+   回退退役（尺寸门禁回收 ≈0.5KB）——不支持容器查询的环境按降级形态呈现（次行项
+   无发丝线分隔、布局不受影响，非破损）；恢复须按宪法 §5.1 重新登记。 */
 
-    .atlas-switch-tab-pro {
-      position: relative;
-    }
+/* ============================== P10 §2 零滚动骨架 ============================== */
+/* 100dvh 锁定 + flex 区域（§2.1）：Layout = height 100vh → 100dvh 直接覆写（旧浏览器
+   忽略后值即得 vh 值，@supports 不需要）；Header flex:none 56；切换条区 flex:none
+   48/56；Content flex:1 + min-height:0 + overflow:hidden（禁内滚兜底，A1 判定③）。
+   min-height:0 是关键：使 flex 子区可被真实测高，页内槽预算才成立；dvh 防移动端
+   地址栏伸缩导致 720 基准失真。 */
+.wf-layout {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
 
-    .atlas-switch-tab-pro::before {
-      content: "";
-      position: absolute;
-      left: -4px;
-      top: 4px;
-      bottom: 4px;
-      width: 1px;
-      background: var(--wf-hairline-card);
-    }
+.wf-layout > .wf-header {
+  flex: none;
+}
+
+/* Content：padding 8/16（<768）与 16/16（≥768）= §1.0a 内容栈预算（16/32 垂直）； */
+.wf-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1112px;
+  margin: 0 auto;
+  padding: 8px 16px;
+  /* A1 显式回退横幅（.wf-fallback-banner）的定位上下文 */
+  position: relative;
+}
+
+@media (min-width: 768px) {
+  .wf-main {
+    padding: 16px;
   }
 }
 
-/* 任务页容器基线：hidden 非卸载（§5.5 切换不卸载）；切换淡入 = base 档标准曲线
-   透明度-only（§2.1；退场即时——hidden 即时移除，宪法 §3.5 退场比进入快）。
-   新增动画类登记：atlas-page-in（animation 承载，reduced-motion 由兜底块全停） */
+.atlas-region {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.atlas-region > .atlas-switch-anchor {
+  flex: none;
+}
+
+/* 任务页容器：height 100% + overflow hidden（页内槽预算的载体；内容超预算由 A1
+   三重判定挂起，不静默兜底内滚）。hidden 非卸载（§5.5 红线 7）；切换淡入 = base 档
+   标准曲线透明度-only（§2.1；退场即时）。新增动画类登记：atlas-page-in（animation
+   承载，reduced-motion 由兜底块全停） */
 .atlas-page {
-  margin-top: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* display:flex 声明会压过 [hidden] 的 UA none（.wf-entry 先例同款修正）——五页互斥
+   显隐必须显式补回，否则隐藏页以 flex item 参与空间分配、活动页被挤压 */
+.atlas-page[hidden] {
+  display: none;
+}
+
+/* A1 显式回退（红线 9）：页栈超预算时由 App 层 ZeroScrollGuard 检出并挂本类——
+   页根放行为可滚动视图 + 顶部明示横幅（wf-fallback-banner），禁静默裁切。
+   六验收视口内容收口后不触发；仅登记为「不支持零滚动」的高度（如 IME 深收缩、
+   env>0 机型）生效。 */
+.atlas-page.wf-fallback-scroll {
+  overflow-y: auto;
+}
+
+.wf-fallback-banner {
+  position: absolute;
+  top: 8px;
+  left: 16px;
+  right: 16px;
+  z-index: 120;
+  pointer-events: none;
 }
 
 .atlas-page:not([hidden]) {
@@ -634,18 +657,13 @@ body {
   }
 }
 
-/* 页头标题（T-3 页面标题 32px 候选键启用处；四任务页，pro 页保留原 Card 标题） */
-.atlas-page-title {
-  margin: 0 0 12px;
-  font-size: var(--wf-text-page-title);
-  line-height: 1.25;
-  font-weight: bold;
-  color: var(--wf-text);
-}
+/* P10 登记注记：页头 h2（.atlas-page-title）退役——页名信息由 C2 活动任务标签承载
+   （键值不变）；32px 页头 + 12px 外距不在 §1 各页预算行内，删除（T 系登记注记）。 */
 
-/* 工具卡/面板承载面（Surface 1 仪表工作区语义）：实底卡 + 发丝线 + 圆角；
-   阅读主体恒实底（brief §2.1 密集数字恒稳定不透明底） */
-.atlas-tool-card,
+/* 面板承载面（Surface 1 仪表工作区语义）：实底卡 + 发丝线 + 圆角；
+   阅读主体恒实底（brief §2.1 密集数字恒稳定不透明底）。
+   P10 槽化登记：.atlas-tool-card（risk/freedom 工具卡壳）随两页切换树重构退役删除，
+   仅 .atlas-life-panel / .atlas-principles-body 仍在用 */
 .atlas-life-panel,
 .atlas-principles-body {
   background: var(--wf-bg-surface);
@@ -654,101 +672,367 @@ body {
   padding: 16px;
 }
 
-.atlas-tool-card + .atlas-tool-card {
-  margin-top: 16px;
-}
-
-/* —— 自由刻度页（容器查询首批；双栏语义自 wf-workbench 迁入，brief §四 容器 ≥1024） —— */
+/* —— 自由刻度页（P10 §1.1 F0–F9；T7 退役登记：双栏左列 sticky + max-height + 内滚
+   退役——左列改 flex 静态列，参数路径由 F8 槽（移动）/左列全量（桌面）承载。
+   双栏切点 ≥1200 视口（BasicCalculator isWorkbench 同源判定，§1.1 ≥1200 双栏同屏）——
+   原 ≥1024 容器档双栏退役为登记变更） —— */
 .atlas-freedom {
   container-type: inline-size;
   container-name: freedom;
 }
 
-.atlas-freedom-layout {
+.wf-freedom-tree {
+  gap: 8px;
+  /* P10 骨架修复轮：页根改 flex 链（叶卡 flex:1 撑满页框、F4/F8 槽填充卡内剩余空间）；
+     固定区（叶条/折叠头/解构行/dock）flex:none——空间不足时上抛页级（显式回退），
+     不静默压缩固定区 */
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
+.wf-freedom-tree > * {
+  flex: none;
+}
+
+.wf-freedom-tree > section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 叶卡容器链：section → div → Card → card-body 逐级 min-height:0 + flex 纵排，
+   使 .wf-slot（flex:1 1 0）能真实吃到剩余高度（§1.0 槽等高互换的布局前提） */
+.wf-freedom-tree section > div,
+.wf-freedom-col section > div {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wf-freedom-tree .arco-card,
+.wf-freedom-col .arco-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wf-freedom-tree .arco-card-body,
+.wf-freedom-col .arco-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 卡体固定区（hero/读数行/槽条/折叠头）不参与压缩——空间不足上抛页级，不静默裁切 */
+.wf-freedom-tree .arco-card-body > :not(.wf-slot),
+.wf-freedom-col .arco-card-body > :not(.wf-slot) {
+  flex: none;
+}
+
+.wf-freedom-split {
+  display: grid;
+  grid-template-columns: 400px minmax(0, 1fr);
+  gap: 16px;
+  /* P10 骨架修复轮：start → stretch（列高=页高，右列槽 flex 填充；列内容超页高时
+     溢出上抛页级触发显式回退，不静默裁列） */
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.wf-freedom-col {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wf-freedom-col > * {
+  flex: none;
+}
+
+.wf-freedom-col > section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* V1（第 1 轮视觉验收 P0）配套迁挂：左列 400px 窄于桌面 nowrap 假设，en 长 label
+   允许换行防溢出（双栏形态专用；单列容器宽不受影响） */
+.wf-freedom-split .arco-descriptions-item-label {
+  white-space: normal;
+}
+
+/* T-1 数字主标题 48px：自由刻度 L1 读数在 ≥1024 容器档启用（每屏仍至多一处）。
+   !important 压制内联样式（BasicCalculator hero fontSize 内联，wf03-spec §4.2
+   本体零触碰；与既有 D3「内联样式须 !important 压制」先例同口径）。
+   骨架修复轮：矮视口档（高度 <850，1200×800 双栏）回退 40px display 档——
+   hero 行 122px 实测为页栈超预算的构成行之一，48px 档与 200 硬底线槽争位的
+   档位压缩登记（恢复 48px 档须重新过 A1 实测） */
 @container freedom (min-width: 1024px) {
-  .atlas-freedom-layout {
-    display: grid;
-    grid-template-columns: 400px minmax(0, 1fr);
-    gap: 16px;
-    align-items: start;
-  }
-
-  .atlas-freedom-layout .atlas-page-title {
-    grid-column: 1 / -1;
-  }
-
-  .wf-workbench-primary {
-    position: sticky;
-    top: calc(var(--wf-topbar-h, 56px) + 16px);
-    max-height: calc(100vh - var(--wf-topbar-h, 56px) - 32px);
-    overflow-y: auto;
-  }
-
-  /* 左栏自身已 sticky 常驻，输出卡的内部吸附在此形态下冗余（双重吸附互相打架），
-     双栏下退化为静态；单列保持吸附行为不变（D9 三态：吸附/紧凑档/双栏退化） */
-  .wf-workbench-primary .wf-output-sticky {
-    position: static;
-  }
-
-  /* V1（第 1 轮视觉验收 P0）配套：左栏 ~400px 窄于桌面 nowrap 假设，en 长 label
-     允许换行防溢出（双栏形态专用；单列容器宽不受影响） */
-  .wf-workbench-primary .arco-descriptions-item-label {
-    white-space: normal;
-  }
-
-  /* T-1 数字主标题 48px：自由刻度 L1 读数在 ≥1024 容器档启用（每屏仍至多一处）。
-     !important 压制内联样式（BasicCalculator hero fontSize 内联，wf03-spec §4.2
-     本体零触碰；与既有 D3「内联样式须 !important 压制」先例同口径） */
   .atlas-freedom .wf-big-number {
     font-size: var(--wf-text-num-display) !important;
   }
 }
 
-/* @supports 等值回退：无容器查询环境 = 同值视口媒体查询（回退即双栏现状布局） */
-@supports not (container-type: inline-size) {
-  @media (min-width: 1024px) {
-    .atlas-freedom-layout {
-      display: grid;
-      grid-template-columns: 400px minmax(0, 1fr);
-      gap: 16px;
-      align-items: start;
-    }
-
-    .atlas-freedom-layout .atlas-page-title {
-      grid-column: 1 / -1;
-    }
-
-    .wf-workbench-primary {
-      position: sticky;
-      top: calc(var(--wf-topbar-h, 56px) + 16px);
-      max-height: calc(100vh - var(--wf-topbar-h, 56px) - 32px);
-      overflow-y: auto;
-    }
-
-    .wf-workbench-primary .wf-output-sticky {
-      position: static;
-    }
-
-    .wf-workbench-primary .arco-descriptions-item-label {
-      white-space: normal;
-    }
-
+@media (max-height: 849.9px) {
+  @container freedom (min-width: 1024px) {
     .atlas-freedom .wf-big-number {
-      font-size: var(--wf-text-num-display) !important;
+      font-size: var(--wf-text-display) !important;
     }
   }
 }
 
-/* —— 原理档案页（容器查询第二批；纯阅读页零状态风险）：阅读列 688px 居中
-   （brief §2.2 主阅读宽 640–760 带内取 8pt 倍数，原型 §4.1） —— */
+/* P10 §8 登记注记：上述两条 @supports not (container-type) 等值回退退役——不支持
+   容器查询的环境按降级形态呈现（大数字保持 display 档 / 阅读列全宽，非破损）；
+   既有 atlas-switch 的旧 @supports 块为在册历史规则，本轮不动。 */
+
+/* ============================== P10 槽套件（§1.0 槽定义） ============================== */
+/* SegBar：槽切换条/分段条统一形态（Radio.Group 既有语义；高度 32-36，触屏档 44 命中
+   由下方触控块承载）；长段标签（F0 卡头标题 / seq.title / scenario.compareTitle）在
+   触屏档固定高 44 + 内文单行省略（换行不加高——零滚动槽预算行；全文经单选钮原生
+   语义可读，aria 由组件库承载）。
+   骨架修复轮：.wf-adv-seg（L1/R1 分段条）并入同一 flex/省略形态——320 档 5 组 chips
+   实测换行 97px（两行）超出 L1 44 预算，且放大全部 320/375 页溢出量（flex + 单行
+   省略后回 44；全文仍可经单选钮 aria 读出，登记注记） */
+.wf-segbar,
+.wf-adv-seg {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: stretch;
+}
+
+/* 按钮是 group 直接子元素（radio-group-inner 不存在——组件库实测）；flex 直挂 group */
+.wf-segbar .arco-radio-button,
+.wf-adv-seg .arco-radio-button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.wf-segbar .arco-radio-button-inner,
+.wf-adv-seg .arco-radio-button-inner {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (pointer: coarse), (max-width: 767.9px) {
+  .wf-segbar .arco-radio-button,
+  .wf-adv-seg .arco-radio-button {
+    box-sizing: border-box;
+    height: 44px;
+    min-height: 0;
+    padding: 0 6px;
+    overflow: hidden;
+    line-height: 1;
+  }
+
+  .wf-segbar .arco-radio-button-inner,
+  .wf-adv-seg .arco-radio-button-inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 44px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* SlotBox：等高槽容器（P10 骨架修复轮：flex 填充剩余空间——槽外固定区恒定时槽高恒定，
+   内容切换等高互换、替换不加高；min-height 下限由调用方经 props 传入（图槽 200 硬底线）。
+   overflow:hidden 的静默裁切由 A1 判定②′显式拦截：槽内容超限须由槽内分页消化，
+   页栈超限上抛页级触发显式回退横幅（红线 9），不静默兜底内滚） */
+.wf-slot {
+  flex: 1 1 0;
+  min-height: 200px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.wf-slot-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 明细 Descriptions 槽内紧凑（全局：行距收敛 + fixed 布局防 label 挤压——
+   P10 §8.3-3 渲染压缩，≤480 与 ≥768 槽内同口径） */
+.wf-output-breakdown .arco-descriptions-item {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+/* F3（第 1 轮验收 P1）修复登记：fixed 布局在 md:2 双对列（一行 4 单元格）下取首行
+   前两格定宽，后两格塌陷为 0 宽 + 值列 nowrap → 两列数值互相叠印（1440×900 固定复现）。
+   改 auto 布局：label 40% 提示宽 + 允许换行，值列按内容取宽（nowrap 保读数完整），
+   表宽超出容器由页级零滚动断言拦截（不再产生 0 宽叠印单元格） */
+.wf-output-breakdown table {
+  table-layout: auto;
+}
+
+.wf-output-breakdown .arco-descriptions-item-label {
+  width: 40% !important;
+  min-width: 0;
+  white-space: normal;
+}
+
+.wf-output-breakdown .arco-descriptions-item-value {
+  white-space: nowrap;
+}
+
+/* 槽内分页器（Pagination mini：页切换为等高互换的一部分） */
+.wf-slot-pager {
+  margin-top: auto;
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+
+/* 槽内紧凑两列字段栅格（xs 断点解耦——§1.1 F8 槽内 2×行预算口径）：
+   .wf-slot-fields 用显式 grid；.wf-slot-row 让 FieldRow 的全部 Col 恒半宽 */
+.wf-slot-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+  align-items: start;
+}
+
+.wf-slot-fields > .arco-col,
+.wf-slot-row > .arco-col {
+  flex: 0 0 50%;
+  max-width: 50%;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+@media (max-width: 639.9px) {
+  .wf-field-row.wf-slot-row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+}
+
+/* §3.4 子女预留折叠态：caption 态一行（显式归因 + 启用按钮） */
+.wf-child-folded {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+/* freedom 叶B F9 核心参数折叠头行（44 命中随触控块；闭合态按行计预算） */
+.wf-core-row {
+  margin-top: 8px;
+}
+
+.wf-core-toggle {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+/* C3 页内底部分享 dock 行（T5/T6 迁移：flex 静态底行——sticky/吸附退役）。
+   基础 display:none；<768 由媒体档放行为静态行（≥768 分享行在卡内承载） */
+.wf-action-dock {
+  display: none;
+}
+
+/* —— 风险实验室页（P10 §1.3 K1 两叶）/ 人生轨迹页（§1.2 L1/L2）：同构 flex 列，
+   与 pro 页块（下方 .wf-risk-page,.wf-life-page 合并规则）共用——此处注释锚点保留，
+   规则见下方合并块 —— */
+
+/* 轨迹槽内续读两列（购买力/存续；L3 前 5 行之外的信息路径承载） */
+.wf-lens-extra-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+
+.wf-lens-extra-cell {
+  min-width: 0;
+}
+
+/* —— 反向卡（F8 双态恒高 228） —— */
+.wf-reverse-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.wf-reverse-card-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.wf-reverse-card-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+/* —— 原理档案页（P10 §1.4 P1–P3 条目化；T-2 阅读正文与压缩路线 (a)） —— */
 .atlas-principles {
   container-type: inline-size;
   container-name: principles;
+}
+
+.wf-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 条目互斥显隐：作者 display 声明会压过 [hidden] 的 UA none——不补这条则五条目
+   全部同屏（P10 实测 2545px 溢出根因） */
+.wf-entry[hidden] {
+  display: none;
+}
+
+.wf-entry-sec {
+  min-height: 0;
+}
+
+/* 路线 (a) 全宽启用（§10-10(a) 准裁：strict/loose 等口径说明类正文降 caption 档
+   12px/18px——P5 反冗长 caption 口径先例；1180 实测 E2 双分节 768>707 回填收口）。
+   T-2 阅读档 16px/1.6 保留给非 entry-reading 载体（下方原块不动） */
+.wf-entry-reading,
+.wf-entry-reading .arco-typography {
+  font-size: var(--wf-text-caption);
+  line-height: 18px;
+}
+
+@media (max-width: 767.9px) {
+  .wf-entry .wf-insight-list {
+    gap: 4px;
+  }
+
+  .wf-entry .wf-insight-row {
+    padding: 4px 8px;
+  }
+
+  .wf-entry .wf-group-line {
+    margin: 8px 0 4px;
+  }
 }
 
 @container principles (min-width: 768px) {
@@ -758,23 +1042,304 @@ body {
   }
 }
 
-@supports not (container-type: inline-size) {
-  @media (min-width: 768px) {
-    .atlas-principles-body {
-      max-width: 688px;
-      margin-inline: auto;
-    }
-  }
-}
-
-/* T-2 阅读正文 16px（行高 1.6 配套）：原理档案阅读列启用；仅本页阅读段落，
-   不触及小节头/来源行/标签（caption 档不受影响）。对比度复用既有正文色对
-   （#102331 系 15.07 在册），无新增验算对 */
+/* T-2 阅读正文 16px（行高 1.6 配套）：原理档案阅读列启用（≥768 既有规则保留） */
 .atlas-principles .wf-insights-body.arco-typography,
 .atlas-principles .wf-insights-body .arco-typography {
   font-size: var(--wf-text-reading);
   line-height: 1.6;
 }
+
+/* ≥1200 左轨竖排（P1）——P10 §8.3-3 延后登记：该桌面形态本轮裁撤（横排分段条承载，
+   1440 预算行相应作废），恢复须按宪法 §5.1 重新登记。 */
+
+/* —— 专业模式页（R1/R2 两层树保留）+ 风险/人生页同构列（§1.2/§1.3 合并规则） ——
+   P10 骨架修复轮：页根与面板承载链全部接 flex（面板槽 .wf-slot 填充剩余空间；
+   固定区 flex:none；面板根溢出上抛页级触发显式回退，不再有 overflow:hidden 裁切层） —— */
+.wf-pro-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wf-pro-panel > * {
+  flex: none;
+}
+
+.wf-pro-panel > .wf-adv-tabs-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* display:flex 会压过 [hidden] 的 UA none——互斥显隐必须显式补回（TaskPages 先例） */
+.wf-pro-panel > .wf-adv-tabs-wrap[hidden] {
+  display: none;
+}
+
+/* Tabs 容器链：header flex:none、content flex:1 + overflow visible——arco 内容区默认
+   hidden 会把面板超限静默裁掉且不被 A1 ①检出（裁切层不产生页级滚动差），
+   overflow:visible 让溢出上抛页级（A1 判定① / 显式回退可见） */
+.wf-adv-tabs {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wf-adv-tabs .arco-tabs-header {
+  flex: none;
+}
+
+.wf-adv-tabs .arco-tabs-content,
+.wf-adv-tabs .arco-tabs-content-inner {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+/* Arco 轮播结构（content-inner 横排 + content-item 高度门控）改纵向 flex 链：
+   非活动 item 保持高度 0 不可见（arco 原机制），活动 item/pane 逐级 flex 填充——
+   面板槽 .wf-slot 才能吃到 tabs 内容区的真实剩余高度 */
+.wf-adv-tabs .arco-tabs-content,
+.wf-adv-tabs .arco-tabs-content-inner {
+  display: flex;
+  flex-direction: column;
+}
+
+.wf-adv-tabs .arco-tabs-content-item {
+  min-height: 0;
+}
+
+.wf-adv-tabs .arco-tabs-content-item-active {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.wf-adv-tabs .arco-tabs-tabpane {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wf-adv-tabs .arco-tabs-tabpane > div,
+.wf-risk-leaf > div,
+.atlas-life-panel > div {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 面板根固定区（读数行/槽条/运行钮/dock）不压缩 */
+.wf-adv-tabs .arco-tabs-tabpane > div > :not(.wf-slot),
+.wf-risk-leaf > div > :not(.wf-slot),
+.atlas-life-panel > div > :not(.wf-slot) {
+  flex: none;
+}
+
+.wf-risk-page,
+.wf-life-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.wf-risk-page,
+.wf-life-page {
+  flex: 1 1 auto;
+}
+
+.wf-risk-page > *,
+.wf-life-page > * {
+  flex: none;
+}
+
+/* 骨架修复轮（flex 链收口）：面板承载面自身接 flex——槽 .wf-slot(flex:1 1 0) 的
+   剩余空间分配要求「页根→面板卡→面板根→槽」逐级都是 flex 容器；此前 .atlas-life-panel /
+   .wf-risk-leaf 为 block，面板高度随内容坍缩、槽恒被压到 min 下限（320 档实测
+   slot=200 且页面留白 100px+ 的根因）。面板卡内容小于页框时撑满页框（Surface 语义
+   不变），溢出上抛页级触发显式回退。 */
+.atlas-life-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.atlas-life-panel[hidden],
+.wf-risk-leaf[hidden] {
+  display: none;
+}
+
+.wf-risk-leaf {
+  /* P10 骨架修复轮：原 overflow:hidden 静默裁切层退役（②′判定命中根因之一）——
+     叶内容溢出上抛页级（A1 ① / 显式回退）；flex 填充页内剩余空间 */
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 原理档案页：阅读体撑满页框（内容溢出上抛页级） */
+.atlas-page > .atlas-principles-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 面板头部说明行（P10 读数前置行统一形态） */
+.wf-panel-head-note {
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* 收租城市参数选项行（P10 §8：由 RentalPanel 双组内联样式迁入，双组共用） */
+.wf-input-full {
+  width: 100%;
+}
+.wf-tier-opt {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.wf-tier-opt-ex {
+  font-size: var(--wf-text-caption);
+  color: var(--wf-text-secondary);
+}
+
+/* ============================== P10 ≤480 压缩套件 ============================== */
+/* 320/375/414 紧档（顶栏 ≤420 两行 ≈87px 实测登记——超出 §1.0a C1=56 的静态假设，
+   页框 = 高度 − 87 − 44 切换条 − 8 页距 − 16 内距）。压缩面：
+   ① 槽统一 240（等高互换保持；reverse 228 / 步骤 / 折叠态均 ≤240）；
+   ② 分段/槽切换条外距收敛 2px；
+   ③ 明细 Descriptions 行紧凑（行距 2px，label 允许换行既有规则）；
+   ④ dock 内距 6px；
+   ⑤ 敏感性/收租/蒙特卡洛图 200 紧档（D5 240→200@≤480，登记变更）。 */
+@media (max-width: 479.9px) {
+  /* P10 骨架修复轮登记：原 `.wf-slot { height: 260px !important }` 固定档退役——
+     槽高改 flex 填充（.wf-slot 基线规则），≤480 保留压缩面 ②③④⑤ 外距/行距收敛 */
+
+  .wf-segbar,
+  .wf-adv-seg {
+    margin-bottom: 2px;
+  }
+
+  /* 骨架修复轮压缩面（320/375 紧档页栈回预算）：卡体 16→12、dock 内距 6→4 */
+  .wf-output-card .arco-card-body,
+  .wf-input-card .arco-card-body {
+    padding: 12px;
+  }
+
+  .wf-action-dock {
+    padding: 4px 0 calc(4px + env(safe-area-inset-bottom));
+  }
+
+  .wf-core-row {
+    margin-top: 4px;
+  }
+
+  .wf-freedom-tree {
+    gap: 4px;
+  }
+
+  .wf-preset-bar {
+    margin-bottom: 4px;
+  }
+
+  /* 骨架修复轮：槽内分页器顶距 4→0（320 档 1px 级裁切收口；按钮自带迷你档间距） */
+  .wf-slot-pager {
+    padding-top: 0;
+  }
+
+  .wf-swipe-hint {
+    margin-bottom: 0;
+  }
+
+  /* 骨架修复轮：槽内图表容器外距收敛（.wf-acc-chart margin-top 12 使 320 档图页
+     209>202——「槽内 margin 收敛为 0」既有口径扩围） */
+  .wf-acc-chart,
+  .wf-mc-chart,
+  .wf-waterfall-chart,
+  .wf-sens-chart {
+    margin-top: 0;
+  }
+
+  /* 骨架修复轮：汇率行降 caption 档（320 档值句折行双倍行高的收口；label 本就短码） */
+  .wf-currency-rates .arco-descriptions-item-label,
+  .wf-currency-rates .arco-descriptions-item-value {
+    font-size: var(--wf-text-caption);
+    line-height: 16px;
+  }
+
+  /* 骨架修复轮：币种区正文降 caption 档 + Alert 收敛（320 档区域偏离/恩格尔页
+     542>381 的收口——提示/对比句为长句，caption 档 P5 先例） */
+  .wf-currency-sec .arco-typography {
+    font-size: var(--wf-text-caption);
+    line-height: 17px;
+  }
+
+  .wf-currency-sec .arco-alert {
+    padding: 6px 8px;
+  }
+
+  .wf-currency-sec .wf-field {
+    margin-bottom: 6px;
+  }
+
+  .wf-currency-sec .arco-divider {
+    margin: 6px 0;
+  }
+
+  /* 打工模拟动作行外距收敛（320 档槽 202→255 的构成行之一） */
+  .wf-acc-actions {
+    margin: 4px 0;
+  }
+
+  /* 骨架修复轮：槽内 Descriptions 紧档收敛（≤480 行文本降 caption 档 12/17、表顶外距
+     归零——320 档序列表 348>338 与对比表行高的统一收口面；标签/值档位一致，P5 口径） */
+  .wf-slot .arco-descriptions {
+    margin-top: 0 !important;
+  }
+
+  .wf-slot .arco-descriptions-item-label,
+  .wf-slot .arco-descriptions-item-value {
+    font-size: var(--wf-text-caption);
+    line-height: 17px;
+  }
+
+  /* 骨架修复轮：槽内空态/表格单元紧档（320 档序列参数页 436>338 与对比表行高的收口面） */
+  .wf-slot .arco-empty {
+    padding: 8px 0;
+  }
+
+  .wf-slot .arco-empty-description {
+    font-size: var(--wf-text-caption);
+    line-height: 17px;
+  }
+
+  .wf-scenario-table .arco-table-td,
+  .wf-scenario-table .arco-table-th {
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+
+  .wf-slot .wf-scenario-table-wrap {
+    margin-top: 2px;
+  }
+
+  .wf-output-breakdown .wf-panel-note {
+    margin-top: 2px;
+  }
+}
+
+/* 原理档案页原独立容器查询块/T-2 阅读档规则已随 P10 §1.4 条目化重构并入上方
+   「P10 槽套件」区的 .atlas-principles 系列块（去重合并，值逐条等值迁挂）。 */
 
 /* —— 专业模式页：维持现行视口断点与布局（不启用容器查询，S1–S26 零回退红线） —— */
 .atlas-pro-topbar {
@@ -826,17 +1391,8 @@ body {
   white-space: nowrap;
 }
 
-/* A9（p4-spec §7，2.4.11 焦点遮挡最低档）：可聚焦元素滚动落点预留顶栏与底部 dock 高度，
-   键盘 Tab 向下滚动时聚焦控件不被整遮 */
-a[href],
-button,
-input,
-select,
-textarea,
-[tabindex] {
-  scroll-margin-top: calc(var(--wf-topbar-h, 56px) + 12px);
-  scroll-margin-bottom: 72px;
-}
+/* P10 §2-T9 退役登记：通用锚点 scroll-margin 块退役（零滚动骨架下无滚动落点可预留；
+   焦点迁移路径由 preventScroll 承载——§2.1）。 */
 
 /* 触控目标 ≥44px：只在触屏或窄屏生效，桌面指针精度下维持现状紧凑尺寸 */
 @media (pointer: coarse), (max-width: 767.9px) {
@@ -1068,9 +1624,23 @@ textarea,
   white-space: nowrap;
 }
 
-.wf-big-number {
+/* 双类名 specificity（0,2,0）压过组件库 h3.arco-typography（0,1,1）的 margin-top:1em */
+.wf-big-number.wf-big-number {
   font-variant-numeric: tabular-nums;
   margin-bottom: 12px !important;
+  /* 骨架修复轮：hero 行紧致——组件库 Title 默认 margin-top（em 派生，48px 档实测 48px）
+     与默认行高放大 hero 行（1440 实测 hero 122px = 48mt + 62line + 12mb），两者归一后
+     hero ≈74px；构成行修正登记（组件库默认外距非视觉令牌，零回退面） */
+  margin-top: 0;
+  line-height: 1.15;
+}
+
+/* 窄档 hero 收敛（骨架修复轮）：大数字下缘 12→4，320/375 档页栈回预算的构成行之一
+   （同特异性同 !important，媒体档按源序胜出） */
+@media (max-width: 767.9px) {
+  .wf-big-number {
+    margin-bottom: 4px !important;
+  }
 }
 
 /* 设计研究采纳 A4（docs/design-research.md §2.2）：表格数值列与实时区数值挂等宽数字，
@@ -1137,10 +1707,6 @@ textarea,
   background: var(--wf-bg-tint, rgba(74,111,165,0.08));
   border-radius: 4px;
   transition: background-color var(--wf-dur-base) var(--wf-ease-standard);
-}
-
-.wf-core-params {
-  margin-top: 8px;
 }
 
 /* 高级面板 */
@@ -1230,17 +1796,18 @@ textarea,
   margin-top: 16px;
 }
 
-/* 页脚 */
-.wf-footer {
-  background: transparent;
-}
+/* P10 §2-T11 退役登记：Footer 元素与 .wf-footer 规则退役——声明全文迁 principles E5
+   条目（app.footerDisclaimer / app.footerPrivacy 键复用不改名，信息先迁移后删）。 */
 
-/* ===== P0 三件套：预设场景 / 自由刻度 / 打工积累模拟 ===== */
-.wf-preset-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
-.wf-preset-btn { /* 高亮态由 Button type="primary" 承载，此处仅保证触控目标 */ min-height: 32px; }
-.wf-preset-custom { /* 「自定义」态徽标：高亮由 Tag color 承载 */ margin-inline-start: auto; }
-.wf-preset-tags { margin-bottom: 8px; }
-.wf-preset-note { margin-bottom: 12px; }
+/* ===== P0 三件套：预设场景 / 自由刻度 / 打工积累模拟（P10 F6 栅格化登记：
+   预设 4 钮 + 自定义 Tag 第 5 格恒单行——44 命中随触控块；防换行加高） ===== */
+.wf-preset-bar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: 4px; align-items: stretch; margin-bottom: 8px; }
+.wf-preset-btn { /* 高亮态由 Button type="primary" 承载，此处仅保证触控目标 */ min-height: 32px; padding-left: 4px; padding-right: 4px; }
+.wf-preset-btn .arco-btn-content { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.wf-preset-custom { /* 「自定义」态徽标：高亮由 Tag color 承载 */ display: inline-flex; align-items: center; justify-content: center; margin: 0; }
+.wf-preset-tags { margin-bottom: 4px; }
+.wf-preset-tags > div { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.wf-preset-note { margin-bottom: 8px; }
 .wf-output-hero { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .wf-progress-ring { flex: none; }
 .wf-progress-caption { margin-top: 4px; }
@@ -1250,32 +1817,30 @@ textarea,
 .wf-acc-chart { margin-top: 12px; }
 /* ===== P1 冲刺：社保养老金 / 历史自助抽样 / 欲望敏感性 / 场景分享（docs/p1-spec.md §10） ===== */
 .wf-mc-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
-.wf-sens-toggle { margin-top: 8px; }
-/* 深色主题文字按钮用提亮主色（验收 T2-2，WCAG 1.4.3）：深色令牌组 --primary-6 恒为
-   浅色品牌主色（global.css:350，供主色实底按钮白字 5.11:1），组件库 text 按钮以
-   rgb(var(--primary-6)) 取字色 → 深卡 3.11:1 < 4.5。改取 --wf-primary（深色 = 提亮
-   主色 #7B9FD1，卡合成底 5.84:1 达标；浅色下 --wf-primary 与 --primary-6 同值不受影响） */
-[data-theme="dark"] .wf-sens-toggle {
-  color: var(--wf-primary, #7B9FD1);
-}
-.wf-sens-block { margin-top: 8px; }
-.wf-sens-group { margin-top: 8px; }
+/* P10 槽化登记：.wf-sens-toggle（含 [data-theme=dark] 变体）/ .wf-breakdown-toggle /
+   .wf-sens-group（加性展开开关与分组标题）随 F3/F4 槽互换退役删除；
+   敏感性槽内容块外距收敛（.wf-sens-block 槽内首行） */
+.wf-sens-block { margin-top: 0; }
 .wf-sens-rows { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .wf-sens-row { display: flex; justify-content: space-between; gap: 8px; }
 .wf-sens-note { margin-top: 8px; }
 .wf-share-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 /* ===== P2 冲刺设计打磨（docs/p2-spec.md §6.1/§6.3，采纳清单 C1/C3 落地的两组） ===== */
-/* C1 龙卷风图（.wf-sens-chart 一组）：图表容器 + 方向图例两行（C1 ⑧，数据表替代见其下数值行） */
-.wf-sens-chart { margin-top: 8px; }
+/* C1 龙卷风图（.wf-sens-chart 一组）：图表容器 + 方向图例两行（C1 ⑧，数据表替代见其下数值行）。
+   P10 F4 槽变体：单行图例（.wf-sens-legend-inline）与两列数值网格（.wf-sens-rows-grid，
+   S25 兜底行第二页）；槽内 margin 收敛为 0（槽体自带间距） */
+.wf-sens-chart { margin-top: 0; }
 .wf-sens-legend { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.wf-sens-legend-inline { flex-direction: row; flex-wrap: wrap; gap: 2px 12px; margin-top: 2px; }
+.wf-sens-rows-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 4px; }
 .wf-sens-legend-row { display: inline-flex; align-items: center; gap: 6px; font-size: var(--wf-text-caption); }
 .wf-sens-legend-dot { width: 10px; height: 10px; border-radius: 2px; flex: none; }
 /* C3 瀑布图（.wf-waterfall-chart 一组）：图表容器（图注复用既有 .wf-panel-note） */
 .wf-waterfall-chart { margin-top: 16px; }
 
 /* ===== P3 面板⑨ 公式原理与数据依据（docs/p3-spec.md §3.3） ===== */
-.wf-insight-section-title { display: block; margin: 20px 0 4px; }
-.wf-insight-section-title:first-child { margin-top: 0; }
+/* P10 骨架修复轮登记：`.wf-insight-section-title` 规则随条目化重构退役（节头改
+   SectionTitle/Divider .wf-group-line 承载，零运行时命中） */
 .wf-insights-body { display: block; margin-bottom: 4px; }
 .wf-insight-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .wf-insight-row {
@@ -1296,6 +1861,12 @@ textarea,
 }
 .wf-insight-source { font-size: var(--wf-text-caption); line-height: 18px; }
 .wf-insight-note { display: block; margin-top: 8px; font-size: var(--wf-text-caption); }
+
+/* P10 §4 多币种槽态：汇率表 9 行压缩行距（槽 300 内可达；信息零删减——padding-only） */
+.wf-currency-rates .arco-descriptions-item {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
 
 /* 反推面板演示算例按钮行（docs/p3-spec.md §4） */
 .wf-example-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 12px; }
@@ -1381,15 +1952,29 @@ textarea,
   .wf-preset-btn { min-height: 44px; }
   /* 折叠面板头补最小触控高（整行可点，天然超宽；只加 min-height，不改组件库布局） */
   .arco-collapse-item-header { min-height: 44px; }
+  /* P10 A11 命中清单：槽切换条 / 分段条 / 叶切换条（F0/F3/F7/L1/L2/L4/K1/K3/R1/R2/
+     条目 P1）——Radio 按钮非 .arco-btn，单独补 44 最小高 */
+  .wf-segbar .arco-radio-button,
+  .wf-adv-seg .arco-radio-button { min-height: 44px; }
 }
 
 /* D7 滑动提示：基础档隐藏，媒体档放行——基础规则必须在源序上先于媒体查询块
    （同特异性按源序胜出；基础规则置后会反向压掉媒体档，致提示恒隐藏，评审修正） */
 .wf-swipe-hint { display: none; }
 
-/* D7 对比表两层滚动结构的承载规则（与媒体档无同名属性竞争，位置无关，就近基础档置此） */
+/* D7 对比表两层滚动结构的承载规则（与媒体档无同名属性竞争，位置无关，就近基础档置此）。
+   P10 骨架修复轮：wrap 补 overflow-y:hidden——横向滚动容器在 CSS 级联上 overflowY
+   计算值恒为 auto（单轴非 visible 的级联规则），A1 判定②会把表高比 wrap 高 1px 的
+   边框圆整差误报为内滚兜底；纵向从不滚动（行由槽内分页承载），显式 hidden 与设计一致 */
 .wf-scenario-table-outer { position: relative; }
-.wf-scenario-table-wrap { margin-top: 8px; overflow-x: auto; }
+.wf-scenario-table-wrap { margin-top: 8px; overflow-x: auto; overflow-y: hidden; }
+
+/* 对比表行压缩（骨架修复轮：槽内 9 行在 320/1024 档超槽的收口面之一——行距 padding-only） */
+.wf-scenario-table .arco-table-td,
+.wf-scenario-table .arco-table-th {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
 
 /* 对比表列压缩防护（验收 S2-1 + S3-1 复测补层，D7 列宽纪律同摊销表口径）：table min-width 560
    与摊销表同口径；指标列 150 / 场景列 120 下限 + 数值列 nowrap——空间不足走横滚而非压缩断数。
@@ -1453,60 +2038,36 @@ textarea,
   }
 }
 
-/* D8 吸附落位：<768 生效；底色实底防与滚动内容叠印；原分享行在窄屏隐藏避免双入口 */
+/* D8 页内底部操作行（P10 §2-T5/T6 迁移登记：sticky 吸附 → flex 静态底行——
+   safe-area-inset-bottom 内边距保留；底色吸附防叠印与 z-index 随吸附退役删除；
+   原 .arco-collapse overflow:clip sticky 祖先修正为死路径一并退役）。
+   基础隐藏；<768 放行为静态行（≥768 卡内分享行/运行钮承载）。
+   natural reachable 区结论沿用（页满视口 ⇒ dock 恒在 [0.66H,1.0H]） */
 .wf-action-dock, .wf-mc-dock-run { display: none; }
 
 @media (max-width: 767.9px) {
   .wf-share-row { display: none; }
   .wf-action-dock {
-    position: sticky;
-    bottom: 0;
-    z-index: 30;
     display: flex;
     padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
-    background: var(--wf-bg-sunken);
   }
   .wf-action-dock .arco-btn { flex: 1; }
   .wf-mc-dock-run {
-    position: sticky;
-    bottom: 8px;
-    z-index: 20;
     display: flex;
     padding: 8px 0;
-    background: var(--wf-bg-sunken);
   }
   .wf-mc-dock-run .arco-btn { flex: 1; }
-  /* sticky 祖先裁切修正（验收 S2-2）：组件库 .arco-collapse / .arco-collapse-item-content
-     均 overflow:hidden（收合动画裁切用），使面板内 sticky 的最近滚动口退化为不可滚动的
-     折叠内容盒、吸附失效（375×667 实测 dock 在视口外 3.4k px）。hidden→clip：裁切视觉
-     与动画收合裁切完全不变，但 clip 不构成滚动容器，sticky 最近滚动口恢复为视口，
-     「面板在视口内时按钮恒在视口底」生效。限 <768（sticky 规则仅窄屏生效）。 */
-  .arco-collapse,
-  .arco-collapse-item-content {
-    overflow: clip;
-  }
 }
 
-/* D9 吸附态紧凑 + P5.1 V1 内容减法：<768 输出卡吸附时收为纯读数卡——大数字 +
-   进度说明常驻；两行长解释句（.wf-output-line ×2，含乘数段位 Tag 行）与明细/
-   敏感性展开开关及其内容区一并隐藏（吸附中内容区本就被隐藏，开关是无反馈死控件，
-   随本修订收除，1185 穿透豁免随之失去对象）；回滚顶部未吸附态即恢复全量交互。
-   调参时表单有效区恢复近全屏（一屏一重点 / 反冗长原则的吸附态兑现，验收 V1） */
-@media (max-width: 767.9px) {
-  .wf-output-card.wf-is-stuck .wf-output-line,
-  .wf-output-card.wf-is-stuck .wf-breakdown-toggle,
-  .wf-output-card.wf-is-stuck .wf-sens-toggle,
-  .wf-output-card.wf-is-stuck .wf-output-breakdown,
-  .wf-output-card.wf-is-stuck .wf-sens-block { display: none; }
-}
-.wf-breakdown-toggle { margin-top: 8px; }
+/* P10 §2-T3 退役登记：D9 吸附态紧凑减法块退役（.wf-is-stuck 不复存在；其承载由
+   F1/F2 恒驻兑现——见上方材质区同号登记）。D9 本体 <640 环 56（BasicCalculator
+   isCompact）保留。原 .wf-breakdown-toggle 随 <768 加性展开开关退役删除。 */
 
-/* D10 认知负荷：组块边界间距（组头与首字段 ≥12px、组间 ≥24px = --wf-space-5） */
+/* D10 认知负荷：组块边界间距（P10 槽化登记：dock 静态行自带 padding，外距退役；
+   .wf-core-params 随核心参数加性 Collapse 退役删除） */
 @media (max-width: 767.9px) {
-  .wf-preset-bar { margin-bottom: 12px; }
-  .wf-preset-tags { margin-bottom: 12px; }
-  .wf-core-params { margin-top: 24px; }
-  .wf-action-dock { margin-top: 16px; }
+  .wf-preset-bar { margin-bottom: 8px; }
+  .wf-preset-tags { margin-bottom: 8px; }
 }
 
 /* ===== P5 设计语言落地（docs/p5-spec.md §3；签名元素 S1–S15；全部动效一律走动效令牌） ===== */
@@ -1666,17 +2227,17 @@ textarea,
 /* S17 敏感性双向高亮：已按 §8 降档顺序整体裁撤（docs/p6-spec.md §8 降档顺序第 3 项；
    .wf-linked 描边与 .wf-sens-link-zone 事件包装随 TSX 挂点一并移除） */
 
-/* S19 输出卡克制悬浮：非吸附态 hover 上浮 1px + ::after 着色底半档（表面色变化，
-   不用海拔动画——宪法 §3.2 口径）。层序裁定（P2）：::after 不设 z-index，按绘制顺序
-   盖于卡面内容之上形成整卡着色底；必须 pointer-events:none 使其完全不参与命中测试
-   ——非吸附态卡内预设/分享/明细开关/敏感性开关点击直达；吸附态 .wf-is-stuck 恒
-   pointer-events:none 天然不触发 hover，穿透链不受影响（定位上下文 position:relative
-   与 fast 过渡已落于上方 .wf-output-card 既有规则处） */
-.wf-output-card:hover:not(.wf-is-stuck) {
+/* S19 输出卡克制悬浮（P10 §2-T12 条件退役登记：`:not(.wf-is-stuck)` 随吸附态退役
+   简化为 `.wf-output-card:hover`——骨架恒非吸附态，hover 触发时机语义收窄为全状态
+   可悬浮，视觉/降级零变化，非新元素）。hover 上浮 1px + ::after 着色底半档（表面色
+   变化，不用海拔动画——宪法 §3.2 口径）。层序裁定（P2）：::after 不设 z-index；
+   pointer-events:none 使其不参与命中测试——卡内预设/分享/槽切换条点击直达
+   （定位上下文 position:relative 与 fast 过渡已落于上方 .wf-output-card 既有规则处） */
+.wf-output-card:hover {
   transform: translateY(-1px);
 }
 
-.wf-output-card:hover:not(.wf-is-stuck)::after {
+.wf-output-card:hover::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -1890,14 +2451,11 @@ textarea,
 }
 .wf-lens-fields {
   display: grid;
-  grid-template-columns: 1fr;
+  /* 骨架修复轮：2 列全档（原 <768 单列在 320 档使透镜页 287>266——两列后透镜面板
+     收 ≈40px；格值短金额 121px 格宽可容，research §1.4 形态变更登记） */
+  grid-template-columns: 1fr 1fr;
   gap: var(--wf-space-2) var(--wf-space-4);
   font-variant-numeric: tabular-nums; /* S3 度量字排（既有规则通道） */
-}
-@media (min-width: 768px) {
-  .wf-lens-fields {
-    grid-template-columns: 1fr 1fr; /* 2 列 ≥768 / 1 列 <768（research §1.4） */
-  }
 }
 .wf-lens-status {
   display: block;
@@ -1977,4 +2535,17 @@ textarea,
   content: "";
   position: absolute;
   inset: -7px -8px;
+}
+
+/* ===== P10 骨架修复轮：矮视口档（高度 <850）双栏自由刻度收敛（1200×800 档，F2） =====
+   双类名/祖先级联提 specificity，压过源序在后的基础档 !important 外距 */
+@media (max-height: 849.9px) {
+  .wf-layout .wf-big-number.wf-big-number {
+    margin-bottom: 4px !important;
+  }
+
+  .wf-realtime.wf-realtime {
+    padding: 8px;
+    margin-top: 8px;
+  }
 }

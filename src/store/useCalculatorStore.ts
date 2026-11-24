@@ -112,6 +112,14 @@ interface CalculatorState {
   /** 蒙特卡洛收益模式（正态参数 / 历史自助抽样；业务口径，随分享链接携带） */
   monteCarloReturnMode: MonteCarloReturnMode;
   setMonteCarloReturnMode: (v: MonteCarloReturnMode) => void;
+  /** P10 §4 MC 回报均值/通胀均值口径标志：true = 跟随核心参数派生锁定（显示层取
+   *  baselineInputs 两值直显、运行提交帧同帧解析覆盖，锁态零 monteCarloInputs 写入）；
+   *  false = 显式解锁独立（解锁动作同时把当刻核心值落入面板切片）。默认 true，
+   *  入 businessDefaults 清单；不入 localStorage（业务输入不落盘纪律），解锁态跨会话
+   *  仅经分享链接 / 情景存档携带（share v6 载荷键 mcMeansSynced）。先例同形：
+   *  accumulationTargetSynced / pensionMonthsSynced（零新交互词汇） */
+  mcMeansSynced: boolean;
+  setMcMeansSynced: (v: boolean) => void;
   /** 自助抽样收益序列选择 */
   monteCarloSeriesId: IndexId;
   setMonteCarloSeriesId: (v: IndexId) => void;
@@ -182,6 +190,7 @@ function businessDefaults() {
     pensionMonthsSynced: true,
     monteCarloReturnMode: "normal" as MonteCarloReturnMode,
     monteCarloSeriesId: "csi300" as IndexId,
+    mcMeansSynced: true,
     strategyLegacyNotice: false,
   };
 }
@@ -266,6 +275,9 @@ export const useCalculatorStore = create<CalculatorState>()((set, get) => ({
   removeLifeEvent: (id) =>
     set((state) => ({ lifeEvents: state.lifeEvents.filter((e) => e.id !== id) })),
   setPensionMonthsSynced: (v) => set({ pensionMonthsSynced: v }),
+  // P10 §4：MC 均值口径标志。锁态（true）不写 monteCarloInputs 两字段——显示与运行
+  // 提交帧均从 baselineInputs 派生（MonteCarloPanel 同帧解析，先例 accumulationTargetSynced）
+  setMcMeansSynced: (v) => set({ mcMeansSynced: v }),
   setMonteCarloReturnMode: (v) => set({ monteCarloReturnMode: v }),
   setMonteCarloSeriesId: (v) => set({ monteCarloSeriesId: v }),
   clearStrategyLegacyNotice: () => set({ strategyLegacyNotice: false }),
@@ -305,6 +317,7 @@ export const useCalculatorStore = create<CalculatorState>()((set, get) => ({
       monteCarloInputs: decoded.state.monteCarlo,
       monteCarloReturnMode: decoded.state.monteCarloReturnMode,
       monteCarloSeriesId: decoded.state.monteCarloSeriesId,
+      mcMeansSynced: decoded.state.mcMeansSynced, // P10 v6：MC 均值口径标志随链接恢复（发送方所见 = 接收方所得）
       taxInputs: decoded.state.tax,
       accumulationInputs: decoded.state.accumulation,
       accumulationTargetSynced: false, // 目标值以链接携带的原值呈现，不联动
@@ -331,6 +344,7 @@ export const useCalculatorStore = create<CalculatorState>()((set, get) => ({
       monteCarlo: s.monteCarloInputs,
       monteCarloReturnMode: s.monteCarloReturnMode,
       monteCarloSeriesId: s.monteCarloSeriesId,
+      mcMeansSynced: s.mcMeansSynced, // P10 v6：口径标志入载荷（锁态派生值随 baseline 入链，两处一致）
       tax: s.taxInputs,
       accumulation: s.accumulationInputs,
       progressCurrentAssets: s.progressInputs.currentAssets,

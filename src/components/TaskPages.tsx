@@ -1,15 +1,16 @@
 /**
- * 人生轨迹任务页壳（WF-03 §1 迁移表 2–5/7 行 + §2.5：本轮单列聚合承载，life 容器
- * 查询归 WF-04——brief §六衔接注记）。七个面板组：轨迹总览 / 人生事件（P9 §5.3）/ 积累 /
- * 养老 / 负债 / 收租 / 税务（原型 §2.1 组序 + P8 §4.2 首组插入 LifeTrajectoryCard——
- * 组数 5 → 6 为 P8 有意变更；P9 §5.3 首组后插 events 组 6 → 7 有意变更），每面板整壳
- * 迁挂、本体零触碰（§4.2 白名单）。
- * - 分段 + hidden 非卸载（先例 AdvancedPanel.tsx:145-153）：组内面板首次展现才挂载
- *   （lazyload 先例 AdvancedPanel.tsx:161），此后常驻 DOM 仅切显隐——跨组切换不丢
- *   表单输入与已运行结果（§5.5 切换不卸载红线）。
- * - 组标签：轨迹组用 life.trajectoryTitle（P8 §4.3 新键），其余沿用既有 advanced.*
- *   键（不搬块不改名）；分段控件为组件库 Radio.Group（与专业模式组分段同语义，
- *   .wf-adv-seg 既有类）。
+ * 人生轨迹任务页壳（P10 §1.2 L1–L5：组数 7 → 5 有意变更登记——同屏独立选项 ≤5 纪律，
+ * research-responsive §8.4；现状 7 组为 wf03/P8/P9 有意变更登记链，本轮再登记收敛）。
+ * 组→组迁移映射（信息路径先迁移，宪法 §5.2）：`trajectory→轨迹`、`events→事件`、
+ * `accumulation+pension→规划`（组内 2 标签）、`loan+rental→资产`（组内 2 标签）、
+ * `tax→税务`。
+ * - L1 组分段条：Radio.Group（.wf-adv-seg 既有类）；<480 短形态由样式层承载（键零新）。
+ * - L2 组内标签条：仅 规划/资产 两组渲染（其余组 0）；每组记忆最后激活标签（切回停留）。
+ * - hidden 非卸载与首展挂载语义原样保留（visited 集合按面板粒度——跨组切换不丢表单
+ *   输入与已运行结果，§5.5 红线 7）。
+ * - L3/L4/L5 槽契约（读数区 + 图⇄参数槽）由各面板内部承载（life 与 pro 两宿主共用同一
+ *   面板槽化壳）；组标签：轨迹组用 life.trajectoryTitle、事件组 life.eventsTitle、
+ *   规划/资产用 atlas.lifeGroupPlan/lifeGroupAsset（P10 §7 新键）、税务 advanced.taxTitle。
  * - 键盘：数字键 1–5 在本页归任务分域（App 容器监听，§2.4 冲突消解），本页不绑
  *   数字键；组切换由分段控件原生键盘语义（方向键 / Tab）承载。
  */
@@ -24,45 +25,87 @@ import PensionPanel from "./advanced/PensionPanel";
 import LoanPanel from "./advanced/LoanPanel";
 import RentalPanel from "./advanced/RentalPanel";
 import TaxPanel from "./advanced/TaxPanel";
+import { SegBar } from "./slots";
 
-/** 七组定义：id = 面板现行 key（每组一面板）；顺序 = 分段展示序（原型 §2.1 + P8 §4.2
- *  首组插入 trajectory + P9 §5.3 首组后插 events——组数 5 → 6（P8）→ 7（P9 有意变更，
- *  理由：新输入面），分段控件语义 / hidden 非卸载 / 首展挂载全部不动；events 组不绑
- *  数字键（p9-spec §7 红线 4）） */
-interface LifeGroupDef {
+/** 组定义：inner 存在的组（规划/资产）先经 L2 组内标签条再挂面板（L2 仅这两组渲染） */
+interface LifePanelDef {
   id: string;
   labelKey: string;
   node: ReactNode;
 }
 
+interface LifeGroupDef {
+  id: string;
+  labelKey: string;
+  node?: ReactNode;
+  inner?: LifePanelDef[];
+}
+
 const LIFE_GROUPS: LifeGroupDef[] = [
   { id: "trajectory", labelKey: "life.trajectoryTitle", node: <LifeTrajectoryCard /> },
   { id: "events", labelKey: "life.eventsTitle", node: <LifeEventEditor /> },
-  { id: "accumulation", labelKey: "advanced.accumulationTitle", node: <AccumulationPanel /> },
-  { id: "pension", labelKey: "advanced.pensionTitle", node: <PensionPanel /> },
-  { id: "loan", labelKey: "advanced.loanTitle", node: <LoanPanel /> },
-  { id: "rental", labelKey: "advanced.rentalTitle", node: <RentalPanel /> },
+  {
+    id: "plan",
+    labelKey: "atlas.lifeGroupPlan",
+    inner: [
+      { id: "accumulation", labelKey: "advanced.accumulationTitle", node: <AccumulationPanel /> },
+      { id: "pension", labelKey: "advanced.pensionTitle", node: <PensionPanel /> },
+    ],
+  },
+  {
+    id: "asset",
+    labelKey: "atlas.lifeGroupAsset",
+    inner: [
+      { id: "loan", labelKey: "advanced.loanTitle", node: <LoanPanel /> },
+      { id: "rental", labelKey: "advanced.rentalTitle", node: <RentalPanel /> },
+    ],
+  },
   { id: "tax", labelKey: "advanced.taxTitle", node: <TaxPanel /> },
 ];
 
 export default function LifeTaskPage() {
   const { t } = useTranslation();
   const [groupId, setGroupId] = useState<string>(LIFE_GROUPS[0].id);
-  /** 首展挂载集合：展现过的组永久保留挂载（hidden 非卸载；未展现组不挂载省首屏成本） */
-  const [visited, setVisited] = useState<ReadonlySet<string>>(() => new Set([LIFE_GROUPS[0].id]));
+  /** L2 组内标签记忆：activeByGroup[id] = 面板 id（切回组停留原面板） */
+  const [activeByGroup, setActiveByGroup] = useState<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const g of LIFE_GROUPS) {
+      if (g.inner) out[g.id] = g.inner[0].id;
+    }
+    return out;
+  });
+  /** 首展挂载集合（按面板粒度）：展现过的面板永久保留挂载（hidden 非卸载） */
+  const [visited, setVisited] = useState<ReadonlySet<string>>(
+    () => new Set<string>([LIFE_GROUPS[0].id, activeByGroupDefault(LIFE_GROUPS)]),
+  );
+
+  const group = LIFE_GROUPS.find((g) => g.id === groupId) ?? LIFE_GROUPS[0];
+  const activePanelId = activeByGroup[groupId] ?? group.inner?.[0].id ?? "";
 
   const selectGroup = (id: string) => {
     setGroupId(id);
+    const g = LIFE_GROUPS.find((x) => x.id === id);
+    const panelId = g?.inner ? (activeByGroup[id] ?? g.inner[0].id) : (g?.id ?? id);
+    markVisited(panelId);
+  };
+
+  const markVisited = (panelId: string) => {
     setVisited((prev) => {
-      if (prev.has(id)) return prev;
+      if (prev.has(panelId)) return prev;
       const next = new Set(prev);
-      next.add(id);
+      next.add(panelId);
       return next;
     });
   };
 
+  const selectInnerPanel = (gid: string, panelId: string) => {
+    setActiveByGroup((m) => ({ ...m, [gid]: panelId }));
+    markVisited(panelId);
+  };
+
   return (
-    <div className="atlas-life">
+    <div className="wf-life-page">
+      {/* L1 组分段条（5 组） */}
       <Radio.Group
         className="wf-adv-seg"
         type="button"
@@ -71,11 +114,37 @@ export default function LifeTaskPage() {
         onChange={(v: string) => selectGroup(v)}
         options={LIFE_GROUPS.map((g) => ({ label: t(g.labelKey), value: g.id }))}
       />
-      {LIFE_GROUPS.map((g) => (
-        <div key={g.id} className="atlas-life-panel" hidden={g.id !== groupId}>
-          {visited.has(g.id) ? g.node : null}
-        </div>
-      ))}
+      {/* L2 组内标签条：仅规划/资产两组渲染（其余组 0 行——预算 L2 36 命中组） */}
+      {group.inner ? (
+        <SegBar
+          name={`atlas-life-inner-${groupId}`}
+          ariaLabel={t(group.labelKey)}
+          value={activePanelId}
+          onChange={(v: string) => selectInnerPanel(groupId, v)}
+          options={group.inner.map((p) => ({ value: p.id, label: t(p.labelKey) }))}
+        />
+      ) : null}
+      {/* 面板承载：inner 组按面板粒度 hidden 非卸载；单面板组按组粒度 */}
+      {LIFE_GROUPS.map((g) => {
+        if (g.inner) {
+          return g.inner.map((p) => (
+            <div key={p.id} className="atlas-life-panel" hidden={g.id !== groupId || p.id !== activePanelId}>
+              {visited.has(p.id) ? p.node : null}
+            </div>
+          ));
+        }
+        return (
+          <div key={g.id} className="atlas-life-panel" hidden={g.id !== groupId}>
+            {visited.has(g.id) ? g.node : null}
+          </div>
+        );
+      })}
     </div>
   );
+}
+
+/** 首组若为 inner 组则同时标记其首个面板（visited 初始化对齐 selectGroup 口径） */
+function activeByGroupDefault(groups: LifeGroupDef[]): string {
+  const first = groups[0];
+  return first.inner ? first.inner[0].id : first.id;
 }

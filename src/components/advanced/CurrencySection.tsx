@@ -21,10 +21,12 @@ const { Text } = Typography;
 /** 中国城镇基准条目（engel 系数与偏离检测共用；偏离锚点/阈值取数据层字段） */
 const CN_BENCHMARK = REGIONAL_BENCHMARKS.find((b) => b.countryCode === "CN") ?? null;
 
-export default function CurrencySection() {
+export default function CurrencySection({ paged, page }: { paged?: boolean; page?: number } = {}) {
   const { t } = useTranslation();
-  /** 窄视口下汇率 Descriptions 切纵向堆叠（标签上/值下），避免数值列被长 label 挤压 */
-  const isNarrow = useIsNarrowViewport();
+  /** 骨架修复轮：汇率行恒横排（label「CNY（¥）」为短标签，纵排在 320 档使页 0 达
+   *  664px 超槽——横排 6 行 ≈204px 收口；既有「防长 label 挤压」的纵排前提不成立，
+   *  useIsNarrowViewport 保留登记注记） */
+  void useIsNarrowViewport;
   const displayCode = useCalculatorStore((s) => s.currency.display);
   const setCurrency = useCalculatorStore((s) => s.setCurrency);
   const monthlyExpense = useCalculatorStore((s) => s.baselineInputs.monthlyExpense);
@@ -82,8 +84,12 @@ export default function CurrencySection() {
   })();
 
   return (
-    <div>
-      <div className="wf-field" style={{ marginBottom: 12 }}>
+    <div className="wf-currency-sec">
+      {/* P10 槽态分页（TaxPanel 三态槽 currency 态承载）：paged=true 时三页等高互换——
+          第 0 页 = 币种选择 + 刷新，第 1 页 = 汇率表 + 来源行，第 2 页 = 区域偏离 +
+          恩格尔系数（骨架修复轮再分页：320 档页 0 全量 664px 超槽 381 的收口）；
+          缺省（paged 未传）整段原样渲染 */}
+      <div className="wf-field" style={{ marginBottom: 12 }} hidden={paged === true && page !== 0}>
         <div className="wf-field-label">
           <Text>{t("currency.label")}</Text>
           <Text type="secondary" style={{ marginLeft: 8 }}>
@@ -114,12 +120,13 @@ export default function CurrencySection() {
         ) : null}
       </div>
 
-      {rates ? (
+      {rates && !(paged === true && page !== 1) ? (
         <>
           <Descriptions
             border
             size="small"
-            layout={isNarrow ? "vertical" : "horizontal"}
+            className="wf-currency-rates"
+            layout="horizontal"
             column={{ xs: 1, md: 3 }}
             title={null}
             data={CURRENCIES.map((c) => {
@@ -145,46 +152,50 @@ export default function CurrencySection() {
             </Text>
           </div>
         </>
-      ) : (
+      ) : !(paged === true && page !== 1) ? (
         <Text type="secondary">{t("currency.loadingRates")}</Text>
-      )}
+      ) : null}
 
-      <Divider style={{ margin: "16px 0 12px" }} />
+      {paged ? <Divider style={{ margin: "8px 0 8px" }} /> : <Divider style={{ margin: "16px 0 12px" }} />}
 
-      {benchmarkAlert ? (
-        <Alert
-          type="warning"
-          style={{ marginBottom: 12 }}
-          content={t("currency.benchmarkNoticePrefix") + benchmarkAlert}
-        />
-      ) : CN_BENCHMARK ? (
-        // 检测已与展示币种解耦（⑤）：口径说明恒为「以人民币口径为锚」，不再分叉展示币种
-        <Alert type="info" style={{ marginBottom: 12 }} content={t("currency.benchmarkInfoCny")} />
-      ) : (
-        <Alert type="info" style={{ marginBottom: 12 }} content={t("currency.benchmarkEmpty")} />
-      )}
+      {!paged || page === 2 ? (
+        <>
+          {benchmarkAlert ? (
+            <Alert
+              type="warning"
+              style={{ marginBottom: 12 }}
+              content={t("currency.benchmarkNoticePrefix") + benchmarkAlert}
+            />
+          ) : CN_BENCHMARK ? (
+            // 检测已与展示币种解耦（⑤）：口径说明恒为「以人民币口径为锚」，不再分叉展示币种
+            <Alert type="info" style={{ marginBottom: 12 }} content={t("currency.benchmarkInfoCny")} />
+          ) : (
+            <Alert type="info" style={{ marginBottom: 12 }} content={t("currency.benchmarkEmpty")} />
+          )}
 
-      <div className="wf-field" style={{ marginBottom: 4 }}>
-        <div className="wf-field-label">
-          <Text>{t("currency.engelLabel")}</Text>
-          <Text type="secondary" style={{ marginLeft: 8 }}>
-            {t("currency.engelHint")}
-          </Text>
-        </div>
-        <InputNumber
-          value={engel ?? undefined}
-          min={LIMITS.engel.min}
-          max={LIMITS.engel.max}
-          step={LIMITS.engel.step}
-          precision={LIMITS.engel.precision}
-          placeholder={t("currency.engelPlaceholder")}
-          style={{ width: 160 }}
-          onChange={(v: number) => setEngel(Number.isFinite(v) ? v : null)}
-        />
-        <div className="wf-field-hint">
-          <Text type="secondary">{engelCompare}</Text>
-        </div>
-      </div>
+          <div className="wf-field" style={{ marginBottom: 4 }}>
+            <div className="wf-field-label">
+              <Text>{t("currency.engelLabel")}</Text>
+              <Text type="secondary" style={{ marginLeft: 8 }}>
+                {t("currency.engelHint")}
+              </Text>
+            </div>
+            <InputNumber
+              value={engel ?? undefined}
+              min={LIMITS.engel.min}
+              max={LIMITS.engel.max}
+              step={LIMITS.engel.step}
+              precision={LIMITS.engel.precision}
+              placeholder={t("currency.engelPlaceholder")}
+              style={{ width: 160 }}
+              onChange={(v: number) => setEngel(Number.isFinite(v) ? v : null)}
+            />
+            <div className="wf-field-hint">
+              <Text type="secondary">{engelCompare}</Text>
+            </div>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

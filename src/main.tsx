@@ -23,7 +23,6 @@ import enUS from "@arco-design/web-react/es/locale/en-US";
 import "@arco-design/web-react/es/Alert/style/css.js";
 import "@arco-design/web-react/es/Button/style/css.js";
 import "@arco-design/web-react/es/Card/style/css.js";
-import "@arco-design/web-react/es/Collapse/style/css.js";
 import "@arco-design/web-react/es/ConfigProvider/style/css.js";
 import "@arco-design/web-react/es/Descriptions/style/css.js";
 import "@arco-design/web-react/es/Divider/style/css.js";
@@ -31,6 +30,9 @@ import "@arco-design/web-react/es/Grid/style/css.js";
 import "@arco-design/web-react/es/InputNumber/style/css.js";
 import "@arco-design/web-react/es/Layout/style/css.js";
 import "@arco-design/web-react/es/Message/style/css.js";
+/* P10 尺寸登记：Collapse 样式引入随加性折叠全面槽化退役移除（§8.3-1 回收）；槽内分页
+   由共享 SlotPager（双 mini 按钮 + 页序文本，§8.3-3 控件简化）承载，不引入 Pagination
+   样式/组件——Table 内建分页（贷款摊销表）经 Table 样式级联自带其形态 */
 import "@arco-design/web-react/es/Progress/style/css.js";
 import "@arco-design/web-react/es/Radio/style/css.js";
 import "@arco-design/web-react/es/Select/style/css.js";

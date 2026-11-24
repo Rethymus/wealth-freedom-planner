@@ -4,7 +4,7 @@
  * 选「其他」时可手动输入简化有效税率（构造单档税带走 estimate_tax）。
  * 文案经 react-i18next 三语化；税表数据层的长注释（来源/速算表口径）保持简中。
  */
-import { Alert, Descriptions, Divider, Grid, InputNumber, Select, Typography } from "@arco-design/web-react";
+import {Alert, Descriptions, Grid, InputNumber, Select, Typography} from "@arco-design/web-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { TAX_TABLES } from "../../data/taxTables";
@@ -13,7 +13,8 @@ import { formatNumber, formatPercent } from "../../services/format";
 import type { EstimateTaxInput, TaxBand } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { calcTax } from "../../services/finance";
-import { FieldRow, AmountField } from "../fields";
+import { FieldRow, AmountField, FieldTip } from "../fields";
+import { SegBar, SlotBox, SlotPager } from "../slots";
 import { useFinanceCall, useIsNarrowViewport, useMoney } from "../hooks";
 import CurrencySection from "./CurrencySection";
 
@@ -110,127 +111,155 @@ export default function TaxPanel() {
     { enabled: taxInput !== null },
   );
 
+  /** F6（第 1 轮验收 P1）修复：把选定税表（standardDeduction + bands，与 taxInput 同源）
+   *  回写 store.taxInputs——对比列（ScenarioPanel computeColumn calcTax(shared.tax)）、
+   *  情景存档与分享载荷（tax 切片本就携带 bands，share v6 形状零变更）与本面板同源，
+   *  消除「面板显示税后收入而基准列恒 ¥0」的失真。写入按字段判等（bands 引用稳定）
+   *  防回环；「其他」未填手动税率（taxInput null）不写——store 保持既有值。 */
+  useEffect(() => {
+    if (!taxInput) return;
+    const s = useCalculatorStore.getState().taxInputs;
+    if (s.standardDeduction !== taxInput.standardDeduction || s.bands !== taxInput.bands) {
+      setTaxInputs({ standardDeduction: taxInput.standardDeduction, bands: taxInput.bands });
+    }
+  }, [taxInput, setTaxInputs]);
+
   const data = result?.ok === true ? result.data : null;
   const error = taxInput && result && !result.ok ? result.error : null;
 
   const selectedLabel = countryLabel(country);
+  /** P10 槽契约（§1.5 R4/R5；life 税务组与 pro 分析组两宿主共用）：结果 ⇄ 参数 ⇄
+   *  多币种校验三态等高互换（第三段标签复用 tax.currencySectionTitle 既有键，零新键），
+   *  多币种态内两页（汇率 / 基准与恩格尔——超行走槽内分页） */
+  const [slot, setSlot] = useState<"out" | "params" | "currency">("params");
+  const [currencyPage, setCurrencyPage] = useState(0);
 
   return (
     <div>
-      <FieldRow>
-        <Col xs={24} className="wf-field">
-          <div className="wf-field-label">
-            <Text>{t("tax.countryLabel")}</Text>
-            <Text type="secondary" style={{ marginLeft: 8 }}>
-              {t("tax.countryHint")}
-            </Text>
-          </div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <Select
-              value={country}
-              options={countryOptions}
-              onChange={(v: string) => setCountry(v)}
-              style={{ width: 220 }}
-              className="wf-pressable"
-            />
-            {countryTables.length > 1 ? (
-              <Select
-                value={String(Math.min(tableIndex, countryTables.length - 1))}
-                options={countryTables.map((tbl, i) => ({ label: tbl.name, value: String(i) }))}
-                onChange={(v: string) => setTableIndex(Number(v))}
-                style={{ width: 320 }}
-                className="wf-pressable"
+      {loading ? <Text type="secondary">{t("common.computing")}</Text> : null}
+      <SegBar
+        name="wf-tax-slot"
+        ariaLabel={t("advanced.taxTitle")}
+        value={slot}
+        onChange={(v: string) => setSlot(v as "out" | "params" | "currency")}
+        options={[
+          { value: "out", label: t("atlas.slotChart") },
+          { value: "params", label: t("atlas.slotParams") },
+          { value: "currency", label: t("tax.currencySectionTitle") },
+        ]}
+      />
+      <SlotBox height={200}>
+        {slot === "out" ? (
+          <div className="wf-slot-body">
+            {!isOther ? (
+              <Text type="secondary" className="wf-panel-note">
+                {t("tax.disclaimer")}
+              </Text>
+            ) : (
+              <Text type="secondary" className="wf-panel-note">
+                {t("tax.otherDisclaimer", { disclaimer: t("tax.disclaimer") })}
+              </Text>
+            )}
+            {!isOther && !table ? (
+              <Alert type="warning" content={t("tax.tableMissing", { country: selectedLabel })} />
+            ) : null}
+            {table ? (
+              /* 骨架修复轮（F1/F9）：表注全文（来源/速算口径数百字）下沉 FieldTip——
+                  320 档面板注行实测 300px+ 级超槽的构成行；名称+年度仍单行可见（P5
+                  冗长治理口径，全文零丢失） */
+              <Text type="secondary" className="wf-panel-note">
+                {table.name}（{table.year} 年度口径）
+                <FieldTip text={`${table.name}（${table.year} 年度口径）；${table.note}`} />
+              </Text>
+            ) : null}
+            {data ? (
+              <Descriptions
+                border
+                size="small"
+                layout={isNarrow ? "vertical" : "horizontal"}
+                column={{ xs: 1, md: 2 }}
+                data={[
+                  { label: t("tax.taxableIncome"), value: money(data.taxableIncome) },
+                  { label: t("tax.taxAmount"), value: money(data.tax) },
+                  { label: t("tax.netIncome"), value: <Text bold className="wf-nowrap">{money(data.netIncome)}</Text> },
+                  { label: t("tax.effectiveRate"), value: formatPercent(data.effectiveRatePct) },
+                ]}
               />
             ) : null}
+            {error ? <Alert type="error" style={{ marginTop: 4 }} content={error} /> : null}
           </div>
-        </Col>
-        <AmountField
-          label={t("tax.grossIncome")}
-          tooltip={t("tax.grossIncomeTooltip")}
-          value={taxInputs.grossAnnualIncome}
-          onChange={(v) => setTaxInputs({ grossAnnualIncome: v })}
-          suffix={displayCode === "CNY" ? t("units.localPerYear") : undefined}
-          convertRate={rate}
-        />
-        {isOther ? (
-          <Col xs={24} className="wf-field">
-            <div className="wf-field-label">
-              <Text>{t("tax.manualRate")}</Text>
-              <Text type="secondary" style={{ marginLeft: 8 }}>
-                {t("tax.manualRateHint")}
-              </Text>
-            </div>
-            <InputNumber
-              value={manualRatePct ?? undefined}
-              min={LIMITS.manualRate.min}
-              max={LIMITS.manualRate.max}
-              step={LIMITS.manualRate.step}
-              precision={LIMITS.manualRate.precision}
-              placeholder={t("tax.manualRatePlaceholder")}
-              suffix="%"
-              style={{ width: 200 }}
-              onChange={(v: number) => setManualRatePct(Number.isFinite(v) ? v : null)}
-            />
-            <div className="wf-field-hint">
-              <Text type="secondary">
-                {manualRatePct === null
-                  ? t("tax.manualRateEmpty")
-                  : t("tax.manualRateApplied", { rate: formatPercent(manualRatePct) })}
-              </Text>
-            </div>
-          </Col>
-        ) : null}
-      </FieldRow>
-
-      {!isOther ? (
-        <div className="wf-field-hint" style={{ marginTop: 4 }}>
-          <Text type="secondary">{t("tax.disclaimer")}</Text>
-        </div>
-      ) : (
-        <div className="wf-field-hint" style={{ marginTop: 4 }}>
-          <Text type="secondary">{t("tax.otherDisclaimer", { disclaimer: t("tax.disclaimer") })}</Text>
-        </div>
-      )}
-
-      {!isOther && !table ? (
-        <Alert
-          type="warning"
-          style={{ marginTop: 8 }}
-          content={t("tax.tableMissing", { country: selectedLabel })}
-        />
-      ) : null}
-
-      {table ? (
-        <div className="wf-field-hint" style={{ marginTop: 4 }}>
-          <Text type="secondary">
-            {table.name}（{table.year} 年度口径）；{table.note}
-          </Text>
-        </div>
-      ) : null}
-
-      {loading ? <Text type="secondary">{t("common.computing")}</Text> : null}
-      {data ? (
-        <Descriptions
-          border
-          size="small"
-          style={{ marginTop: 8 }}
-          layout={isNarrow ? "vertical" : "horizontal"}
-          column={{ xs: 1, md: 2 }}
-          data={[
-            { label: t("tax.taxableIncome"), value: money(data.taxableIncome) },
-            { label: t("tax.taxAmount"), value: money(data.tax) },
-            { label: t("tax.netIncome"), value: <Text bold className="wf-nowrap">{money(data.netIncome)}</Text> },
-            { label: t("tax.effectiveRate"), value: formatPercent(data.effectiveRatePct) },
-          ]}
-        />
-      ) : null}
-      {error ? <Alert type="error" style={{ marginTop: 8 }} content={error} /> : null}
-
-      {/* P5 T7 同族类：分节线挂 .wf-group-line（线色发丝线令牌、文字 caption 档——
-          与 S7 分组左标线同族；结构零改动，间距由该类的 margin 承载） */}
-      <Divider className="wf-group-line" />
-      <Text bold>{t("tax.currencySectionTitle")}</Text>
-      <CurrencySection />
+        ) : slot === "params" ? (
+          <div className="wf-slot-body">
+            <FieldRow className="wf-slot-row">
+              <Col xs={12} md={12} className="wf-field">
+                <div className="wf-field-label">
+                  <Text>{t("tax.countryLabel")}</Text>
+                  <FieldTip text={t("tax.countryHint")} />
+                </div>
+                <Select
+                  value={country}
+                  options={countryOptions}
+                  onChange={(v: string) => setCountry(v)}
+                  className="wf-pressable wf-input-full"
+                />
+                {countryTables.length > 1 ? (
+                  <Select
+                    value={String(Math.min(tableIndex, countryTables.length - 1))}
+                    options={countryTables.map((tbl, i) => ({ label: tbl.name, value: String(i) }))}
+                    onChange={(v: string) => setTableIndex(Number(v))}
+                    style={{ marginTop: 4 }}
+                    className="wf-pressable wf-input-full"
+                  />
+                ) : null}
+              </Col>
+              <AmountField
+                xs={12}
+                md={12}
+                label={t("tax.grossIncome")}
+                tooltip={t("tax.grossIncomeTooltip")}
+                value={taxInputs.grossAnnualIncome}
+                onChange={(v) => setTaxInputs({ grossAnnualIncome: v })}
+                suffix={displayCode === "CNY" ? t("units.localPerYear") : undefined}
+                convertRate={rate}
+              />
+              {isOther ? (
+                <Col xs={24} md={24} className="wf-field">
+                  <div className="wf-field-label">
+                    <Text>{t("tax.manualRate")}</Text>
+                    <FieldTip text={t("tax.manualRateHint")} />
+                  </div>
+                  <InputNumber
+                    value={manualRatePct ?? undefined}
+                    min={LIMITS.manualRate.min}
+                    max={LIMITS.manualRate.max}
+                    step={LIMITS.manualRate.step}
+                    precision={LIMITS.manualRate.precision}
+                    placeholder={t("tax.manualRatePlaceholder")}
+                    suffix="%"
+                    style={{ width: 160 }}
+                    onChange={(v: number) => setManualRatePct(Number.isFinite(v) ? v : null)}
+                  />
+                  <div className="wf-field-hint">
+                    <Text type="secondary">
+                      {manualRatePct === null
+                        ? t("tax.manualRateEmpty")
+                        : t("tax.manualRateApplied", { rate: formatPercent(manualRatePct) })}
+                    </Text>
+                  </div>
+                </Col>
+              ) : null}
+            </FieldRow>
+          </div>
+        ) : (
+          <div className="wf-slot-body">
+            {/* P5 T7 同族类：多币种校验区迁入槽第三态（原 Divider + 标题行结构退役——
+                标题信息由槽切换条段标签承载，键值不变）。骨架修复轮：页 0 币种选择 /
+                页 1 汇率表 / 页 2 区域偏离与恩格尔三页等高互换（320 档收口登记） */}
+            <CurrencySection paged page={currencyPage} />
+            <SlotPager label={t("advanced.taxTitle")} total={3} page={Math.min(currencyPage, 2)} onPage={setCurrencyPage} />
+          </div>
+        )}
+      </SlotBox>
     </div>
   );
 }

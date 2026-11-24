@@ -3,7 +3,7 @@
  * 城市参数预设来自 src/data/rentParams.ts，按「中国一线 / 中国二线 / 国际一线 / 国际门户」
  * 四档分组展示，并在下拉旁附各档参照城市图例；文案经 react-i18next 三语化。
  */
-import { Alert, Descriptions, Select, Tag, Typography } from "@arco-design/web-react";
+import {Alert, Descriptions, Select, Tag, Typography} from "@arco-design/web-react";
 import { useRef, useState } from "react";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
@@ -29,7 +29,8 @@ import type { NumberInputLimit } from "../../data/types";
 import type { RentalBreakdown } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, FieldTip, IntField, NumberField, PercentField } from "../fields";
-import { useAnimatedNumber, useFinanceCall, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
+import { SegBar, SlotBox, SlotPager } from "../slots";
+import { useAnimatedNumber, useFinanceCall, useIsCompactViewport, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text } = Typography;
 
@@ -245,12 +246,21 @@ export default function RentalPanel() {
   const rate = display.rate;
   /** CNY 规范值 → 展示币种数值（瀑布图几何数据同源换算；rate 不可用时恒等） */
   const convert = (v: number): number => (rate !== null ? cnyToDisplay(v, rate) : v);
-  /** 窄视口下结果 Descriptions 切纵向堆叠（标签上/值下），避免长 label 挤压数值列 */
+  /** 窄视口下结果 Descriptions 切纵向堆叠（标签上/值下），避免长 label 挤压数值列。
+   *  P10 ≤480 紧档：isCompact 承载图高 200 与图注下沉（槽 240 内共存） */
   const isNarrow = useIsNarrowViewport();
+  const isCompact = useIsCompactViewport();
 
   const [group, setGroup] = useState<CityGroup | null>(null);
   const [groupCities, setGroupCities] = useState<CityRentParams[]>([]);
   const [repParams, setRepParams] = useState<CityRentParams | null>(null);
+  /** P10 槽契约（§1.2 L4/L5；life 资产组与 pro 购房组两宿主共用）：结果 ⇄ 参数两态
+   *  等高互换（槽 320 = D5 宽档图位）；超行走槽内分页——结果 3 页（摘要 / 瀑布图 240
+   *  D5 档：收租图 280 并入 240 档为 p10-spec §1.2 L5 有意变更登记 / 年度明细），
+   *  参数 2 页（城市预设 + 两列紧凑栅格） */
+  const [slot, setSlot] = useState<"out" | "params">("out");
+  const [outPage, setOutPage] = useState(0);
+  const [paramPage, setParamPage] = useState(0);
 
   const { loading, result } = useFinanceCall(() => calcRental(inputs), [inputs]);
 
@@ -430,6 +440,22 @@ export default function RentalPanel() {
 
   return (
     <div ref={hostRef}>
+      {loading ? <Text type="secondary">{t("common.computing")}</Text> : null}
+      {error ? <Alert type="error" style={{ marginBottom: 4 }} content={error} /> : null}
+      {/* L4 槽切换条（复用 atlas.slotChart / atlas.slotParams，零新键） */}
+      <SegBar
+        name="wf-rental-slot"
+        ariaLabel={t("advanced.rentalTitle")}
+        value={slot}
+        onChange={(v: string) => setSlot(v as "out" | "params")}
+        options={[
+          { value: "out", label: t("atlas.slotChart") },
+          { value: "params", label: t("atlas.slotParams") },
+        ]}
+      />
+      <SlotBox height={200}>
+        {slot === "params" ? (
+          <div className="wf-slot-body">
       {CITY_RENT_PARAMS.length === 0 ? (
         <Alert
           type="info"
@@ -457,17 +483,10 @@ export default function RentalPanel() {
                 .filter((g) => CN_GROUPS.includes(g.group))
                 .map((g) => (
                   <Select.Option key={g.group} value={g.group}>
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "baseline",
-                        justifyContent: "space-between",
-                        width: "100%",
-                        gap: 12,
-                      }}
-                    >
+                    {/* P10 §8 尺寸回收：选项行样式迁样式层（.wf-tier-opt，双组共用） */}
+                    <span className="wf-tier-opt">
                       <span>{t(GROUP_LABEL_KEYS[g.group])}</span>
-                      <span style={{ fontSize: 12, color: "var(--wf-text-secondary)" }}>{g.examples}</span>
+                      <span className="wf-tier-opt-ex">{g.examples}</span>
                     </span>
                   </Select.Option>
                 ))}
@@ -477,17 +496,9 @@ export default function RentalPanel() {
                 .filter((g) => INTL_GROUPS.includes(g.group))
                 .map((g) => (
                   <Select.Option key={g.group} value={g.group}>
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "baseline",
-                        justifyContent: "space-between",
-                        width: "100%",
-                        gap: 12,
-                      }}
-                    >
+                    <span className="wf-tier-opt">
                       <span>{t(GROUP_LABEL_KEYS[g.group])}</span>
-                      <span style={{ fontSize: 12, color: "var(--wf-text-secondary)" }}>{g.examples}</span>
+                      <span className="wf-tier-opt-ex">{g.examples}</span>
                     </span>
                   </Select.Option>
                 ))}
@@ -499,37 +510,60 @@ export default function RentalPanel() {
             </Tag>
           ) : null}
           {group && selectedRange && repParams ? (
-            <>
-              <div className="wf-field-hint">
-                <Text type="secondary">
-                  {t("rental.tierHint", {
-                    tier: selectedGroupLabel,
-                    cities: selectedCitiesText,
-                    lo: selectedRange.lo,
-                    hi: selectedRange.hi,
-                    currencyNote,
-                  })}
-                </Text>
-              </div>
-              <div className="wf-field-hint">
-                <Text type="secondary">
-                  {t("tiers.representativeNote", { city: t(CITY_NAME_KEY[repParams.city]) })}
-                </Text>
-              </div>
-              {/* P5 §5 冗长治理：分级口径注压 ≤1 行 + 全文（2 段拼接键）进 FieldTip */}
+            /* ≤480 紧档：三行口径注全量下沉 FieldTip（P5 口径，信息路径零丢失——
+               槽 260 内城市选择与字段共存） */
+            isCompact ? (
               <div className="wf-field-hint">
                 <Text type="secondary">
                   {t("tiers.gradingNoteShort")}
-                  <FieldTip text={`${t("tiers.gradingNote1")} ${t("tiers.gradingNote2")}`} />
+                  <FieldTip
+                    text={`${t("rental.tierHint", {
+                      tier: selectedGroupLabel,
+                      cities: selectedCitiesText,
+                      lo: selectedRange.lo,
+                      hi: selectedRange.hi,
+                      currencyNote,
+                    })}；${t("tiers.representativeNote", { city: t(CITY_NAME_KEY[repParams.city]) })}；${t("tiers.gradingNote1")} ${t("tiers.gradingNote2")}`}
+                  />
                 </Text>
               </div>
-            </>
+            ) : (
+              <>
+                <div className="wf-field-hint">
+                  <Text type="secondary">
+                    {t("rental.tierHint", {
+                      tier: selectedGroupLabel,
+                      cities: selectedCitiesText,
+                      lo: selectedRange.lo,
+                      hi: selectedRange.hi,
+                      currencyNote,
+                    })}
+                  </Text>
+                </div>
+                <div className="wf-field-hint">
+                  <Text type="secondary">
+                    {t("tiers.representativeNote", { city: t(CITY_NAME_KEY[repParams.city]) })}
+                  </Text>
+                </div>
+                {/* P5 §5 冗长治理：分级口径注压 ≤1 行 + 全文（2 段拼接键）进 FieldTip */}
+                <div className="wf-field-hint">
+                  <Text type="secondary">
+                    {t("tiers.gradingNoteShort")}
+                    <FieldTip text={`${t("tiers.gradingNote1")} ${t("tiers.gradingNote2")}`} />
+                  </Text>
+                </div>
+              </>
+            )
           ) : null}
         </div>
       )}
 
-      <FieldRow>
+      <FieldRow className="wf-slot-row">
+        {paramPage === 0 ? (
+          <>
         <AmountField
+          xs={12}
+          md={12}
           label={t("rental.price")}
           tooltip={t("rental.priceTooltip")}
           value={inputs.price}
@@ -539,6 +573,8 @@ export default function RentalPanel() {
           convertRate={rate}
         />
         <AmountField
+          xs={12}
+          md={12}
           label={t("rental.monthlyRent")}
           tooltip={t("rental.monthlyRentTooltip")}
           value={inputs.monthlyRent}
@@ -548,6 +584,7 @@ export default function RentalPanel() {
           convertRate={rate}
         />
         <PercentField
+          xs={12}
           md={12}
           label={t("rental.downPayment")}
           tooltip={t("rental.downPaymentTooltip")}
@@ -556,6 +593,7 @@ export default function RentalPanel() {
           suffix="%"
         />
         <PercentField
+          xs={12}
           md={12}
           label={t("rental.loanRate")}
           tooltip={t("rental.loanRateTooltip")}
@@ -563,7 +601,11 @@ export default function RentalPanel() {
           onChange={(v) => setInputs({ loanAnnualRatePct: v })}
           suffix="%"
         />
+          </>
+        ) : (
+          <>
         <IntField
+          xs={12}
           md={12}
           label={t("rental.loanYears")}
           tooltip={t("rental.loanYearsTooltip")}
@@ -575,6 +617,7 @@ export default function RentalPanel() {
           hint={t("loan.yearsHint", { max: LOAN_YEARS_LIMIT.max })}
         />
         <PercentField
+          xs={12}
           md={12}
           label={t("rental.vacancy")}
           tooltip={t("rental.vacancyTooltip")}
@@ -583,6 +626,7 @@ export default function RentalPanel() {
           suffix="%"
         />
         <PercentField
+          xs={12}
           md={12}
           label={t("rental.maintenance")}
           tooltip={t("rental.maintenanceTooltip")}
@@ -591,6 +635,7 @@ export default function RentalPanel() {
           suffix="%"
         />
         <AmountField
+          xs={12}
           md={12}
           label={t("rental.propertyFee")}
           tooltip={t("rental.propertyFeeTooltip")}
@@ -601,6 +646,7 @@ export default function RentalPanel() {
           convertRate={rate}
         />
         <AmountField
+          xs={12}
           md={12}
           label={t("rental.otherCost")}
           tooltip={t("rental.otherCostTooltip")}
@@ -611,6 +657,7 @@ export default function RentalPanel() {
           convertRate={rate}
         />
         <NumberField
+          xs={12}
           md={12}
           label={t("rental.rentTax")}
           tooltip={t("rental.rentTaxTooltip")}
@@ -619,17 +666,22 @@ export default function RentalPanel() {
           limit={RENT_TAX_LIMIT}
           suffix="%"
         />
+          </>
+        )}
       </FieldRow>
-
-      {loading ? <Text type="secondary">{t("common.computing")}</Text> : null}
-      {data ? (
+      {/* 参数槽分页（2 页：房价租金利率 / 持有成本） */}
+      <SlotPager label={t("advanced.rentalTitle")} total={2} page={paramPage} onPage={setParamPage} />
+          </div>
+        ) : (
+          <div className="wf-slot-body">
+      {data && outPage === 0 ? (
         <>
           <Descriptions
             border
             size="small"
             style={{ marginTop: 8 }}
-            layout={isNarrow ? "vertical" : "horizontal"}
-            column={{ xs: 1, md: 3 }}
+            layout="horizontal"
+            column={1}
             data={[
               { label: t("rental.monthlyPayment"), value: money(data.monthlyPayment) },
               {
@@ -652,23 +704,42 @@ export default function RentalPanel() {
               },
             ]}
           />
+        </>
+      ) : null}
+      {data && outPage === 1 ? (
           <Descriptions
             border
             size="small"
             style={{ marginTop: 12 }}
             title={t("rental.breakdownTitle")}
-            layout={isNarrow ? "vertical" : "horizontal"}
-            column={{ xs: 1, md: 2 }}
-            data={BREAKDOWN_LABELS.map(([key, labelKey]) => ({
+            layout="horizontal"
+            column={1}
+            data={BREAKDOWN_LABELS.slice(0, 5).map(([key, labelKey]) => ({
               label: t(labelKey),
               value: key in data.breakdown ? money(data.breakdown[key]) : "—",
             }))}
           />
-          {/* C3 ⑥ 窄屏降级：瀑布图不渲染，年度明细 Descriptions（上方，信息无损）承载全部数值；
-              md+ 桌面图表 + 明细表并存（数据表替代即该明细表，C5 口径） */}
-          {waterfallRows && waterfallRows.length > 0 ? (
+      ) : null}
+      {data && outPage === 2 ? (
+          <Descriptions
+            border
+            size="small"
+            style={{ marginTop: 12 }}
+            title={t("rental.breakdownTitle")}
+            layout="horizontal"
+            column={1}
+            data={BREAKDOWN_LABELS.slice(5).map(([key, labelKey]) => ({
+              label: t(labelKey),
+              value: key in data.breakdown ? money(data.breakdown[key]) : "—",
+            }))}
+          />
+      ) : null}
+      {/* C3 ⑥ 窄屏降级：瀑布图不渲染（<768 由样式层 media 承载信息无损降级——年度明细页 1 承载）；
+          md+ 桌面图表 + 明细表并存（数据表替代即该明细表，C5 口径）。
+          P10 L5 槽：瀑布图 280 并入 240 档（p10-spec §1.2 L5 有意变更登记） */}
+      {data && outPage === 3 && waterfallRows && waterfallRows.length > 0 ? (
             <div className="wf-waterfall-chart" role="img" aria-label={t("rental.waterfallAria")}>
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={isCompact ? 180 : 240}>
                 <BarChart
                   data={waterfallRows}
                   margin={{ top: 24, right: 16, bottom: 0, left: 0 }}
@@ -717,15 +788,18 @@ export default function RentalPanel() {
                   <Customized component={renderWaterfallConnectors} />
                 </BarChart>
               </ResponsiveContainer>
-              {/* C3 ⑦ 图注：三角色配色与连接线含义 */}
+              {/* C3 ⑦ 图注：三角色配色与连接线含义（≤480 紧档下沉 FieldTip——P5 口径） */}
               <Text type="secondary" className="wf-panel-note">
                 {t("rental.waterfallNote")}
+                {isCompact ? <FieldTip text={t("rental.waterfallNote")} /> : null}
               </Text>
             </div>
-          ) : null}
-        </>
       ) : null}
-      {error ? <Alert type="error" style={{ marginTop: 8 }} content={error} /> : null}
+      {/* 结果槽分页（4 页：摘要 / 明细 1 / 明细 2 / 瀑布图）；参数槽分页（3 页） */}
+      <SlotPager label={t("advanced.rentalTitle")} total={4} page={outPage} onPage={setOutPage} />
+          </div>
+        )}
+      </SlotBox>
       <Text type="secondary" className="wf-panel-note">
         {t("rental.note")}
       </Text>

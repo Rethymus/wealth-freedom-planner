@@ -33,9 +33,11 @@ import {
 import { resolveThemeTokens } from "../../data/defaults";
 import { effectiveMonthsDivisor } from "../../data/pensionParams";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
+import { FieldTip } from "../fields";
 import { EmptyRulerArt } from "../EmptyRuler";
+import { SegBar, SlotBox, SlotPager } from "../slots";
 import ScenarioOverlayChart from "./ScenarioOverlayChart";
-import { useMoney, usePrefersReducedMotion } from "../hooks";
+import { useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text } = Typography;
 
@@ -146,6 +148,13 @@ export default function ScenarioPanel() {
   const rental = useCalculatorStore((s) => s.rentalInputs);
   /** P9 事件切片：编辑器写入即触发对比表/叠影同步刷新（§5.6 deps 扩展） */
   const lifeEvents = useCalculatorStore((s) => s.lifeEvents);
+  /** P10 §5（V-F-1 必修）：对比列 computeColumn 消费 reverseInputs（calcReverse）/ taxInputs
+   *  （calcTax）/ monteCarloInputs（档案行 annualSpend）三切片，而下方对比表 effect 的
+   *  deps 此前缺三者——手动改反向/税务/MC 输入后基准列八项指标与档案行静默停在旧值。
+   *  补三个原子选择器 + deps 三项（叠影 effect deps 不动：calcLifecycle 不消费三者） */
+  const reverse = useCalculatorStore((s) => s.reverseInputs);
+  const taxInputs = useCalculatorStore((s) => s.taxInputs);
+  const monteCarloInputs = useCalculatorStore((s) => s.monteCarloInputs);
   const reducedMotion = usePrefersReducedMotion();
   /** CNY → 展示币种数值（叠影图数据同源一次换算；rate 不可用恒等） */
   const convert = (v: number): number => (display.rate !== null ? cnyToDisplay(v, display.rate) : v);
@@ -157,6 +166,17 @@ export default function ScenarioPanel() {
   const [overlayOn, setOverlayOn] = useState(false);
   const [overlayId, setOverlayId] = useState<string | null>(null);
   const [overlayData, setOverlayData] = useState<OverlayData | null>(null);
+  /** P10 槽契约（§1.3 K3/K4；risk 情景叶与 pro 分析组两宿主共用）：叠影图 ⇄ 对比表两态
+   *  等高互换（槽 320）；段标签复用 scenario.overlaySwitch / scenario.compareTitle 既有键
+   *  （后者长文案由样式层 .wf-segbar 省略承载，aria 全文可读） */
+  const [slot, setSlot] = useState<"overlay" | "table">("table");
+  /** 骨架修复轮：对比表行分页（档案行 + 8 指标 = 9 行；≤768 档 3 行/页 × 3 页——
+   *  320 档表高 427>槽 312 的静默裁切收口；≥768 单页 9 行；表头逐页重复，列不切分） */
+  const [comparePage, setComparePage] = useState(0);
+  const isNarrowCmp = useIsNarrowViewport();
+  const compareRowsPerPage = isNarrowCmp ? 2 : 9;
+  const compareTotal = Math.ceil(9 / compareRowsPerPage);
+  const safeComparePage = Math.min(comparePage, compareTotal - 1);
   // P6 S23 已按 §8 降档顺序裁撤（docs/p6-spec.md §8；dist 原始字节门禁实测回写）
 
   const reload = () => setEntries(listScenarios());
@@ -189,7 +209,7 @@ export default function ScenarioPanel() {
     return () => {
       stale = true;
     };
-  }, [entries, money, moneyFixed, t, baseline, accumulation, pension, monthsSynced, loan, rental, lifeEvents]);
+  }, [entries, money, moneyFixed, t, baseline, accumulation, pension, monthsSynced, loan, rental, lifeEvents, reverse, taxInputs, monteCarloInputs]);
 
   /** WF-04 T3 叠影重算（wf04-spec §1-T3 / research §2.3 八裁定）：触发源仅三种——开关
    *  置位 / 情景选中变更 / 基准六切片落定帧；独立 300ms 防抖 + stale 布尔闭包丢弃过期
@@ -374,7 +394,7 @@ export default function ScenarioPanel() {
       </div>
 
       {/* 场景库列表：名称 + 保存序号；版本不符条目标记 scenario.versionMismatch 并禁用载入 */}
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 6 }}>
         <Text type="secondary">{t("scenario.listTitle", { count: entries.length })}</Text>
         {entries.length > 0 ? (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
@@ -414,11 +434,23 @@ export default function ScenarioPanel() {
         ) : null}
       </div>
 
-      {/* WF-04 T3 情景叠影（wf04-spec §1-T3）：对比表上方图卡；开关置图卡头（wf-touch-target
-          44 命中）；恒两线裁定（research §2.4）——多情景仍由对比表 ≤12 列承载；挂 scenario
-          Tabs pane 内（hidden 非卸载承载，AdvancedPanel.tsx:168-175 注释口径）——切组/切 Tab
-          不卸载、不重算、不重播入场；防抖不被 Tab 切换触发（§2-S20） */}
-      <div style={{ marginTop: 16 }}>
+      {/* P10 §1.3 K3/K4 槽切换条：叠影图 ⇄ 对比表（等高互换，槽 320） */}
+      <SegBar
+        name="wf-scenario-slot"
+        ariaLabel={t("advanced.scenarioTitle")}
+        value={slot}
+        onChange={(v: string) => setSlot(v as "overlay" | "table")}
+        options={[
+          { value: "overlay", label: t("scenario.overlaySwitch") },
+          { value: "table", label: t("scenario.compareTitle") },
+        ]}
+      />
+      <SlotBox height={200}>
+        {slot === "overlay" ? (
+          <div className="wf-slot-body">
+        {/* WF-04 T3 情景叠影（wf04-spec §1-T3）：开关置槽内行首（wf-touch-target
+            44 命中）；恒两线裁定（research §2.4）；挂 scenario Tabs pane 内
+            （hidden 非卸载承载）——切组/切 Tab 不卸载、不重算；防抖不被 Tab 切换触发 */}
         <Text bold>{t("scenario.overlaySwitch")}</Text>
         <span className="wf-touch-target" style={{ marginLeft: 8 }}>
           <Switch
@@ -456,22 +488,27 @@ export default function ScenarioPanel() {
             reducedMotion={reducedMotion}
           />
         ) : null}
-      </div>
-
-      {/* 并排对比表：行 = 指标、列 = 情景（≤12 列横向滚动；窄屏同口径滚动） */}
-      <div style={{ marginTop: 16 }}>
-        <Text bold>{t("scenario.compareTitle")}</Text>
-        {/* ③ 导出图片按钮：size="small" + wf-pressable（44px 触控档随既有全局规则命中；
-            文字即自带可访问名称）；valid 列数为 0 时禁用（p4-spec §8.1） */}
-        <Button
-          size="small"
-          className="wf-pressable"
-          style={{ marginLeft: 8 }}
-          disabled={validCols.length === 0}
-          onClick={onExport}
-        >
-          {t("scenario.export")}
-        </Button>
+          </div>
+        ) : (
+          <div className="wf-slot-body">
+        {/* 并排对比表：行 = 指标、列 = 情景（≤12 列横向滚动；窄屏同口径滚动）。
+            骨架修复轮：标题/导出/口径注合一行（槽内 flex 纵排使三行独立占行，320 档
+            335>312 的收口面） */}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+          <Text bold>{t("scenario.compareTitle")}</Text>
+          {/* ③ 导出图片按钮：size="small" + wf-pressable（44px 触控档随既有全局规则命中）；
+              valid 列数为 0 时禁用（p4-spec §8.1）。F1 口径注沉降 FieldTip（骨架修复轮：
+              独立注行收编——P5 反冗长口径，说明信息零丢失） */}
+          <Button
+            size="small"
+            className="wf-pressable"
+            disabled={validCols.length === 0}
+            onClick={onExport}
+          >
+            {t("scenario.export")}
+          </Button>
+          <FieldTip text={t("scenario.spendRowNote")} />
+        </div>
         {validCols.length === 0 ? (
           /* T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入；
              文案改写为「缺什么——下一步」句式（改值不增键） */
@@ -482,28 +519,32 @@ export default function ScenarioPanel() {
           />
         ) : (
           <>
-            {/* F1 口径注：说明首行为情景输入档案、8 项指标不受年支出驱动（改年支出对比
-                「无变化」不再是静默行为） */}
-            <div style={{ marginTop: 4 }}>
-              <Text type="secondary">{t("scenario.spendRowNote")}</Text>
-            </div>
             {/* D7 滑动提示：仅非空分支渲染（无表可滚不虚示）；<675.9 档由样式层放行 */}
             <Text type="secondary" className="wf-swipe-hint">{t("common.swipeHint")}</Text>
-            {/* D7 两层结构：渐隐 ::after 挂在不滚动的外层上（挂在内层滚动容器会随内容滚走） */}
+            {/* D7 两层结构：渐隐 ::after 挂在不滚动的外层上（挂在内层滚动容器会随内容滚走）。
+                骨架修复轮：行分页（5 行/页 × 2 页）——320 档 9 行表高 390>槽静默裁切收口 */}
             <div className="wf-scenario-table-outer">
               <div className="wf-scenario-table-wrap">
                 <Table
                   size="small"
                   border
                   columns={tableColumns}
-                  data={tableData}
+                  data={tableData.slice(safeComparePage * compareRowsPerPage, safeComparePage * compareRowsPerPage + compareRowsPerPage)}
                   className="wf-scenario-table"
                 />
               </div>
             </div>
+            <SlotPager
+              label={t("scenario.compareTitle")}
+              total={compareTotal}
+              page={safeComparePage}
+              onPage={setComparePage}
+            />
           </>
         )}
-      </div>
+          </div>
+        )}
+      </SlotBox>
     </div>
   );
 }

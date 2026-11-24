@@ -85,6 +85,9 @@ const zhCN = {
       "攒够「月开销 × 乘数」的本金后，仅靠投资收益（扣除通胀）即可覆盖每月开销。按默认参数（名义回报率 {{nominal}}、通胀率 {{inflation}}），实际回报率为 {{real}}、对应乘数 {{multiplier}}，「480 法则」由此得名。",
     multiplierExactLabel: "精确乘数（费雪口径）",
     criticalExactLabel: "精确口径参考线",
+    // P10 §7 新键（F7 叶B 步骤条两步标签；docs/p10-spec.md §1.1）
+    stepDesire: "欲望",
+    stepAssumption: "假设与资产",
     fisherNote:
       "实际回报率按精确费雪式 (1+r_nom)/(1+π)−1 计算；近似式 r≈r_nom−π 仅供教学对照，两者差 ≈ π×实际回报率。",
     formulaRow: "480 法则公式解构",
@@ -115,11 +118,14 @@ const zhCN = {
       communication: "通讯",
       other: "其他",
     },
+    // P10 §7 新键（§3.4 子女预留折叠态文案：预设归因 / custom 态 +「启用」按钮）
+    childFoldedPreset: "子女预留未启用（预设）",
+    childFolded: "子女预留未启用",
+    childEnable: "启用",
   },
   progress: {
     assetsLabel: "已有资产（选填）",
     assetsTooltip: "你目前已经攒下的可投资资产；填写后在大字号旁展示相对参考线的进度环。",
-    caption: "已有资产约为参考线的 {{pct}}%",
     ariaLabel: "自由刻度进度环：已有资产约为参考线的 {{pct}}%",
     emptyHint: "填入已有资产，点亮第一档刻度",
   },
@@ -170,6 +176,14 @@ const zhCN = {
     migrate: {
       notice: "默认视图已换为四任务导航，原九面板收入专业模式",
     },
+    // P10 §7 新键（L1 life 页 5 组新分段标签：规划 = 积累+养老组、资产 = 负债+收租组）
+    lifeGroupPlan: "规划",
+    lifeGroupAsset: "资产",
+    // P10 §7 新键（槽切换条通用两段标签：图 / 参数，跨 L4/K3/R4 复用）
+    slotChart: "图表",
+    slotParams: "参数",
+    // 骨架修复轮新键（A1 显式回退横幅，红线 9——不支持零滚动的高度回退滚动并明示）
+    scrollFallback: "视口高度不足，本页已回退为可滚动视图。",
   },
   insights: {
     formulaTitle: "公式推导",
@@ -226,6 +240,12 @@ const zhCN = {
       "宽松版：允许资产在后期缓慢下降，换取更高的当期开销。对应蒙特卡洛面板「阈值带调整」与「余额比例」两类支取策略——可在模拟中观察耗尽概率与末年购买力的权衡。",
     evidenceTitle: "数据核证标注说明",
     evidenceShort: "官方核证 = 直读原文；媒体核证 = 两家以上独立媒体一致；视频口径 = 未独立查证。",
+    // P10 §7 新键（原理档案 5 条目标签 E1–E5；docs/p10-spec.md §1.4 P1）
+    entryFormula: "公式与口径",
+    entryChain: "假设链条",
+    entryData: "数据与来源",
+    entryEvidence: "医疗与证据",
+    entryNotice: "声明",
     evidenceNote1:
       "标注说明：「官方核证」= 官方原文页面已直读；「媒体核证」= 官方发布数字经两家及以上独立媒体转载核对一致；「视频口径」= 仅见于原视频或属分析假设、未找到独立权威来源。",
     evidenceNote2: "各条年份与口径以行内标注为准；查证记录见 docs/research-video-data.md。",
@@ -315,6 +335,9 @@ const zhCN = {
       "算例 B 原视频称结果约 0.9 万/月（含约 10% 的额外折让，来源无法复算）；本工具按同一口径如实给出 1.0 万/月，不按 0.9 万修正。",
     perpetuityWarning:
       "永续口径在模型假设内成立（实际回报恒正、支出随模型上行）；真实序列风险可破坏该结论——参照 Morningstar 2026 年度研究：30 年期、90% 成功率、股票权重 30%–50% 组合的起始安全支取率为 3.9%（固定实际支取基线，排除养老金等外部收入；历年数值随市场假设在 3.3%–4.0% 间浮动）。该数值基于美国市场假设，不构成任何环境下的保证值。",
+    // P10 §7 新键（F8 反向卡双态切换「估算结果 ⇄ 编辑参数」；修订对照轮二⑧）
+    viewResult: "估算结果",
+    editParams: "编辑参数",
   },
   loan: {
     principal: "贷款金额",
@@ -532,6 +555,10 @@ const zhCN = {
     chartAria:
       "蒙特卡洛模拟图：{{paths}} 条路径模拟 {{years}} 年，耗尽概率 {{prob}}%、中位终值 {{median}}",
     doneAria: "模拟完成：资产耗尽概率 {{prob}}，中位终值 {{median}}",
+    // P10 §7 新键（§4.3 MC 均值「跟随核心参数」锁标：aria / hint / 恢复联动按钮）
+    meanSyncLockAria: "跟随核心参数，点击解锁",
+    meanSyncHint: "跟随基础模式核心参数；锁态显示与运行值随核心参数同步",
+    meanSyncRestore: "恢复跟随核心参数",
   },
   accumulation: {
     currentAssets: "当前资产",
@@ -681,8 +708,6 @@ const zhCN = {
       "你的月开销明显高于{{region}}人均消费水平（约 {{anchor}} 元/月，{{year}} 年国家统计局口径），请确认数值是否为高消费城市口径。",
     benchmarkNoticePrefix: "非阻断提示：",
     benchmarkInfoCny: "偏离检测按中国城镇人均消费口径（国家统计局）为锚，仅作提示、不阻断使用。",
-    benchmarkInfoOther:
-      "月开销偏离检测以人民币口径（中国城镇人均消费）为锚，切换币种后暂不比对；默认参数以人民币口径给出。",
     benchmarkEmpty: "区域人均消费参考（regional.ts）暂为占位空数据，偏离检测将在数据填充后自动启用。",
     engelLabel: "你的恩格尔系数（选填）",
     engelHint: "食品支出 ÷ 总支出，数值越低通常代表生活水平越高",
@@ -697,10 +722,6 @@ const zhCN = {
   },
   sensitivity: {
     title: "月开销敏感性",
-    expand: "展开",
-    collapse: "收起",
-    plusTitle: "调高月开销（更贵的生活）",
-    minusTitle: "调低月开销（更省的生活）",
     plusRow: "+{{pct}}%",
     minusRow: "−{{pct}}%",
     note: "同一乘数下参考线与月开销线性同比例：月开销每变动 {{pct}}%，参考线约变动 {{delta}}；育儿、健康与重大投入预留不受月开销影响——「欲壑难填」在这里就是参考线的抬升幅度。",
@@ -713,7 +734,6 @@ const zhCN = {
   },
   share: {
     copy: "复制分享链接",
-    copyShort: "复制分享",
     copiedShort: "已复制",
     copyTooltip:
       "把当前全部业务输入（不含主题 / 语言 / 币种等界面偏好）编码进链接；粘贴给他人打开即为同一套参数。链接内容为可逆编码（编码 ≠ 加密），任何拿到链接的人可读出全部业务输入——请勿在链接中携带不愿公开的数字。",

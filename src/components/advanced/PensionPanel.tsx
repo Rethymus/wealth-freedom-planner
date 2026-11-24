@@ -15,6 +15,7 @@ import { LIMITS, resolveThemeTokens } from "../../data/defaults";
 import { effectiveMonthsDivisor, PENSION_WAGE_SOURCE_NOTE } from "../../data/pensionParams";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, FieldTip, IntField, NumberField } from "../fields";
+import { SegBar, SlotBox, SlotPager } from "../slots";
 import { useAnimatedNumber, useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney } from "../hooks";
 
 const { Text } = Typography;
@@ -69,221 +70,263 @@ export default function PensionPanel() {
   const serviceError = result && !result.ok ? result.error : null;
   /** S18 面板主数渐近滚动（p6-spec §2）：rAF 中间帧只进显示值、永不进 store（§6 红线 2） */
   const animatedPensionMonthly = useAnimatedNumber(data?.pensionMonthly ?? 0, undefined, hostRef);
+  /** P10 槽契约（§1.2 L4/L5；life 与 pro 两宿主共用）：结果 ⇄ 参数两态等高互换，
+   *  超行走槽内分页（§9 对比表槽分页先例同款） */
+  const [slot, setSlot] = useState<"out" | "params">("out");
+  const [outPage, setOutPage] = useState(0);
+  const [paramPage, setParamPage] = useState(0);
+
+  const resultOpacity = { opacity: loading ? 0.45 : 1 } as const;
+  /** P10 §8 尺寸回收：三张结果表共用同一形态入参（展开注入；防抖降透明随表） */
+  const tbl = {
+    border: true,
+    size: "small",
+    style: resultOpacity,
+    layout: "horizontal" as const,
+    column: (isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }) as 1 | { xs: number; md: number },
+    tableLayout: (isWorkbench ? "fixed" : "auto") as "fixed" | "auto",
+  } as const;
 
   return (
     <div ref={hostRef}>
-      {/* 说明行：两层公式 + 简化口径 */}
-      <Text type="secondary">{t("pension.formulaNote")}</Text>
-
-      <FieldRow>
-        <IntField
-          md={12}
-          label={t("pension.currentAge")}
-          tooltip={t("pension.currentAgeTooltip")}
-          value={pensionInputs.currentAge}
-          onChange={(v) => setPensionInputs({ currentAge: v })}
-          suffix={t("units.yearUnit")}
-        />
-        <IntField
-          md={12}
-          label={t("pension.retireAge")}
-          tooltip={t("pension.retireAgeTooltip")}
-          value={pensionInputs.retireAge}
-          onChange={(v) => setPensionInputs({ retireAge: v })}
-          suffix={t("units.yearUnit")}
-          hint={t("pension.retireAgeDelayNote")}
-        />
-        {/* P7/P0-1：想停止工作的年龄（时间口径）——只驱动桥接两字段，不影响任何
-            养老金金额（金额仍全部由 retireAge 经计发月数联动承载，验收锚点 ①） */}
-        <IntField
-          md={12}
-          label={t("pension.targetRetireAge")}
-          tooltip={t("pension.targetRetireAgeTooltip")}
-          value={pensionInputs.targetRetireAge}
-          onChange={(v) => setPensionInputs({ targetRetireAge: v })}
-          min={LIMITS.targetRetireAge.min}
-          max={LIMITS.targetRetireAge.max}
-          suffix={t("units.yearUnit")}
-        />
-        <IntField
-          md={12}
-          label={t("pension.contribYears")}
-          tooltip={t("pension.contribYearsTooltip")}
-          value={pensionInputs.contribYears}
-          onChange={(v) => setPensionInputs({ contribYears: v })}
-          suffix={t("units.yearUnit")}
-        />
-        <NumberField
-          md={12}
-          label={t("pension.contribIndex")}
-          tooltip={t("pension.contribIndexTooltip")}
-          value={pensionInputs.contribIndex}
-          onChange={(v) => setPensionInputs({ contribIndex: v })}
-          limit={LIMITS.contribIndex}
-        />
-        <AmountField
-          label={t("pension.accountBalance")}
-          tooltip={t("pension.accountBalanceTooltip")}
-          value={pensionInputs.accountBalance}
-          onChange={(v) => setPensionInputs({ accountBalance: v })}
-          prefix={symbol}
-          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
-          convertRate={rate}
-        />
-        <AmountField
-          label={t("pension.avgWage")}
-          /* P5 §5 冗长治理：原「来源行」整段（wf-panel-note）删除——数据口径全文并入本字段
-             提示（一句话出处由 tooltip 值内联承载，L4 判据：出处 → 全文 tooltip） */
-          tooltip={`${t("pension.avgWageTooltip")}；${PENSION_WAGE_SOURCE_NOTE}`}
-          value={pensionInputs.avgMonthlyWage}
-          onChange={(v) => setPensionInputs({ avgMonthlyWage: v })}
-          prefix={symbol}
-          suffix={displayCode === "CNY" ? t("units.yuanPerMonth") : undefined}
-          convertRate={rate}
-        />
-        <IntField
-          key={`months-sync-${monthsSyncEpoch}`}
-          label={t("pension.monthsDivisor")}
-          tooltip={t("pension.monthsDivisorTooltip")}
-          value={effectiveMonths}
-          onChange={(v) => {
-            setPensionInputs({ monthsDivisor: v });
-            setPensionMonthsSynced(false); // 手动修改计发月数即解除联动
-          }}
-          min={1}
-          max={600}
-          suffix={t("pension.monthsUnit")}
-          hint={monthsSynced ? t("pension.monthsSyncedHint") : undefined}
-        />
-      </FieldRow>
-
-      {/* 联动恢复按钮：点击递增重挂载序号，让计发月数输入框回填当刻表值（显示与计算口径一致） */}
-      <Button
-        type="text"
-        size="small"
-        className="wf-pressable"
-        onClick={() => {
-          setMonthsSyncEpoch((c) => c + 1);
-          setPensionMonthsSynced(true);
-        }}
-      >
-        {t("pension.monthsResync")}
-      </Button>
-
-      {/* P5 §5 冗长治理：来源行（wf-panel-note）删除——全文并入上方 avgWage 字段提示 */}
-
-      {/* 运行区：无按钮；防抖计算中在结果区头部显示小型旋转器（模式同 BasicCalculator 输出卡头部） */}
+      {/* 说明行：两层公式 + 简化口径（固定读数区，P10 L3 前置行） */}
+      <Text type="secondary" className="wf-panel-head-note">
+        {t("pension.formulaNote")}
+      </Text>
       {loading ? <Spin size={14} /> : null}
+      {serviceError ? <Alert type="error" style={{ marginTop: 4 }} content={serviceError} /> : null}
 
-      {serviceError ? <Alert type="error" style={{ marginTop: 8 }} content={serviceError} /> : null}
-
-      {data ? (
-        <>
-          {/* 防抖窗口内金额来自上一轮 wasm 结果，而计发月数即时跟随输入（规范 §3.6.1 设计）；
-              loading 期间整表降透明度提示「计算中」，消除「新月数 + 旧金额」的观感矛盾 */}
-          <Descriptions
-            border
-            size="small"
-            style={{ marginTop: 8, opacity: loading ? 0.45 : 1 }}
-            layout={isNarrow ? "vertical" : "horizontal"}
-            column={isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }}
-            tableLayout={isWorkbench ? "fixed" : "auto"}
-            data={[
-              {
-                label: t("pension.monthlyPension"),
-                value: (
-                  <Text bold className="wf-nowrap">
-                    {money(animatedPensionMonthly)}
-                  </Text>
-                ),
-              },
-              { label: t("pension.basicPart"), value: <span className="wf-nowrap">{money(data.basicPensionMonthly)}</span> },
-              { label: t("pension.accountPart"), value: <span className="wf-nowrap">{money(data.accountPensionMonthly)}</span> },
-              {
-                label: t("pension.yearsToRetire"),
-                value: `${data.yearsToRetire} ${t("units.yearUnit")}`,
-              },
-              {
-                label: t("pension.monthsUsed"),
-                value: `${effectiveMonths} ${t("pension.monthsUnit")}`,
-              },
-            ]}
-          />
-          <Descriptions
-            border
-            size="small"
-            style={{ marginTop: 8, opacity: loading ? 0.45 : 1 }}
-            layout={isNarrow ? "vertical" : "horizontal"}
-            column={isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }}
-            tableLayout={isWorkbench ? "fixed" : "auto"}
-            title={t("pension.adjustedTitle")}
-            data={[
-              {
-                label: t("pension.adjustedExpense"),
-                value: <span className="wf-nowrap">{money(data.adjustedMonthlyExpense)}</span>,
-              },
-              {
-                label: t("pension.adjustedCritical"),
-                value: (
-                  <Text bold className="wf-nowrap">
-                    {money(data.adjustedCriticalValue)}
-                  </Text>
-                ),
-              },
-              {
-                // 覆盖率是倍率不是百分点：× 100 后按一位小数渲染（如 0.95 → 95%）
-                label: t("pension.coverage"),
-                value: <span className="wf-nowrap">{`${formatNumber(data.coverageRatio * 100, 1)}%`}</span>,
-              },
-            ]}
-          />
-          {/* P7/P0-1 桥接块（§4.2）：bridgeYears > 0 才渲染——缺省（targetRetireAge =
-              retireAge）视图 bridgeYears = 0，面板形状与 README 锚点截图一致；
-              金额经 money() 展示币种换算（§6 红线 4）；块尾 bridgeNote 口径注 */}
-          {data.bridgeYears > 0 ? (
-            <>
+      {/* L4 槽切换条（复用 atlas.slotChart / atlas.slotParams，零新键） */}
+      <SegBar
+        name="wf-pension-slot"
+        ariaLabel={t("advanced.pensionTitle")}
+        value={slot}
+        onChange={(v: string) => setSlot(v as "out" | "params")}
+        options={[
+          { value: "out", label: t("atlas.slotChart") },
+          { value: "params", label: t("atlas.slotParams") },
+        ]}
+      />
+      <SlotBox height={200}>
+        {slot === "out" ? (
+          <div className="wf-slot-body">
+            {/* 防抖窗口内金额来自上一轮 wasm 结果；loading 期间整表降透明度（既有口径）。
+                槽内分页 3 页：主表 5 行 / 调整后 3 行 + 覆盖率注 / 桥接 2 行 + 口径注 */}
+            {data && outPage === 0 ? (
               <Descriptions
-                border
-                size="small"
-                style={{ marginTop: 8, opacity: loading ? 0.45 : 1 }}
-                layout={isNarrow ? "vertical" : "horizontal"}
-                column={isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }}
-                tableLayout={isWorkbench ? "fixed" : "auto"}
-                title={t("pension.bridgeTitle")}
+                {...tbl}
                 data={[
                   {
-                    label: t("pension.bridgeYearsLabel"),
-                    value: `${data.bridgeYears} ${t("units.yearUnit")}`,
-                  },
-                  {
-                    label: t("pension.bridgeFundingLabel"),
+                    label: t("pension.monthlyPension"),
                     value: (
                       <Text bold className="wf-nowrap">
-                        {money(data.bridgeFundingNeeded)}
+                        {money(animatedPensionMonthly)}
                       </Text>
                     ),
                   },
+                  { label: t("pension.basicPart"), value: <span className="wf-nowrap">{money(data.basicPensionMonthly)}</span> },
+                  { label: t("pension.accountPart"), value: <span className="wf-nowrap">{money(data.accountPensionMonthly)}</span> },
+                  { label: t("pension.yearsToRetire"), value: `${data.yearsToRetire} ${t("units.yearUnit")}` },
+                  { label: t("pension.monthsUsed"), value: `${effectiveMonths} ${t("pension.monthsUnit")}` },
                 ]}
               />
-              <Text type="secondary" className="wf-panel-note">
-                {t("pension.bridgeNote")}
-              </Text>
-            </>
-          ) : null}
-          {data.coverageRatio >= 1 ? (
-            <div style={{ marginTop: 8 }}>
-              <Text bold style={{ color: themeTokens.rise }}>
-                {t("pension.coverageFull")}
-              </Text>
+            ) : null}
+            {data && outPage === 1 ? (
+              <>
+                <Descriptions
+                  {...tbl}
+                  title={t("pension.adjustedTitle")}
+                  data={[
+                    { label: t("pension.adjustedExpense"), value: <span className="wf-nowrap">{money(data.adjustedMonthlyExpense)}</span> },
+                    {
+                      label: t("pension.adjustedCritical"),
+                      value: (
+                        <Text bold className="wf-nowrap">
+                          {money(data.adjustedCriticalValue)}
+                        </Text>
+                      ),
+                    },
+                    {
+                      // 覆盖率是倍率不是百分点：× 100 后按一位小数渲染（如 0.95 → 95%）
+                      label: t("pension.coverage"),
+                      value: <span className="wf-nowrap">{`${formatNumber(data.coverageRatio * 100, 1)}%`}</span>,
+                    },
+                  ]}
+                />
+                {data.coverageRatio >= 1 ? (
+                  <Text bold style={{ color: themeTokens.rise }}>
+                    {t("pension.coverageFull")}
+                  </Text>
+                ) : null}
+                {/* P5 §5 冗长治理：coverageHint + resultNote 合并键，估算口径一句话内联 */}
+                <Text type="secondary" className="wf-panel-note">
+                  {t("pension.coverageNote")}
+                </Text>
+              </>
+            ) : null}
+            {data && outPage === 2 ? (
+              <>
+                {/* P7/P0-1 桥接块（§4.2）：bridgeYears > 0 才渲染（缺省 = 0 不占位） */}
+                {data.bridgeYears > 0 ? (
+                  <>
+                    <Descriptions
+                      {...tbl}
+                      title={t("pension.bridgeTitle")}
+                      data={[
+                        { label: t("pension.bridgeYearsLabel"), value: `${data.bridgeYears} ${t("units.yearUnit")}` },
+                        {
+                          label: t("pension.bridgeFundingLabel"),
+                          value: (
+                            <Text bold className="wf-nowrap">
+                              {money(data.bridgeFundingNeeded)}
+                            </Text>
+                          ),
+                        },
+                      ]}
+                    />
+                    <Text type="secondary" className="wf-panel-note">
+                      {t("pension.bridgeNote")}
+                    </Text>
+                  </>
+                ) : (
+                  <Text type="secondary" className="wf-panel-note">
+                    {t("pension.coverageNote")}
+                  </Text>
+                )}
+              </>
+            ) : null}
+            <SlotPager label={t("advanced.pensionTitle")} total={3} page={outPage} onPage={setOutPage} />
+          </div>
+        ) : (
+          <div className="wf-slot-body">
+            {/* 参数槽两页：9 字段两列紧凑栅格（xs=12 与视口断点解耦——§1.1 F8 槽内口径） */}
+            <div className="wf-slot-fields">
+              {paramPage === 0 ? (
+                <>
+                  <IntField
+                    xs={12}
+                    md={12}
+                    label={t("pension.currentAge")}
+                    tooltip={t("pension.currentAgeTooltip")}
+                    value={pensionInputs.currentAge}
+                    onChange={(v) => setPensionInputs({ currentAge: v })}
+                    suffix={t("units.yearUnit")}
+                  />
+                  <IntField
+                    xs={12}
+                    md={12}
+                    label={
+                      <span>
+                        {t("pension.retireAge")}
+                        {/* P10 槽态：延迟退休口径长 hint 下沉 FieldTip（信息路径零丢失） */}
+                        <FieldTip text={t("pension.retireAgeDelayNote")} />
+                      </span>
+                    }
+                    tooltip={t("pension.retireAgeTooltip")}
+                    value={pensionInputs.retireAge}
+                    onChange={(v) => setPensionInputs({ retireAge: v })}
+                    suffix={t("units.yearUnit")}
+                  />
+                </>
+              ) : (
+                <>
+                  <NumberField
+                    xs={12}
+                    md={12}
+                    label={t("pension.contribIndex")}
+                    tooltip={t("pension.contribIndexTooltip")}
+                    value={pensionInputs.contribIndex}
+                    onChange={(v) => setPensionInputs({ contribIndex: v })}
+                    limit={LIMITS.contribIndex}
+                  />
+                  <AmountField
+                    xs={12}
+                    md={12}
+                    label={t("pension.accountBalance")}
+                    tooltip={t("pension.accountBalanceTooltip")}
+                    value={pensionInputs.accountBalance}
+                    onChange={(v) => setPensionInputs({ accountBalance: v })}
+                    prefix={symbol}
+                    suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+                    convertRate={rate}
+                  />
+                </>
+              )}
+              {paramPage === 0 ? (
+                <>
+                  {/* P7/P0-1：想停止工作的年龄（时间口径）——只驱动桥接两字段，不影响任何
+                      养老金金额（金额仍全部由 retireAge 经计发月数联动承载，验收锚点 ①） */}
+                  <IntField
+                    xs={12}
+                    md={12}
+                    label={t("pension.targetRetireAge")}
+                    tooltip={t("pension.targetRetireAgeTooltip")}
+                    value={pensionInputs.targetRetireAge}
+                    onChange={(v) => setPensionInputs({ targetRetireAge: v })}
+                    min={LIMITS.targetRetireAge.min}
+                    max={LIMITS.targetRetireAge.max}
+                    suffix={t("units.yearUnit")}
+                  />
+                  <IntField
+                    xs={12}
+                    md={12}
+                    label={t("pension.contribYears")}
+                    tooltip={t("pension.contribYearsTooltip")}
+                    value={pensionInputs.contribYears}
+                    onChange={(v) => setPensionInputs({ contribYears: v })}
+                    suffix={t("units.yearUnit")}
+                  />
+                </>
+              ) : (
+                <>
+                  <AmountField
+                    xs={12}
+                    md={12}
+                    label={t("pension.avgWage")}
+                    /* P5 §5 冗长治理：原「来源行」整段（wf-panel-note）删除——数据口径全文
+                       并入本字段提示（一句话出处由 tooltip 值内联承载） */
+                    tooltip={`${t("pension.avgWageTooltip")}；${PENSION_WAGE_SOURCE_NOTE}`}
+                    value={pensionInputs.avgMonthlyWage}
+                    onChange={(v) => setPensionInputs({ avgMonthlyWage: v })}
+                    prefix={symbol}
+                    suffix={displayCode === "CNY" ? t("units.yuanPerMonth") : undefined}
+                    convertRate={rate}
+                  />
+                  <IntField
+                    xs={12}
+                    md={12}
+                    key={`months-sync-${monthsSyncEpoch}`}
+                    label={t("pension.monthsDivisor")}
+                    tooltip={t("pension.monthsDivisorTooltip")}
+                    value={effectiveMonths}
+                    onChange={(v) => {
+                      setPensionInputs({ monthsDivisor: v });
+                      setPensionMonthsSynced(false); // 手动修改计发月数即解除联动
+                    }}
+                    min={1}
+                    max={600}
+                    suffix={t("pension.monthsUnit")}
+                    hint={monthsSynced ? t("pension.monthsSyncedHint") : undefined}
+                  />
+                </>
+              )}
             </div>
-          ) : null}
-          {/* P5 §5 冗长治理：coverageHint + resultNote 两段合并 1 行（合并键
-              pension.coverageNote，旧两键删除；估算口径一句话内联） */}
-          <Text type="secondary" className="wf-panel-note">
-            {t("pension.coverageNote")}
-          </Text>
-        </>
-      ) : null}
+            {/* 联动恢复按钮：点击递增重挂载序号，让计发月数输入框回填当刻表值 */}
+            <Button
+              type="text"
+              size="small"
+              className="wf-pressable"
+              onClick={() => {
+                setMonthsSyncEpoch((c) => c + 1);
+                setPensionMonthsSynced(true);
+              }}
+            >
+              {t("pension.monthsResync")}
+            </Button>
+            <SlotPager label={t("atlas.slotParams")} total={2} page={paramPage} onPage={setParamPage} />
+          </div>
+        )}
+      </SlotBox>
 
       {/* 免责文案：固定渲染，不参与折叠、不随结果就绪与否变化 */}
       <Text type="secondary" className="wf-panel-note">

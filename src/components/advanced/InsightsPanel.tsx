@@ -1,12 +1,22 @@
 /**
- * ⑨ 公式原理与数据依据：480 的推导、假设链条与展示数据的来源/年份/核证标注。
+ * ⑨ 公式原理与数据依据（P10 §1.4 P1–P3 条目化重构）：8 节 → 5 条目（≤5 纪律）；
+ * E5 声明 = Footer 两行迁入（app.footerDisclaimer / app.footerPrivacy 键复用不改名
+ * ——T11 信息先迁移后删元素）。
+ * - P1 条目切换条：5 条目（insights.entry* 五新键，§7）；<1200 分段条形态、≥1200
+ *   左轨竖排（样式层承载，高度不变）。
+ * - 骨架修复轮（F5，红线 10 路线 (b) 条目内两级切换的落地形态）：条目内分节改
+ *   SlotPager 翻页等高互换——原「分节栈同屏」静态底稿在 320–1200×800 各档实测超预算
+ *   （chain 809>502@320、E3 551>489@320 等），两级切换为全视口统一形态；分节内容
+ *   零丢失（一次翻页可达），条目切换复位页码。
+ * - 渲染压缩（红线 10 路线 (a)）：阅读段降 caption 档 12px/18px（.wf-entry-reading，
+ *   样式层）、来源行/勘误注全文下沉 FieldTip（compact 恒启用）——数据层 insights.ts
+ *   零改动；E2 链条行 ≤480 档 3 行/页、其余 4 行/页。
+ * - P5 §5 冗长治理既有口径保留：FieldTip 全文下沉、核证 Tag 三色、S4 行 hover 原样；
+ *   数据行挂 T4 行级 hover 读数。
  * 纯展示面板（无输入、无计算调用）；数据来自 src/data/insights.ts，环节标签走 i18n。
- * P5 §5 冗长治理（p5-spec §4/§5）：每节改「小节标题（T7 左标线）+ 一句话副行 +
- * info 图标」，原文全文下沉 FieldTip（全文键复用既有——字节近似守恒）；
- * childVideoNote（勘误性质）内联零文字、全文仅存 tooltip；evidence 小节补标题键。
- * 数据行挂 T4 行级 hover 读数（样式层 .wf-insight-row:hover 半档着色底）。
  */
 import { Divider, Tag, Typography } from "@arco-design/web-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   INSIGHT_CHAIN_STEPS,
@@ -16,6 +26,8 @@ import {
 } from "../../data/insights";
 import type { InsightEntry, InsightVerification } from "../../data/insights";
 import { FieldTip } from "../fields";
+import { SegBar, SlotPager } from "../slots";
+import { useIsCompactViewport, useIsNarrowViewport, useIsWorkbenchViewport } from "../hooks";
 
 const { Text } = Typography;
 
@@ -32,6 +44,15 @@ const INSIGHT_ANCHOR_KEYS: readonly string[] = [
   "insights.anchorExpense2",
   "insights.anchorAsset1",
   "insights.anchorAsset2",
+];
+
+/** P10 §1.4 条目定义（id → 分节渲染；顺序 = 条目切换条展示序） */
+const ENTRY_KEYS: { id: string; labelKey: string }[] = [
+  { id: "formula", labelKey: "insights.entryFormula" },
+  { id: "chain", labelKey: "insights.entryChain" },
+  { id: "data", labelKey: "insights.entryData" },
+  { id: "evidence", labelKey: "insights.entryEvidence" },
+  { id: "notice", labelKey: "insights.entryNotice" },
 ];
 
 /** P5 §5：全文提示按「≤1 行内联短句 + 全文 tooltip」双通道下沉。原文全文键为满足
@@ -51,8 +72,10 @@ function SectionTitle({ titleKey }: { titleKey: string }) {
   );
 }
 
-/** 通用数据行（链条 / 市场平均 / 医疗共用同一渲染；行挂 S4 hover 读数） */
-function EntryRows({ entries }: { entries: (InsightEntry & { labelKey?: string })[] }) {
+/** 通用数据行（链条 / 市场平均 / 医疗共用同一渲染；行挂 S4 hover 读数）。
+ *  P10 compact（<768 压缩路线 (a)）：来源行全文下沉 FieldTip（图标零布局高度），
+ *  行主体单行化——桌面（≥768）来源行可见不变 */
+function EntryRows({ entries, compact }: { entries: (InsightEntry & { labelKey?: string })[]; compact: boolean }) {
   const { t } = useTranslation();
   return (
     <ol className="wf-insight-list">
@@ -64,10 +87,15 @@ function EntryRows({ entries }: { entries: (InsightEntry & { labelKey?: string }
             <Tag size="small" color={VERIFICATION[entry.verification].color}>
               {t(VERIFICATION[entry.verification].key)}
             </Tag>
+            {compact ? (
+              <FieldTip text={`${entry.source}；${entry.year}；${entry.scope}`} />
+            ) : null}
           </div>
-          <Text type="secondary" className="wf-insight-source">
-            {entry.source}；{entry.year}；{entry.scope}
-          </Text>
+          {compact ? null : (
+            <Text type="secondary" className="wf-insight-source">
+              {entry.source}；{entry.year}；{entry.scope}
+            </Text>
+          )}
         </li>
       ))}
     </ol>
@@ -76,73 +104,177 @@ function EntryRows({ entries }: { entries: (InsightEntry & { labelKey?: string }
 
 export default function InsightsPanel() {
   const { t } = useTranslation();
+  /** P1 条目切换（默认首条目；App visitedTasks 门控下本面板首展挂载） */
+  const [entryId, setEntryId] = useState<string>(ENTRY_KEYS[0].id);
+  /** 骨架修复轮（F5，红线 10 路线 (b) 条目内两级切换）：分节页码——每条目两分节经
+   *  SlotPager 翻页等高互换（E2 链条行为前 N 页、锚点为末页），分节内容零丢失、
+   *  条目切换即复位。静态底稿「分节栈同屏」在 320–1200×800 各档实测均超预算
+   *  （chain 809>502@320 / E3 551>489 等），两级切换为全视口统一形态（登记：
+   *  p10-spec §1.4 分节栈形态由本页级切换替代，节点数 +2 分节页器，键零新增）。 */
+  const [secPage, setSecPage] = useState(0);
+  const isCompact = useIsCompactViewport();
+  /** 压缩档（路线 (a)：来源行全文下沉 FieldTip）——全视口恒启用（P10 实测回填：
+   *  1180 阅读列下链条 5 行带来源 ≈ 768 > 槽，来源下沉后达标；
+   *  EntryRows 的来源行信息由行内 FieldTip 承载，零丢失） */
+  const isNarrow = true;
+  void useIsNarrowViewport;
+  void useIsWorkbenchViewport;
+  /** E2 链条每页行数（≤480 档 3 行 / 其余 4 行）；末页 = 锚点分节 */
+  const chainPerPage = isCompact ? 3 : 4;
+  const chainPages = Math.ceil(INSIGHT_CHAIN_STEPS.length / chainPerPage);
+  const chainTotal = chainPages + 1;
+  const safeSecPage = Math.min(secPage, chainTotal - 1);
+  const chainRows = INSIGHT_CHAIN_STEPS.slice(
+    safeSecPage * chainPerPage,
+    safeSecPage * chainPerPage + chainPerPage,
+  );
+
   return (
     <div className="wf-insights">
-      <SectionTitle titleKey="insights.formulaTitle" />
-      {/* P5 §5：228 字符长串压为 ≤1 行副行，全文（3 段拼接键）经 info 图标下沉 FieldTip */}
-      <div className="wf-insights-body">
-        <Text type="secondary">{t("insights.formulaShort")}</Text>
-        <FieldTip
-          text={joinParts(t("insights.formulaBody1"), t("insights.formulaBody2"), t("insights.formulaBody3"))}
-        />
-      </div>
+      {/* P1 条目切换条（5 条目；≥1200 左轨竖排由样式层承载，高度不变） */}
+      <SegBar
+        name="wf-insights-entry"
+        ariaLabel={t("atlas.nav.principles")}
+        value={entryId}
+        onChange={(v: string) => {
+          setEntryId(v);
+          setSecPage(0);
+        }}
+        options={ENTRY_KEYS.map((e) => ({ value: e.id, label: t(e.labelKey) }))}
+      />
 
-      <SectionTitle titleKey="insights.chainTitle" />
-      <Text type="secondary" className="wf-insights-body">{t("insights.chainIntro")}</Text>
-      <EntryRows entries={INSIGHT_CHAIN_STEPS} />
-
-      <SectionTitle titleKey="insights.anchorTitle" />
-      <Text type="secondary" className="wf-insights-body">{t("insights.anchorNote")}</Text>
-      <div className="wf-insight-list">
-        {INSIGHT_ANCHOR_KEYS.map((k) => (
-          <div key={k} className="wf-insight-row">
-            <Text>{t(k)}</Text>
-          </div>
-        ))}
-      </div>
-
-      <SectionTitle titleKey="insights.marketTitle" />
-      <EntryRows entries={INSIGHT_MARKET_ENTRIES} />
-      <Text type="secondary" className="wf-insight-note">{t("insights.marketNote")}</Text>
-
-      <SectionTitle titleKey="insights.childTitle" />
-      <div className="wf-insight-list">
-        {INSIGHT_CHILD_COST_REGIONS.map((row) => (
-          <div key={row.region} className="wf-insight-row">
-            <div className="wf-insight-main">
-              <Text>{row.region}</Text>
-              <Text bold className="wf-nowrap">{row.costWan} 万元</Text>
+      {/* —— E1 公式与口径（页 1 = 公式推导 / 页 2 = 严格/宽松口径） —— */}
+      <div className="wf-entry" hidden={entryId !== "formula"}>
+        {safeSecPage === 0 ? (
+          <div className="wf-entry-sec">
+            <SectionTitle titleKey="insights.formulaTitle" />
+            <div className={isNarrow ? "wf-insights-body wf-entry-reading" : "wf-insights-body"}>
+              <Text type="secondary">{t("insights.formulaShort")}</Text>
+              <FieldTip
+                text={joinParts(t("insights.formulaBody1"), t("insights.formulaBody2"), t("insights.formulaBody3"))}
+              />
             </div>
-            {row.note ? (
-              <Text type="secondary" className="wf-insight-source">{row.note}</Text>
-            ) : null}
           </div>
-        ))}
-      </div>
-      {/* P5 §5：childNote / childVideoNote 两长串——副行 1 行 + 全文 tooltip；
-          childVideoNote（勘误性质）内联零文字、全文仅存 tooltip（图标紧邻上一副行） */}
-      <div className="wf-insights-body">
-        <Text type="secondary">{t("insights.childShort")}</Text>
-        <FieldTip text={joinParts(t("insights.childNote1"), t("insights.childNote2"))} />
-        <FieldTip text={joinParts(t("insights.childVideoNote1"), t("insights.childVideoNote2"))} />
-      </div>
-
-      <SectionTitle titleKey="insights.healthTitle" />
-      <EntryRows entries={INSIGHT_HEALTH_ENTRIES} />
-      <div className="wf-insights-body">
-        <Text type="secondary">{t("insights.healthShort")}</Text>
-        <FieldTip text={joinParts(t("insights.healthNote1"), t("insights.healthNote2"))} />
+        ) : (
+          <div className="wf-entry-sec">
+            <SectionTitle titleKey="insights.strictTitle" />
+            <div className={isNarrow ? "wf-entry-reading" : undefined}>
+              <Text type="secondary" className="wf-insights-body">{t("insights.strictBody")}</Text>
+              <Text type="secondary" className="wf-insights-body">{t("insights.looseBody")}</Text>
+            </div>
+          </div>
+        )}
+        <SlotPager label={t("insights.entryFormula")} total={2} page={safeSecPage} onPage={setSecPage} />
       </div>
 
-      <SectionTitle titleKey="insights.strictTitle" />
-      <Text type="secondary" className="wf-insights-body">{t("insights.strictBody")}</Text>
-      <Text type="secondary" className="wf-insights-body">{t("insights.looseBody")}</Text>
+      {/* —— E2 假设链条（前 N 页 = 推导链[分页] / 末页 = 直观锚点） —— */}
+      <div className="wf-entry" hidden={entryId !== "chain"}>
+        {safeSecPage < chainPages ? (
+          <div className="wf-entry-sec">
+            <SectionTitle titleKey="insights.chainTitle" />
+            <Text type="secondary" className={isNarrow ? "wf-insights-body wf-entry-reading" : "wf-insights-body"}>
+              {t("insights.chainIntro")}
+            </Text>
+            <EntryRows entries={chainRows} compact={isNarrow} />
+          </div>
+        ) : (
+          <div className="wf-entry-sec">
+            <SectionTitle titleKey="insights.anchorTitle" />
+            <Text type="secondary" className={isNarrow ? "wf-insights-body wf-entry-reading" : "wf-insights-body"}>
+              {t("insights.anchorNote")}
+            </Text>
+            <div className="wf-insight-list">
+              {INSIGHT_ANCHOR_KEYS.map((k) => (
+                <div key={k} className="wf-insight-row">
+                  <Text>{t(k)}</Text>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* 链条条目分页（≤480 档 3 行×4 页+锚点 / 其余 4 行×3 页+锚点；零新交互词汇） */}
+        <SlotPager label={t("insights.entryChain")} total={chainTotal} page={safeSecPage} onPage={setSecPage} />
+      </div>
 
-      {/* P5 §11 补漏：evidence 小节补标题键（原 evidenceNote 独立渲染无标题） */}
-      <SectionTitle titleKey="insights.evidenceTitle" />
-      <div className="wf-insights-body">
-        <Text type="secondary">{t("insights.evidenceShort")}</Text>
-        <FieldTip text={joinParts(t("insights.evidenceNote1"), t("insights.evidenceNote2"))} />
+      {/* —— E3 数据与来源（页 1 = 市场平均 / 页 2 = 育儿成本） —— */}
+      <div className="wf-entry" hidden={entryId !== "data"}>
+        {safeSecPage === 0 ? (
+          <div className="wf-entry-sec">
+            <SectionTitle titleKey="insights.marketTitle" />
+            <EntryRows entries={INSIGHT_MARKET_ENTRIES} compact={isNarrow} />
+            <Text type="secondary" className={isNarrow ? "wf-insight-note wf-entry-reading" : "wf-insight-note"}>
+              {t("insights.marketNote")}
+            </Text>
+          </div>
+        ) : (
+          <div className="wf-entry-sec">
+            <SectionTitle titleKey="insights.childTitle" />
+            <div className="wf-insight-list">
+              {INSIGHT_CHILD_COST_REGIONS.map((row) => (
+                <div key={row.region} className="wf-insight-row">
+                  <div className="wf-insight-main">
+                    <Text>{row.region}</Text>
+                    <Text bold className="wf-nowrap">{row.costWan} 万元</Text>
+                    {row.note ? (
+                      isNarrow ? <FieldTip text={row.note} /> : (
+                        <Text type="secondary" className="wf-insight-source">{row.note}</Text>
+                      )
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className={isNarrow ? "wf-insights-body wf-entry-reading" : "wf-insights-body"}>
+              {/* P5 §5：childNote / childVideoNote 两长串——副行 1 行 + 全文 tooltip；
+                  childVideoNote（勘误性质）内联零文字、全文仅存 tooltip */}
+              <Text type="secondary">{t("insights.childShort")}</Text>
+              <FieldTip
+                text={joinParts(
+                  t("insights.childNote1"),
+                  t("insights.childNote2"),
+                  t("insights.childVideoNote1"),
+                  t("insights.childVideoNote2"),
+                )}
+              />
+            </div>
+          </div>
+        )}
+        <SlotPager label={t("insights.entryData")} total={2} page={safeSecPage} onPage={setSecPage} />
+      </div>
+
+      {/* —— E4 医疗与证据（页 1 = 医疗预留 / 页 2 = 证据说明） —— */}
+      <div className="wf-entry" hidden={entryId !== "evidence"}>
+        {safeSecPage === 0 ? (
+          <div className="wf-entry-sec">
+            <SectionTitle titleKey="insights.healthTitle" />
+            <EntryRows entries={INSIGHT_HEALTH_ENTRIES} compact={isNarrow} />
+            <div className={isNarrow ? "wf-insights-body wf-entry-reading" : "wf-insights-body"}>
+              <Text type="secondary">{t("insights.healthShort")}</Text>
+              <FieldTip text={joinParts(t("insights.healthNote1"), t("insights.healthNote2"))} />
+            </div>
+          </div>
+        ) : (
+          <div className="wf-entry-sec">
+            <SectionTitle titleKey="insights.evidenceTitle" />
+            <div className={isNarrow ? "wf-insights-body wf-entry-reading" : "wf-insights-body"}>
+              {/* P5 §11 补漏：evidence 小节补标题键（原 evidenceNote 独立渲染无标题） */}
+              <Text type="secondary">{t("insights.evidenceShort")}</Text>
+              <FieldTip text={joinParts(t("insights.evidenceNote1"), t("insights.evidenceNote2"))} />
+            </div>
+          </div>
+        )}
+        <SlotPager label={t("insights.entryEvidence")} total={2} page={safeSecPage} onPage={setSecPage} />
+      </div>
+
+      {/* —— E5 声明（单节；Footer 两行迁入，键复用不改名——§2-T11 信息迁移承载） —— */}
+      <div className="wf-entry" hidden={entryId !== "notice"}>
+        <div className="wf-entry-sec">
+          <SectionTitle titleKey="insights.entryNotice" />
+          <div className={isNarrow ? "wf-entry-reading" : undefined} role="contentinfo">
+            <Text type="secondary" className="wf-insights-body">{t("app.footerDisclaimer")}</Text>
+            <Text type="secondary" className="wf-insights-body">{t("app.footerPrivacy")}</Text>
+          </div>
+        </div>
       </div>
     </div>
   );
