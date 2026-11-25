@@ -1,6 +1,14 @@
 /**
  * 城市租售参数（买房收租面板的城市预设）。
  *
+ * @data-meta
+ *   YEAR: 2025               // 数据集基准年；Numbeo 为滚动 18 个月窗口（数据时点 2026-11）
+ *   CHECKED_AT: 2026-11-20   // 在案滚动读取登记轮（git 提交日与 NUMBEO_NOTE「2026-11 读取」双证；16 城同源同判据，头块承载，逐城内联省略）
+ *   NEXT_DUE: 2027-05        // Numbeo 滚动窗口复核节奏（约每半年）
+ *   SOURCE_TYPE: rolling
+ *   EXPIRY: L3（滚动 >6 个月 soft、>12 个月 hard）
+ *   SOURCE: Numbeo 城市房产页（滚动窗口读取，逐城 source 字段承载）；持有成本与租金税整理值见各 note
+ *
  * 口径约定（与 src/wasm/bridge.ts RentalAnalysisInput 对齐）：
  * - rentYieldRangePct：毛租金收益率（年租金 ÷ 房价）典型区间，百分点；
  *   主来源 Numbeo 城市房产页（市中心 / 非市中心两个点值，取整后加少量余量构成区间）；

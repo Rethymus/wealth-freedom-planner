@@ -1,8 +1,7 @@
 # docs/data-dictionary.md — 数据字典：默认值与展示数据台账
 
-> **用途**：全仓数据层默认值与展示数据的唯一人读台账；机读镜像为 `scripts/check-data.mjs`（`npm run check:data`，九组断言），两处键一一映射——本表每行「check:data 组」列即指向该组断言。
-> **首建基线复核日期：2026-11-21**（每行「复核」列同日；后续改动行须刷新该列）。
-> **三处同步纪律**：任何改默认值的 PR 必须同时改①数据层落点、②本字典对应行、③check:data 对应断言（`defaults.ts` → 字典 → 断言）；缺一处即视为漂移。
+> **用途**：全仓数据层默认值与展示数据的唯一人读台账；机读镜像为 `scripts/check-data.mjs`（`npm run check:data`，十一组断言——P11 起扩为 A–I 九组 + 组 J 序列溯源 + 组 K @data-meta 元数据），两处键一一映射——本表每行「check:data 组」列即指向该组断言。
+> **首建基线复核日期：2026-11-21**（每行「复核」列同日；后续改动行须刷新该列）。**P11 采值轮（2026-11-24/25）**：§一/§二表改值行已刷新复核列；§五–§八四表（taxTables / regional / rentParams / indexSeries，共 37 行）为本轮首次全量登记（research-p11-data-audit §1 台账缺口 35 项 + 本轮新增序列 2 项收口）。**文档收口同步（2026-11-25）**：全表「落点」列按 P11 施工后的当前工作树行号逐行校正（defaults / presets / insights / taxTables / regional / indexSeries / freshness 七文件行号整体位移；复核列与各文件 @data-meta CHECKED_AT 逐一比对一致，未虚刷）。
 > **核证等级**：official=官方核证（官方原文页面已直读）；media=媒体核证（官方数字经两家及以上独立媒体转载核对）；video=视频口径（仅见于原视频或分析假设，未独立查证，不参与计算）；工程参数=无外部来源的工程/研究默认值；占位=待数据研究员复核；派生=由其他行算术导出。展示数据表全部行「不参与计算」（纪律见 `src/data/insights.ts:9`）。
 > **简中惯例**：`presets.note` 与 `insights.ts` 的 value/source/year/scope 为简中数据口径、不入 i18n（`presets.ts:4-5`、`insights.ts:7` 头注惯例）；界面标签走 i18n 键空间。
 > **复核节奏**：国家统计局年度收支每年 1 月（下次 2027-01）；社保基金会年报每年 8–10 月发布（下次注意 7.62% 传导——引用「最新」时用 7.62%，见 §4 句式 5）；SBBI China 年报约每年 4 月；育娲人口报告不定期（2024 版后无固定周期）。
@@ -14,48 +13,48 @@
 
 | 键 / 常量 | 落点（file:line） | 现值 | 口径与来源摘要 | 核证等级 | 句式 | 复核节奏 | 复核 | check:data 组 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| BASELINE_DEFAULTS.monthlyExpense | src/data/defaults.ts:32 | 2990 | 国家统计局《2025年居民收入和消费支出情况》城镇居民人均消费支出 35,869 元/年 ÷12 ≈ 2,989，取整到十位（折月值为派生算术，非官方月度数据） | official | 1 | NBS 每年 1 月 | 2026-11-21 | A/B/C/D |
-| BASELINE_DEFAULTS.costPerChild | src/data/defaults.ts:35 | 580000 | 视频口径示例值 58 万（非报告原文——原文 0–17 岁全国平均 53.8 万，见面板⑨）；保留为可编辑示例 | video-示例值 | 2 | 育娲不定期 | 2026-11-21 | E/F |
-| BASELINE_DEFAULTS.healthReserve | src/data/defaults.ts:36 | 200000 | 原视频估算；保守区间 15–50 万（2024 年价格水平，语境见 insights.ts 医疗参考） | video | — | 无固定（待数据研究员复核） | 2026-11-21 | B |
-| BASELINE_DEFAULTS.nominalReturnPct | src/data/defaults.ts:38 | 4.5 | 规划假设区间 4%–4.5% 上沿、非文献推导均值；参考背景见句式 4 | video-假设 | 4 | 无固定（SBBI 背景 4 月） | 2026-11-21 | D/I |
-| BASELINE_DEFAULTS.inflationPct | src/data/defaults.ts:39 | 2.0 | 规划假设（原视频）；近年实际 CPI 2022 +2.0 / 2023 +0.2 / 2024 +0.2 / 2025 持平（insights 链条 chainInflation） | video-假设 | 4 | 无固定 | 2026-11-21 | D |
-| MONTE_CARLO_DEFAULTS.annualSpend | src/data/defaults.ts:116 | 35880 | 派生：2990 × 12（年支出基期值，自第 1 年起按通胀上行） | 派生（official 基座） | 1 | 同 monthlyExpense | 2026-11-21 | C |
-| MONTE_CARLO_DEFAULTS.nominalReturnStdPct / inflationStdPct | src/data/defaults.ts:118,120 | 12 / 1 | 波动率工程参数（docs/p2-spec.md §2.4 语境） | 工程参数 | — | — | 2026-11-21 | — |
-| MONTE_CARLO_STRATEGY_DEFAULTS.threshold 五参数 | src/data/defaults.ts:137-144 | 20/10/20/10/15（freezeOnLoss=true） | 文献最优阈值带参数（docs/p2-spec.md §2.4 研究默认） | 工程参数（研究默认） | — | — | 2026-11-21 | — |
-| MONTE_CARLO_STRATEGY_DEFAULTS.percent.realReturnAssumpPct | src/data/defaults.ts:146 | 2.5 | 派生：4.5 − 2.0 = 2.5（初始回显值，用户可改、无运行时联动） | 派生 | 4 | 随名义/通胀默认 | 2026-11-21 | D |
-| PENSION_AVG_WAGE_ANCHOR_CNY | src/data/pensionParams.ts:49 | 10343 | 国家统计局 2024 年城镇非私营单位年平均工资 124,110 元 ÷12 = 10,342.5 → 10,343（全国口径锚点，各省计发基数不同） | official | — | 年度（工资发布约 5–6 月） | 2026-11-21 | — |
-| PRESET_PROFILES 四画像 monthlyExpense | src/data/presets.ts:43,50,57,64 | 4500/8000/11000/2000 | 一线/低线整理口径；与消费构成五项和恒等（1500+2000+400+100+500 等） | 工程整理 | — | — | 2026-11-21 | E |
-| PRESET_PROFILES 四画像 costPerChild | src/data/presets.ts:43,50,57,64 | 580000 | 同 BASELINE.costPerChild（视频口径示例值；一孩 note 已注 53.8 万对照，presets.ts:59） | video-示例值 | 2 | 育娲不定期 | 2026-11-21 | E/F |
-| PRESET_PROFILES 四画像 healthReserve | src/data/presets.ts:43,50,57,64 | 150000/200000/200000/150000 | 单人 15 万 / 双人 20 万整理口径（note 内注明） | 工程整理 | — | — | 2026-11-21 | — |
-| LOAN_DEFAULTS | src/data/defaults.ts:92-97 | 100 万 / 3.9% / 30 年 | 占位：常见房贷参考，待数据研究员校准 | 占位 | — | 待校准 | 2026-11-21 | — |
-| RENTAL_DEFAULTS | src/data/defaults.ts:100-111 | 见行 | 占位：待接 rentParams.ts 城市参数后由用户选择覆盖 | 占位 | — | 待校准 | 2026-11-21 | — |
-| TAX_ESTIMATE_DEFAULTS | src/data/defaults.ts:153-157 | 20 万 / 6 万 / 空表 | 占位：bands 待接 taxTables.ts；减除费用按中国个税年减除口径 | 占位 | — | 待校准 | 2026-11-21 | — |
-| ACCUMULATION_DEFAULTS.monthlyExpense | src/data/defaults.ts:186 | 2990 | 同 BASELINE.monthlyExpense（①） | official | 1 | 同 monthlyExpense | 2026-11-21 | —（经 targetValue 间接入 B） |
-| ACCUMULATION_DEFAULTS.targetValue | src/data/defaults.ts:187 | 1635200 | 联动派生：2990 × 480 + 200,000（与基础模式临界值实时联动，手动修改解除） | 派生（official 基座） | 1 | 同 monthlyExpense | 2026-11-21 | B |
+| BASELINE_DEFAULTS.monthlyExpense | src/data/defaults.ts:39 | 2990 | 国家统计局《2025年居民收入和消费支出情况》城镇居民人均消费支出 35,869 元/年 ÷12 ≈ 2,989，取整到十位（折月值为派生算术，非官方月度数据） | official | 1 | NBS 每年 1 月 | 2026-11-21 | A/B/C/D |
+| BASELINE_DEFAULTS.costPerChild | src/data/defaults.ts:42 | 580000 | 视频口径示例值 58 万（非报告原文——原文 0–17 岁全国平均 53.8 万，见面板⑨）；保留为可编辑示例 | video-示例值 | 2 | 育娲不定期 | 2026-11-21 | E/F |
+| BASELINE_DEFAULTS.healthReserve | src/data/defaults.ts:43 | 200000 | 原视频估算；保守区间 15–50 万（2024 年价格水平，语境见 insights.ts 医疗参考） | video | — | 无固定（待数据研究员复核） | 2026-11-21 | B |
+| BASELINE_DEFAULTS.nominalReturnPct | src/data/defaults.ts:45 | 4.5 | 规划假设区间 4%–4.5% 上沿、非文献推导均值；参考背景见句式 4 | video-假设 | 4 | 无固定（SBBI 背景 4 月） | 2026-11-21 | D/I |
+| BASELINE_DEFAULTS.inflationPct | src/data/defaults.ts:46 | 2.0 | 规划假设（原视频）；近年实际 CPI 2022 +2.0 / 2023 +0.2 / 2024 +0.2 / 2025 持平（insights 链条 chainInflation） | video-假设 | 4 | 无固定 | 2026-11-21 | D |
+| MONTE_CARLO_DEFAULTS.annualSpend | src/data/defaults.ts:129 | 35880 | 派生：2990 × 12（年支出基期值，自第 1 年起按通胀上行） | 派生（official 基座） | 1 | 同 monthlyExpense | 2026-11-21 | C |
+| MONTE_CARLO_DEFAULTS.nominalReturnStdPct / inflationStdPct | src/data/defaults.ts:131,133 | 12 / 1 | 波动率工程参数（docs/p2-spec.md §2.4 语境） | 工程参数 | — | — | 2026-11-21 | — |
+| MONTE_CARLO_STRATEGY_DEFAULTS.threshold 五参数 | src/data/defaults.ts:150-156 | 20/10/20/10/15（freezeOnLoss=true） | 文献最优阈值带参数（docs/p2-spec.md §2.4 研究默认） | 工程参数（研究默认） | — | — | 2026-11-21 | — |
+| MONTE_CARLO_STRATEGY_DEFAULTS.percent.realReturnAssumpPct | src/data/defaults.ts:159 | 2.5 | 派生：4.5 − 2.0 = 2.5（初始回显值，用户可改、无运行时联动） | 派生 | 4 | 随名义/通胀默认 | 2026-11-21 | D |
+| PENSION_AVG_WAGE_ANCHOR_CNY | src/data/pensionParams.ts:63 | 10787 | 国家统计局《2025年城镇单位就业人员年平均工资情况》（2026-05-15 发布）：2025 年城镇非私营 129,441 元 ÷12 = 10,786.75 → 10,787（私营 71,590 元 ≈5,966 元/月作 note 注；各省计发基数不同） | official | — | 年度（工资发布约 5–6 月，下次 2027-05） | 2026-11-24 | — |
+| PRESET_PROFILES 四画像 monthlyExpense | src/data/presets.ts:50,58,66,74 | 4500/8000/11000/2000 | 一线/低线整理口径；与消费构成五项和恒等（1500+2000+400+100+500 等） | 工程整理 | — | — | 2026-11-21 | E |
+| PRESET_PROFILES 四画像 costPerChild | src/data/presets.ts:50,58,66,74 | 580000 | 同 BASELINE.costPerChild（视频口径示例值；一孩 note 已注 53.8 万对照，presets.ts:59） | video-示例值 | 2 | 育娲不定期 | 2026-11-21 | E/F |
+| PRESET_PROFILES 四画像 healthReserve | src/data/presets.ts:50,58,66,74 | 150000/200000/200000/150000 | 单人 15 万 / 双人 20 万整理口径（note 内注明） | 工程整理 | — | — | 2026-11-21 | — |
+| LOAN_DEFAULTS | src/data/defaults.ts:105-111 | 100 万 / 3.9% / 30 年 | 占位：常见房贷参考，待数据研究员校准 | 占位 | — | 待校准 | 2026-11-21 | — |
+| RENTAL_DEFAULTS | src/data/defaults.ts:113-124 | 见行 | 占位：待接 rentParams.ts 城市参数后由用户选择覆盖 | 占位 | — | 待校准 | 2026-11-21 | — |
+| TAX_ESTIMATE_DEFAULTS | src/data/defaults.ts:170-174 | 20 万 / 6 万 / 空表 | 占位：bands 待接 taxTables.ts；减除费用按中国个税年减除口径 | 占位 | — | 待校准 | 2026-11-21 | — |
+| ACCUMULATION_DEFAULTS.monthlyExpense | src/data/defaults.ts:204 | 2990 | 同 BASELINE.monthlyExpense（①） | official | 1 | 同 monthlyExpense | 2026-11-21 | —（经 targetValue 间接入 B） |
+| ACCUMULATION_DEFAULTS.targetValue | src/data/defaults.ts:205 | 1635200 | 联动派生：2990 × 480 + 200,000（与基础模式临界值实时联动，手动修改解除） | 派生（official 基座） | 1 | 同 monthlyExpense | 2026-11-21 | B |
 
 ## 二、展示数据表（src/data/insights.ts 全量：链条 10 环 + 市场消费 2 条 + 育儿地区 4 条 + 医疗 3 条；全部行不参与计算）
 
 | 键 / 条目 | 落点（file:line） | 现值 | 口径与来源摘要 | 核证等级 | 句式 | 复核节奏 | 复核 | check:data 组 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| chainDeposit1y | src/data/insights.ts:47-54 | 0.95% | 全国性商业银行一年期整存整取挂牌利率（2025-05-20 生效），经媒体报道核对 | media | — | 随挂牌利率调整 | 2026-11-21 | — |
-| chainDeposit5y | src/data/insights.ts:55-62 | 1.30% | 同上五年期 | media | — | 同上 | 2026-11-21 | — |
-| chainCoreInflation | src/data/insights.ts:63-70 | 1.2%（视频口径 1.0%） | 国家统计局 2025-12 核心 CPI（2026-01-09 发布）；视频 1.0% 与发布值不一致、按发布值展示 | media | — | NBS 每月/年度发布 | 2026-11-21 | — |
-| chainSsf | src/data/insights.ts:71-78 | 7.39% | 社保基金会《全国社会保障基金 2024 年度报告》（2025-09-30 发布）：成立以来至 2024 年末年均投资收益率；scope 另注 2025 年报更新口径 7.62%（截至 2025 年末）；国家级储备基金历史业绩、不代表个人可获收益 | official | 3、5 | 每年 8–10 月年报 | 2026-11-21 | G |
-| chainAnnuity | src/data/insights.ts:79-86 | 6.17% | 人社部 2024 年度企业年金摘要（2007–2024 十八年平均，媒体转载核对） | media | — | 年度摘要（约 3 月） | 2026-11-21 | — |
-| chainFeeDrag | src/data/insights.ts:87-94 | 2–3 pp（显性锚 1.4 pp） | 原视频估计；显性部分锚定证监会 2023 费率改革口径 | video | — | — | 2026-11-21 | — |
-| chainNominal | src/data/insights.ts:95-102 | 4%–4.5%（默认 4.5%） | 规划假设（原视频），非文献结论；背景见句式 4 | video | 4 | — | 2026-11-21 | I |
-| chainInflation | src/data/insights.ts:103-110 | 2%（默认 2.0%） | 规划假设；已核证实际值近四年均值 ≈0.6%，假设属偏保守 | video | — | — | 2026-11-21 | — |
-| chainReal | src/data/insights.ts:111-118 | 2%–2.5% | 由上两环费雪复算（(1+4%)/(1+2%)−1 ≈ 1.96%、(1+4.5%)/(1+2%)−1 ≈ 2.45%） | video | — | — | 2026-11-21 | — |
-| chainMultiplier | src/data/insights.ts:119-126 | 480 | 12 ÷ 0.025 = 480（算式与组 B 同源） | video | — | — | 2026-11-21 | B（算式同源） |
-| 市场消费[0] 全国 | src/data/insights.ts:131-137 | 2,456 元/月（29,476 元/年） | NBS《2025 年居民收入和消费支出情况》；折月=年值÷12 派生 | official | 1 | NBS 每年 1 月 | 2026-11-21 | A |
-| 市场消费[1] 城镇 | src/data/insights.ts:138-144 | 2,989 元/月（35,869 元/年） | 同上城镇口径；scope 注明默认 2,990 取整 | official | 1 | NBS 每年 1 月 | 2026-11-21 | A |
-| 育儿地区·全国 | src/data/insights.ts:149 | 53.8 万（0–17 岁平均） | 育娲《中国生育成本报告2024版》原文值（经央广网转述核证；文件无核证字段，本表按 media 登记） | media | 2 | 育娲不定期 | 2026-11-21 | F |
-| 育儿地区·上海 | src/data/insights.ts:150 | 101 万 | 报告原文值；note 注明视频口径 108 万不符 | media | 2 | 育娲不定期 | 2026-11-21 | — |
-| 育儿地区·北京 | src/data/insights.ts:151 | 93.6 万 | 报告原文值；note 注明视频口径 100 万不符 | media | 2 | 育娲不定期 | 2026-11-21 | — |
-| 育儿地区·西藏 | src/data/insights.ts:152 | 34.9 万 | 报告原文值（最低省份）；note 注明视频「贵州 43 万最低」未能复核、不采纳 | media | 2 | 育娲不定期 | 2026-11-21 | — |
-| 医疗[0] | src/data/insights.ts:157-163 | 6,454.4 元/年 | 卫健委《2024 年我国卫生健康事业发展统计公报》人均卫生总费用（官方解读页受限、媒体转载核对） | media | — | 年度公报 | 2026-11-21 | — |
-| 医疗[1] | src/data/insights.ts:164-170 | 约 20 万（保守区间 15–50 万） | 原视频估算；等额不折现上限参考 6,454.4×80 年 ≈ 51.6 万 | video | — | — | 2026-11-21 | — |
-| 医疗[2] | src/data/insights.ts:171-177 | 二线 15–30 万；一线 30–60 万 | 原视频估算，未独立查证；可作健康预留可编辑预设参考 | video | — | — | 2026-11-21 | — |
+| chainDeposit1y | src/data/insights.ts:57-64 | 0.95% | 全国性商业银行一年期整存整取挂牌利率（2025-05-20 生效），经媒体报道核对 | media | — | 随挂牌利率调整 | 2026-11-21 | — |
+| chainDeposit5y | src/data/insights.ts:66-73 | 1.30% | 同上五年期 | media | — | 同上 | 2026-11-21 | — |
+| chainCoreInflation | src/data/insights.ts:75-82 | 1.2%（视频口径 1.0%） | 国家统计局 2025-12 核心 CPI（2026-01-09 发布）；视频 1.0% 与发布值不一致、按发布值展示 | media | — | NBS 每月/年度发布 | 2026-11-21 | — |
+| chainSsf | src/data/insights.ts:84-91 | 7.39% | 社保基金会《全国社会保障基金 2024 年度报告》（2025-09-30 发布）：成立以来至 2024 年末年均投资收益率；scope 另注 2025 年报更新口径 7.62%（截至 2025 年末）；国家级储备基金历史业绩、不代表个人可获收益 | official | 3、5 | 每年 8–10 月年报 | 2026-11-21 | G |
+| chainAnnuity | src/data/insights.ts:93-101 | 6.17% | 人社部 2024 年度企业年金摘要（2007–2024 十八年平均，媒体转载核对）。**复核受限**：《2025 年度摘要》已发布（官网页 2026-03-20 在案；2025 单年 6.69%、规模 4.17 万亿经媒体 2026-03-25 核对），「自 2007 年以来平均」精确均值须直读 PDF——待证纪律：保持 6.17% + scope 补复核受限句，禁编造更新值 | media | — | 年度摘要（约 3 月，下次 2027-03） | 2026-11-21 | K6（EXPIRY=L1） |
+| chainFeeDrag | src/data/insights.ts:102-110 | 2–3 pp（显性锚 1.4 pp） | 原视频估计；显性部分锚定证监会 2023 费率改革口径 | video | — | — | 2026-11-21 | — |
+| chainNominal | src/data/insights.ts:111-119 | 4%–4.5%（默认 4.5%） | 规划假设（原视频），非文献结论；背景见句式 4 | video | 4 | — | 2026-11-21 | I |
+| chainInflation | src/data/insights.ts:120-128 | 2%（默认 2.0%） | 规划假设；已核证实际值近四年均值 ≈0.6%，假设属偏保守 | video | — | — | 2026-11-21 | — |
+| chainReal | src/data/insights.ts:129-137 | 2%–2.5% | 由上两环费雪复算（(1+4%)/(1+2%)−1 ≈ 1.96%、(1+4.5%)/(1+2%)−1 ≈ 2.45%） | video | — | — | 2026-11-21 | — |
+| chainMultiplier | src/data/insights.ts:138-146 | 480 | 12 ÷ 0.025 = 480（算式与组 B 同源） | video | — | — | 2026-11-21 | B（算式同源） |
+| 市场消费[0] 全国 | src/data/insights.ts:150-158 | 2,456 元/月（29,476 元/年） | NBS《2025 年居民收入和消费支出情况》；折月=年值÷12 派生 | official | 1 | NBS 每年 1 月 | 2026-11-21 | A |
+| 市场消费[1] 城镇 | src/data/insights.ts:159-167 | 2,989 元/月（35,869 元/年） | 同上城镇口径；scope 注明默认 2,990 取整 | official | 1 | NBS 每年 1 月 | 2026-11-21 | A |
+| 育儿地区·全国 | src/data/insights.ts:171 | 53.8 万（0–17 岁平均） | 育娲《中国生育成本报告2024版》原文值（经央广网转述核证；文件无核证字段，本表按 media 登记） | media | 2 | 育娲不定期 | 2026-11-21 | F |
+| 育儿地区·上海 | src/data/insights.ts:173 | 101 万 | 报告原文值；note 注明视频口径 108 万不符 | media | 2 | 育娲不定期 | 2026-11-21 | — |
+| 育儿地区·北京 | src/data/insights.ts:175 | 93.6 万 | 报告原文值；note 注明视频口径 100 万不符 | media | 2 | 育娲不定期 | 2026-11-21 | — |
+| 育儿地区·西藏 | src/data/insights.ts:177 | 34.9 万 | 报告原文值（最低省份）；note 注明视频「贵州 43 万最低」未能复核、不采纳 | media | 2 | 育娲不定期 | 2026-11-21 | — |
+| 医疗[0] | src/data/insights.ts:182-190 | 6,454.4 元/年 | 卫健委《2024 年我国卫生健康事业发展统计公报》人均卫生总费用（官方解读页受限、媒体转载核对） | media | — | 年度公报 | 2026-11-21 | — |
+| 医疗[1] | src/data/insights.ts:191-198 | 约 20 万（保守区间 15–50 万） | 原视频估算；等额不折现上限参考 6,454.4×80 年 ≈ 51.6 万 | video | — | — | 2026-11-21 | — |
+| 医疗[2] | src/data/insights.ts:199-206 | 二线 15–30 万；一线 30–60 万 | 原视频估算，未独立查证；可作健康预留可编辑预设参考 | video | — | — | 2026-11-21 | — |
 
 > **登记勘误**：wf01-spec §3 草拟时把链条记作「9 环」、医疗记作「2 条」，实况为链条 10 环（chainReal 与 chainMultiplier 各为一环）、医疗 3 条——本表按「insights.ts 全量」纪律逐行登记实况（实施会话如实登记，偏差全录见 wf01-spec §10.5）。
 
@@ -63,7 +62,7 @@
 
 | 键 | 落点（file:line） | 现值 | 口径与来源摘要 | 核证等级 | 句式 | 复核节奏 | 复核 | check:data 组 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| FX_RATE_SNAPSHOT | src/data/defaults.ts:211-228 | USD 0.149433 / EUR 0.136198 / GBP 0.113982 / JPY 23.877343 / HKD 1.172212 / CNY 1 | open.er-api.com 公开端点实拉核验，接口时点 2026-11-20；仅收六币种，数值随实施时点冻结，实时获取失败时回退使用 | 工程快照（官方接口实拉） | — | 换汇场景手动刷新 | 2026-11-21 | — |
+| FX_RATE_SNAPSHOT | src/data/defaults.ts:230-247 | USD 0.149433 / EUR 0.136198 / GBP 0.113982 / JPY 23.877343 / HKD 1.172212 / CNY 1 | open.er-api.com 公开端点实拉核验，接口时点 2026-11-20；仅收六币种，数值随实施时点冻结，实时获取失败时回退使用 | 工程快照（官方接口实拉） | — | 换汇场景手动刷新 | 2026-11-21 | — |
 
 ## 四、写作指引（引用句式模板全文 + 禁用句式 + 更新口径指引）
 
@@ -95,3 +94,68 @@
 - 引用社保基金收益「最新」值时用 7.62%（2025 年报口径，截至 2025 年末）；7.39% 只能与 2024 年报同源引用。
 - NBS 年度收支更新后：同步三处——`defaults.ts` 注释、本表对应行、check:data 组 A 断言（34,557 式旧年份清零同规则）。
 - 育娲新版报告发布后：报告原文值入展示层（面板⑨），输入默认示例值属性另行裁定；不得静默替换 580000。
+
+---
+
+## 五、税表台账（src/data/taxTables.ts 九表；P11 首次登记；时效元数据见各表内联 @data-meta 与文件头块）
+
+| 键 / 表 | 落点 | 现值（扣除/档位） | 年度 | 口径与来源摘要 | 核证等级 | 复核节奏 | 复核 | check:data 组 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| T1 CN 综合所得 | taxTables.ts:30-59 | 6 万；3%–45% 七档 | 2025 | 个税法税率表（2019 起施行，延续不变；触发点=个税法修订） | official | 修法触发 | 2026-11-24 | K3 |
+| T2 US 单身 | taxTables.ts:61-83 | 16,100 美元；12400/50400/105700/201775/256225/640600 | 2026 | IRS Rev. Proc. 2025-32（2025-10 发布，经 Tax Foundation 整理页 2026-11-24 转载核对；OBBBA 后首度常规指数化） | media | 每年 10–11 月（下年税档） | 2026-11-24 | K3 |
+| T3 US 合并 | taxTables.ts:85-107 | 32,200 美元；24800/100800/211400/403550/512450/768700 | 2026 | 同 T2 | media | 同 T2 | 2026-11-24 | K3 |
+| T4 GB（EWN） | taxTables.ts:109-128 | £12,570；20/40/45% | 2025 | GOV.UK 官方页 2026-11-24 直读：2026/27 年度免税额与档上限冻结延续、数值零变化（year 标注属顺延非数值缺口） | official | 冻结延续（预算案触发） | 2026-11-24 | K3 |
+| T5 DE 单身基础 | taxTables.ts:130-160 | 12,348 欧；九档 0.154/0.189/0.219/0.258/0.307/0.353/0.397/0.42/0.45 | 2026 | §32a EStG 2026 官方公式（gesetze-im-internet.de 直读 2026-11-24）：五段全变（≤12,348 为 0；12,349–17,799：(914.51·y+1,400)·y；17,800–69,878：(173.10·z+2,397)·z+1,034.87；69,879–277,825：0.42x−11,135.63；≥277,826：0.45x−19,470.38）；九档按「段界承 2025 同构（首段三等分+次段逐半中点+区界整段）+ 割线初值 + 相邻段联合网格微调」重推，逐点扫描（200–300,000 欧）实测：应税所得 >3,000 欧偏差 ≤2%（最大约 1.6% @ 可税 9,582）、低段约 10%（绝对税额 ≤0.1 欧） | official | 每年税率法修订 | 2026-11-24 | K3 |
+| T6 JP 工薪综合 | taxTables.ts:162-186 | 123 万円；5%–45% 七档 | 2025 | 令和 7 年度税改口径。**复核受限**：令和 8 年度（2026）调整未能核验，以在案口径展示 | official | 年度税改（12 月大纲） | 2026-11 | K3 |
+| T7 SG 税务居民 | taxTables.ts:188-216 | 2 万新元；等效 12 档 | 2025 | IRAS 税率页在案（YA2024 起结构延续至 YA2025/YA2026）。**复核受限**：IRAS 官方页本次直读未达；YA2027 触发点=2027-02 预算案 | official | 预算案触发 | 2026-11 | K3 |
+| T8 AU 居民 | taxTables.ts:218-238 | 18,200 澳元；16/30/37/45% | 2025 | ATO 税率页在案（2024–25 与 2025–26 同）。**复核受限**：2026–27 财年税率未能复核（官方页 403） | official | 财年更替（7 月） | 2026-11 | K3 |
+| T9 CA 联邦 | taxTables.ts:240-260 | 16,129 加元；14.5/20.5/26/29/33% | 2025 | CRA 2025 税档在案（指数化 2.7%，7 月起最低档 14%）。**复核受限**：2026 税年指数化公告未能核验（每年 11 月前后发布） | official | 年度指数化（11 月） | 2026-11 | K3 |
+
+> 税表固定声明：`TAX_TABLE_DISCLAIMER`（taxTables.ts:27）为需求固定文案、运行时零消费（仅 types.ts:123 注释引用）；各表 note 首句年度句随表内 year 独立字面量（US 两表/DE 表已升「2026 年公开税档」）。UI 顶部声明走 i18n `tax.disclaimer`（本轮未列入键预算，零改动）。
+
+## 六、区域校验参考台账（src/data/regional.ts 八条；P11 首次登记 + 世行 2025 采值）
+
+| 条目 | 落点 | GDP(PPP) | 消费率 | 恩格尔区间 | year | 锚点 | 来源 | 复核 | check:data 组 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| R1 中国城镇 | regional.ts:36-50 | 29,300 | 40 | [0.26,0.31] | 2025 | 2,989 元/月（35,869÷12，与默认月开销 2,990 同口径） | 世行 API NY.GDP.PCAP.PP.CD（快照 lastupdated 2026-11-11）；NBS《2025年居民收入和消费支出情况》（2026-01-19） | 2026-11-24 | K1/K4 |
+| R2 美国 | regional.ts:51-62 | 90,000 | 67.9 | [0.11,0.14] | 2025 | — | 世行同上；消费率 NE.CON.PRVT.ZS 最新仍 2024（各 note 注明） | 2026-11-24 | K1/K4 |
+| R3 德国 | regional.ts:63-73 | 75,400 | 52.7 | [0.10,0.13] | 2025 | — | 同上 | 2026-11-24 | K1/K4 |
+| R4 英国 | regional.ts:74-84 | 64,600 | 60.8 | [0.10,0.12] | 2025 | — | 同上 | 2026-11-24 | K1/K4 |
+| R5 日本 | regional.ts:85-97 | 55,400 | 53.1 | [0.26,0.29] | 2025 | — | 同上 | 2026-11-24 | K1/K4 |
+| R6 新加坡 | regional.ts:98-110 | 163,400 | 30.7 | [0.15,0.22] | 2025 | — | 同上 | 2026-11-24 | K1/K4 |
+| R7 澳大利亚 | regional.ts:111-121 | 71,900 | 51.4 | [0.09,0.12] | 2025 | — | 同上 | 2026-11-24 | K1/K4 |
+| R8 加拿大 | regional.ts:122-132 | 66,700 | 55.6 | [0.09,0.12] | 2025 | — | 同上 | 2026-11-24 | K1/K4 |
+
+> 复核节奏：世行 WDI 年度更新（下次 2027-07）；消费率列 2025 年值上线后随轮更新。头块 @data-meta NEXT_DUE=2027-07（组 K1/K4/K5 承载）。
+
+## 七、城市租售参数台账（src/data/rentParams.ts 十六城；P11 首次登记；值零改动）
+
+| 城市组 | 落点 | 收益率区间｜空置/维护/物业费/其他年成本/租金税 | year | 来源 | 复核 | check:data 组 |
+| --- | --- | --- | --- | --- | --- | --- |
+| C1–C6 中国六城（北京/上海/深圳/广州/成都/武汉） | rentParams.ts:30 起 | 见各条目（如北京 1.8–2.0｜8/0.5/280/3600/2.5） | 2025 | Numbeo 城市房产页（滚动 18 个月窗口，2026-11 读取）；租金税=地方税务公告/整理值（各 note） | 2026-11-20 | K1/K4 |
+| C7–C11 海外五城（东京/纽约/伦敦/新加坡/迪拜） | rentParams.ts 中段 | 见各条目 | 2025 | 同上（持有成本为市场惯例整理值） | 2026-11-20 | K1/K4 |
+| C12–C16 国内四城+清迈（珠海/海口/吉隆坡/桂林/清迈） | rentParams.ts 尾段 | 见各条目 | 2025 | 同上 | 2026-11-20 | K1/K4 |
+
+> 复核节奏：Numbeo 滚动窗口约每半年（头块 NEXT_DUE=2027-05）；判据 L3（滚动 >6 个月 soft、>12 个月 hard）。
+
+## 八、指数年度收益序列台账（src/data/indexSeries.ts；P11 首次登记 + 采值；@data-meta 有意不放——机读走 fetchedAt/sourceUrl 字段，组 J 承载）
+
+| 序列 id | 落点 | 区间/样本 | 口径 | 来源与录入 | fetchedAt | 复核 | check:data 组 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| X1 csi300 | indexSeries.ts:57-77 | 2005–2025 / 21（P11 尾部追加 2025 格，既有 20 值逐值零 diff——实施轮 node 比对登记） | 价格（不含股息） | 行情历史接口按年末收盘独立复算；2025 格 = 4,629.94 ÷ 3,934.91 − 1 = +17.66%（与 Wind 年末收盘口径转述一致；12-30 阶段值 4651.28 复算 +18.21% 仅自洽参照） | 2026-11-25 | 2026-11-25 | J0/J1/J2/J3 |
+| X2 sp500 | indexSeries.ts:78-94 | 2005–2025 / 21 | 总回报（含股息再投资） | Slickcharts 全表（2026-11-18 读取，本轮零改动） | 2026-11-18 | 2026-11-25 | J0/J1/J2/J3 |
+| C1 csi300tr | indexSeries.ts:95-116 | 2005–2025 / 21 | 全收益（含股息再投资） | 中证指数官网指数表现接口按年末收盘独立复算（2026-11-25 拉取，H00300 全序列 21 值）；2017–2025 与 GuruFocus 年度表逐值一致（二手交叉）；2005 年值与价格指数同值（官方接口早期序列重建口径，如实登记）；并列新增、不替换 csi300（J1 锚 [2024,18.24]/[2025,20.98] 与规范预登记吻合） | 2026-11-25 | 2026-11-25 | J0/J1/J2/J3 |
+| C2 cba00101 | indexSeries.ts:117-136 | 2002–2025 / 24 | 财富口径（含票息按月再投资；债类归 total） | 中国债券信息网官方查询平台（yield.chinabond.com.cn 单指数查询，财富指标总值）年末值复算相邻年末比值（2026-11-25 实读 24 值；J1 锚 [2002,3.58]/[2008,10.45]/[2013,-0.29]/[2024,7.6]/[2025,0.65] 录入轮登记） | 2026-11-25 | 2026-11-25 | J0/J1/J2/J3 |
+| C3 sp500long | （缓置，未落库） | 1972–2025 / 54（待落库） | 总回报（含股息再投资） | Damodaran「Historical Returns on Stocks, Bonds and Bills」表（2026-11-25 全表实读：1972=+18.76 … 2025=+17.78，54 值；与 sp500 重叠年份 ≤0.4pp 为股息 vintage 差异，不调和）。**缓置登记（p11-spec §7.3-3 闸门裁决）**：Phase A/B 实测后余量 < 2,200B 直落条件不成立，回收盘点后仍不足 → 下轮余量回收后按录入轮实读值直接落库（锚值已在 check:data 组 J1 注释预登记，禁占位） | —（实读 2026-11-25） | 2026-11-25 | 下轮 J1 补登 |
+
+> 复核节奏：年度序列类收宫后 Q1 补录（判据 L3——上年收宫后 Q1 未补录即 soft，`src/data/freshness.ts` seriesFreshnessHint 承载 UI 提示）；2026 不完整年度一律不录入（indexSeries.ts:4，组 J2-3 机读镜像）。
+
+## 九、数据时效清单（src/data/freshness.ts；P11 新增展示层——纯展示不入计算路径，insights.ts:9 纪律扩展适用）
+
+| 键 | 落点 | 内容 | check:data 组 |
+| --- | --- | --- | --- |
+| INSIGHT_FRESHNESS | freshness.ts:43-50 | 行级时效映射（仅登记非 ok 项；当前唯一 soft = 企业年金环：2025 年度摘要已发布在案、精确均值复核受限——缺口已证但新值未证，soft 档不填 newValue） | K6（EXPIRY 映射一致性） |
+| FILE_FRESHNESS | freshness.ts:71-81 | 九文件文件级清单（E5 第 2 分页「数据时效清单」数据源）：七文件 ok 零渲染、insights.ts 与 taxTables.ts 状态列「复核受限」（待证项明细承载于本文件头注释与本台账，不入 dist——§7.3 回收登记） | —（展示层；A-10 验收） |
+| seriesFreshnessHint | freshness.ts:99-108 | 序列 L3 soft 判据（收宫未补录 / fetchedAt >6 个月）→ 键+插值提示，ok 返回 null 零追加 | J3（fetchedAt 机读同源） |
+
+> 状态裁定基准日 2026-11-25（零自动播种：全部为编译期静态登记的判据比对，运行时零外部请求）。

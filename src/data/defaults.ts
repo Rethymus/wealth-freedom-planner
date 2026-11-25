@@ -1,6 +1,12 @@
 /**
  * 数据层默认值（类型先行、值后补：类型见 src/data/types.ts 与 src/wasm/bridge.ts）。
  * 数值口径与来源以注释为准；标注「占位」的数值待数据研究员复核后调整。
+ *
+ * @data-meta
+ *   CHECKED_AT: 2026-11-24   // 审计判类日（工程/派生混合文件，YEAR 省略）
+ *   SOURCE_TYPE: engineering
+ *   EXPIRY: L4（假设/工程类：仅复核提醒——复核 >24 个月即 soft；D15 汇率快照内联单判）
+ *   SOURCE: 工程参数与假设，逐项来源见各行注释与 docs/data-dictionary.md（派生项引基座 ID，不填 SOURCE）
  */
 import type {
   AccumulationInput,
@@ -220,6 +226,7 @@ export const CURRENCIES: Currency[] = [
 ];
 
 /** 离线汇率快照（占位：仅含基准币种自身；真实快照由数据研究员填充） */
+// @data-meta YEAR=2026-11-20 CHECKED_AT=2026-11-21 SOURCE_TYPE=snapshot EXPIRY=L3（快照类豁免 hard——机制内滚动，运行时可刷新；接口时点 2026-11-20，重拉核对 2026-11-21）
 export const FX_RATE_SNAPSHOT: FxRateSnapshot = {
   base: "CNY",
   // 离线快照真值（P7/F 工程快赢）：open.er-api.com 公开端点实拉核验，

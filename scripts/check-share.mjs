@@ -132,6 +132,8 @@ const BASE_STATE = {
     { id: "ev-child-1", kind: "childBirth", age: 32 },
     { id: "ev-health-1", kind: "healthPhase", age: 39, endAge: 44, annualAmount: 30000, label: "" },
   ],
+  // P10 v6：MC 均值口径标志（第 13 键；严格布尔，缺键/非布尔 → 整体 null）
+  mcMeansSynced: true,
 };
 
 function base64urlDecode(payload) {
@@ -140,9 +142,9 @@ function base64urlDecode(payload) {
 }
 
 try {
-  // ---- 断言 0：版本闸常量（P9 v5：4 → 5，§6.2 版本 bump 的机械承载——ShareState
-  //      形状变更即递增；既有断言 1–6 语义零改动）----
-  assert.equal(SHARE_LINK_VERSION, 5, "断言 0 失败：SHARE_LINK_VERSION 应为 5");
+  // ---- 断言 0：版本闸常量（P10 §4 v6：5 → 6，版本 bump 的机械承载——ShareState
+  //      形状变更即递增；既有断言 1–7 语义零改动）----
+  assert.equal(SHARE_LINK_VERSION, 6, "断言 0 失败：SHARE_LINK_VERSION 应为 6");
 
   // ---- 断言 1：三 UI 枚举值往返（合法枚举 + 数值深相等）----
   for (const strategy of ["fixed", "threshold", "percent"]) {
@@ -354,9 +356,43 @@ try {
     badId.lifeEvents[0].id = "";
     assert.equal(decodeShareState(encodeShareState(badId)), null, "断言 7h 失败：id 空串应整体 null");
   }
+  // ---- 断言 8：v6 mcMeansSynced 断言组（P10 §4 新增，不改动既有七组语义）----
+  // 8a. 往返恒等：布尔标志逐值往返（true / false 两态）
+  {
+    for (const flag of [true, false]) {
+      const state = structuredClone(BASE_STATE);
+      state.mcMeansSynced = flag;
+      const decoded = decodeShareState(encodeShareState(state));
+      assert.ok(decoded !== null, `断言 8a 失败：mcMeansSynced=${flag} 往返应成功`);
+      assert.equal(decoded.state.mcMeansSynced, flag, `断言 8a 失败：mcMeansSynced=${flag} 往返应逐值相等`);
+    }
+  }
+  // 8b. 缺键 → null（必填键，禁止部分恢复）
+  {
+    const json = JSON.parse(base64urlDecode(encodeShareState(BASE_STATE)));
+    delete json.mcMeansSynced;
+    const tampered = btoa(JSON.stringify(json)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    assert.equal(decodeShareState(tampered), null, "断言 8b 失败：缺 mcMeansSynced 键应整体 null");
+  }
+  // 8c. 非布尔 → null（字符串 "true" / 数字 1 均拒绝——严格 true/false）
+  {
+    for (const bad of ["true", 1, 0, null]) {
+      const json = JSON.parse(base64urlDecode(encodeShareState(BASE_STATE)));
+      json.mcMeansSynced = bad;
+      const tampered = btoa(JSON.stringify(json)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      assert.equal(decodeShareState(tampered), null, `断言 8c 失败：mcMeansSynced=${JSON.stringify(bad)} 应整体 null`);
+    }
+  }
+  // 8d. v5 历史载荷 → null（版本闸一次性失效；v5 键集 + v:5 编码，缺 mcMeansSynced 键亦被版本闸先拒）
+  {
+    const json = JSON.parse(base64urlDecode(encodeShareState(BASE_STATE)));
+    json.v = 5;
+    const v5payload = btoa(JSON.stringify(json)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    assert.equal(decodeShareState(v5payload), null, "断言 8d 失败：v5 载荷应被版本闸拒绝（一次性失效）");
+  }
 
   rmSync(dirShare, { recursive: true, force: true });
-  console.log("[check-share] v5 往返（含事件数组）+ v4/v3 失效 + inflation_uplift 规范化 + label 剥离 + 事件校验面 + 三语键集一致：七组断言全部通过。");
+  console.log("[check-share] v6 往返（含事件数组 + mcMeansSynced 布尔闸）+ v5/v4/v3 失效 + inflation_uplift 规范化 + label 剥离 + 事件校验面 + 三语键集一致：八组断言全部通过。");
 } catch (e) {
   rmSync(dirShare, { recursive: true, force: true });
   throw e;

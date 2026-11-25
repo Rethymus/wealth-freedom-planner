@@ -1,5 +1,14 @@
 /**
  * 面板⑨「公式原理与数据依据」数据层（docs/p3-spec.md §2；查证记录见 docs/research-video-data.md）。
+ *
+ * @data-meta
+ *   YEAR: 与各条目既有结构化 year 字段同源（头块省略，不重写）
+ *   CHECKED_AT: 2026-11-21（在案台账复核列；审计日仅判级不重读源，不虚刷）
+ *   NEXT_DUE: 2027-01        // 最近 L1 窗口 = NBS 年度收支（条目级窗口见各内联）
+ *   SOURCE_TYPE: 与各条目既有 verification 字段映射（official/media/video）
+ *   EXPIRY: official/media=L1；video=L4（逐条目内联承载，见各条目上方单行注释）
+ *   SOURCE: 逐条目既有 source 字段承载（内联注释不重复写 source——禁双源漂移）
+ *
  * 纪律：
  * - 核证等级三级——official=官方核证（官方原文页面已直读）、media=媒体核证（官方发布数字经
  *   两家及以上独立媒体转载核对）、video=视频口径（仅见于原视频或分析假设，未独立查证，
@@ -45,6 +54,7 @@ export interface InsightChildCostRegion {
 /** 假设链条：从存款利率到乘数 480（顺序即展示顺序；研究采纳清单 #1–#4） */
 export const INSIGHT_CHAIN_STEPS: InsightChainStep[] = [
   {
+    // @data-meta CHECKED_AT=2026-11-21 SOURCE_TYPE=media EXPIRY=L1（复核受限：2025-05-20 挂牌值后是否存在 2026 年新调整未能核验，以在案口径展示；挂牌利率随政策随时可变，属高频复核项）
     labelKey: "insights.chainDeposit1y",
     value: "0.95%",
     source: "主要全国性商业银行人民币存款挂牌利率（同花顺财经 / 证券日报报道核对）",
@@ -53,6 +63,7 @@ export const INSIGHT_CHAIN_STEPS: InsightChainStep[] = [
     verification: "media",
   },
   {
+    // @data-meta CHECKED_AT=2026-11-21 SOURCE_TYPE=media EXPIRY=L1（复核受限：同 chainDeposit1y）
     labelKey: "insights.chainDeposit5y",
     value: "1.30%",
     source: "主要全国性商业银行人民币存款挂牌利率（同花顺财经 / 证券日报报道核对）",
@@ -61,6 +72,7 @@ export const INSIGHT_CHAIN_STEPS: InsightChainStep[] = [
     verification: "media",
   },
   {
+    // @data-meta YEAR=2025 CHECKED_AT=2026-11-21 SOURCE_TYPE=media EXPIRY=L1（NBS 月度发布节奏，NEXT_DUE 按月度节奏省略）
     labelKey: "insights.chainCoreInflation",
     value: "1.2%（视频口径 1.0%）",
     source: "国家统计局 2025 年 12 月 CPI 发布（2026-01-09）",
@@ -69,6 +81,7 @@ export const INSIGHT_CHAIN_STEPS: InsightChainStep[] = [
     verification: "media",
   },
   {
+    // @data-meta CHECKED_AT=2026-11-21 SOURCE_TYPE=official EXPIRY=L1 NEXT_DUE=2027-09（社保基金会年报窗口；2025 年报 7.62% 更新口径已在 scope 在案——主值切换属写作裁定，非时效缺口）
     labelKey: "insights.chainSsf",
     value: "7.39%",
     source: "全国社会保障基金理事会《全国社会保障基金 2024 年度报告》（官网 2025-09-30 发布，原文已直读）",
@@ -77,14 +90,16 @@ export const INSIGHT_CHAIN_STEPS: InsightChainStep[] = [
     verification: "official",
   },
   {
+    // @data-meta CHECKED_AT=2026-11-21 SOURCE_TYPE=media EXPIRY=L1 NEXT_DUE=2027-03（复核受限：2025 年度摘要已发布（官网页 2026-03-20 在案），「自 2007 年以来平均」精确均值须直读 PDF 复核，本会话未达——以在案 6.17% 口径展示，禁编造更新值）
     labelKey: "insights.chainAnnuity",
     value: "6.17%",
     source: "人社部社会保险基金监管局《2024 年度全国企业年金基金业务数据摘要》（2025-03 发布，经东方财富 / 财经网转载核对）",
     year: "2007–2024",
-    scope: "自 2007 年市场化投资运营以来 18 年平均年化收益率；另经人社部 2022 年度口径（16 年 6.58%）代入复算 ≈6.18% 吻合",
+    scope: "自 2007 年市场化投资运营以来 18 年平均年化收益率；另经人社部 2022 年度口径（16 年 6.58%）代入复算 ≈6.18% 吻合。复核受限：《2025 年度企业年金摘要》已发布（2026-03，2025 单年 6.69% 经媒体核对），「自 2007 年以来平均」精确均值未能核验，以在案口径展示",
     verification: "media",
   },
   {
+    // @data-meta CHECKED_AT=2026-11-21 SOURCE_TYPE=video EXPIRY=L4
     labelKey: "insights.chainFeeDrag",
     value: "2–3 个百分点（显性费率锚 1.4pp）",
     source: "原视频估计；显性部分锚定证监会 2023 年公募基金费率改革（主动权益类管理费 ≤1.2% + 托管费 ≤0.2%，央广网 / 新浪财经报道核对）",
@@ -93,7 +108,8 @@ export const INSIGHT_CHAIN_STEPS: InsightChainStep[] = [
     verification: "video",
   },
   {
-    labelKey: "insights.chainNominal",
+    // @data-meta CHECKED_AT=2026-11-21 SOURCE_TYPE=video EXPIRY=L4
+        labelKey: "insights.chainNominal",
     value: "4%–4.5%（本工具默认 4.5%）",
     source: "规划假设（原视频）",
     year: "—",
@@ -101,7 +117,8 @@ export const INSIGHT_CHAIN_STEPS: InsightChainStep[] = [
     verification: "video",
   },
   {
-    labelKey: "insights.chainInflation",
+    // @data-meta CHECKED_AT=2026-11-21 SOURCE_TYPE=video EXPIRY=L4
+        labelKey: "insights.chainInflation",
     value: "2%（本工具默认 2.0%）",
     source: "规划假设（原视频）；已核证实际值：国家统计局历年 CPI（2022 +2.0%、2023 +0.2%、2024 +0.2%、2025 全年持平）",
     year: "2022–2025",
@@ -109,7 +126,8 @@ export const INSIGHT_CHAIN_STEPS: InsightChainStep[] = [
     verification: "video",
   },
   {
-    labelKey: "insights.chainReal",
+    // @data-meta CHECKED_AT=2026-11-21 SOURCE_TYPE=video EXPIRY=L4（派生复算：随 chainNominal/chainInflation 基座传递）
+        labelKey: "insights.chainReal",
     value: "2%–2.5%",
     source: "由上两环按费雪近似复算",
     year: "—",
@@ -117,7 +135,8 @@ export const INSIGHT_CHAIN_STEPS: InsightChainStep[] = [
     verification: "video",
   },
   {
-    labelKey: "insights.chainMultiplier",
+    // @data-meta CHECKED_AT=2026-11-21 SOURCE_TYPE=video EXPIRY=L4（派生复算：12 ÷ chainReal）
+        labelKey: "insights.chainMultiplier",
     value: "480（= 12 ÷ 2.5%）",
     source: "由上一环复算；「480 法则」由此得名",
     year: "—",
@@ -129,14 +148,16 @@ export const INSIGHT_CHAIN_STEPS: InsightChainStep[] = [
 /** 市场平均消费参考（研究采纳清单 #7） */
 export const INSIGHT_MARKET_ENTRIES: InsightEntry[] = [
   {
-    value: "2,456 元/月（29,476 元/年）",
+    // @data-meta YEAR=2025 CHECKED_AT=2026-11-21 SOURCE_TYPE=official EXPIRY=L1 NEXT_DUE=2027-01
+        value: "2,456 元/月（29,476 元/年）",
     source: "国家统计局《2025 年居民收入和消费支出情况》（2026-01-19 发布，官方原文已直读）",
     year: "2025",
     scope: "全国居民人均消费支出；口径含居住、医疗保健、教育文化娱乐",
     verification: "official",
   },
   {
-    value: "2,989 元/月（35,869 元/年）",
+    // @data-meta YEAR=2025 CHECKED_AT=2026-11-21 SOURCE_TYPE=official EXPIRY=L1 NEXT_DUE=2027-01
+        value: "2,989 元/月（35,869 元/年）",
     source: "国家统计局《2025 年居民收入和消费支出情况》（2026-01-19 发布，官方原文已直读）",
     year: "2025",
     scope: "城镇居民口径；本工具默认月开销 2,990 元/月即参考此口径取整",
@@ -146,30 +167,37 @@ export const INSIGHT_MARKET_ENTRIES: InsightEntry[] = [
 
 /** 分城市育儿成本参考（研究采纳清单 #5：以《中国生育成本报告（2024 版）》原文为准） */
 export const INSIGHT_CHILD_COST_REGIONS: InsightChildCostRegion[] = [
-  { region: "全国（0–17 岁平均）", costWan: 53.8 },
-  { region: "上海", costWan: 101, note: "视频口径 108 万与报告原文不符" },
-  { region: "北京", costWan: 93.6, note: "视频口径 100 万与报告原文不符" },
-  { region: "最低省份：西藏", costWan: 34.9, note: "视频称贵州 43 万最低，未能复核，不采纳" },
+  // @data-meta YEAR=2024 CHECKED_AT=2026-11-21 SOURCE_TYPE=media EXPIRY=L1（复核受限：2024 版后有无新版未能核验；即便新版发布，输入示例值 580000 不得静默替换——data-dictionary §4 禁则）
+    { region: "全国（0–17 岁平均）", costWan: 53.8 },
+  // @data-meta YEAR=2024 CHECKED_AT=2026-11-21 SOURCE_TYPE=media EXPIRY=L1（同上复核受限）
+    { region: "上海", costWan: 101, note: "视频口径 108 万与报告原文不符" },
+  // @data-meta YEAR=2024 CHECKED_AT=2026-11-21 SOURCE_TYPE=media EXPIRY=L1（同上复核受限）
+    { region: "北京", costWan: 93.6, note: "视频口径 100 万与报告原文不符" },
+  // @data-meta YEAR=2024 CHECKED_AT=2026-11-21 SOURCE_TYPE=media EXPIRY=L1（同上复核受限）
+    { region: "最低省份：西藏", costWan: 34.9, note: "视频称贵州 43 万最低，未能复核，不采纳" },
 ];
 
 /** 医疗支出参考（研究采纳清单 #6） */
 export const INSIGHT_HEALTH_ENTRIES: InsightEntry[] = [
   {
-    value: "6,454.4 元/年",
+    // @data-meta YEAR=2024 CHECKED_AT=2026-11-21 SOURCE_TYPE=media EXPIRY=L1（复核受限：《2024年公报》仍为在案最新，2025 年度版存在性未能核验，以在案口径展示）
+        value: "6,454.4 元/年",
     source: "国家卫生健康委《2024 年我国卫生健康事业发展统计公报》（2025-12 发布，官方解读页访问受限，数字经媒体转载核对）",
     year: "2024",
     scope: "全国人均卫生总费用（年口径）；9.09 万亿总量 ÷ 人口 ≈ 6,454 元，算术一致",
     verification: "media",
   },
   {
-    value: "约 20 万（保守区间 15–50 万）",
+    // @data-meta CHECKED_AT=2026-11-21 SOURCE_TYPE=video EXPIRY=L4
+        value: "约 20 万（保守区间 15–50 万）",
     source: "原视频估算",
     year: "2024 年价格水平",
     scope: "终身口径估算，无官方终身支出口径；等额不折现上限参考：6,454.4 元/年 × 80 年 ≈ 51.6 万，实际就医强度随年龄后移，中青年起点可明显低于上限",
     verification: "video",
   },
   {
-    value: "二线 15–30 万；一线 30–60 万",
+    // @data-meta CHECKED_AT=2026-11-21 SOURCE_TYPE=video EXPIRY=L4
+        value: "二线 15–30 万；一线 30–60 万",
     source: "原视频估算",
     year: "—",
     scope: "终身口径估算，未独立查证；可作为健康预留的可编辑预设参考",

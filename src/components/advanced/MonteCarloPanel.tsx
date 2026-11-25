@@ -36,8 +36,9 @@ import type { FinanceResult } from "../../services/finance";
 import { formatNumber, formatCompactAxis, formatMoney } from "../../services/format";
 import { cnyToDisplay } from "../../services/currency";
 import { LIMITS, MONTE_CARLO_STRATEGY_DEFAULTS, MOTION_DURATIONS, resolveThemeTokens } from "../../data/defaults";
-import { INDEX_ORDER, INDEX_SERIES } from "../../data/indexSeries";
+import { INDEX_ORDER, INDEX_SERIES, seriesRange } from "../../data/indexSeries";
 import type { IndexId, MonteCarloReturnMode } from "../../data/indexSeries";
+import { seriesFreshnessHint } from "../../data/freshness";
 import type { MonteCarloOutput, SequenceDirection, SequenceSimOutput, WithdrawalStrategy } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, FieldTip, IntField, NumberField, PathsField, PercentField } from "../fields";
@@ -59,16 +60,8 @@ const SEQ_INITIAL_RATE_DEFAULT = 4;
 /** 序列风险对照：滚动窗长默认 10 年（docs/p2-spec.md §3.4） */
 const SEQ_WINDOW_YEARS_DEFAULT = 10;
 
-/** 指数 id → i18n 显示名键（禁用模板串拼键） */
-const INDEX_NAME_KEY: Record<IndexId, string> = {
-  csi300: "mc.indexCsi300",
-  sp500: "mc.indexSp500",
-};
-/** 序列口径说明键 */
-const INDEX_KIND_KEY: Record<IndexId, string> = {
-  csi300: "mc.seriesPriceOnly",
-  sp500: "mc.seriesTotalReturn",
-};
+// P11：id→i18n 键映射收编入数据层（INDEX_SERIES[id].nameKey / .kindKey）——新增序列零面板改动
+// （此前面板内两份 id→键硬编码 Record 已删，check:data 组 J0 防裸键断言）。
 
 /** 图表数据行：逐年各路径值 + 逐年中位数（命运曲线图为三条命运线） */
 type ChartRow = Record<string, number | string>;
@@ -370,19 +363,29 @@ export default function MonteCarloPanel() {
   const baselineAnnualSpend = baseline.monthlyExpense * 12;
   const spendMismatched = inputs.annualSpend !== baselineAnnualSpend;
 
-  /** 序列窗口数（seq.note1 的 {{count}}：滚动窗起点数 = 序列长度 − 窗长 + 1） */
-  const seqWindowsCount = Math.max(0, seqSeries.length - seqWindowYears + 1);
+  /** 序列窗口数（seq.note1 的 {{count}}：滚动窗起点数 = 序列长度 − 窗长 + 1）；
+   *  P11：区间三件套经 seriesRange() 单一真源派生（数据层助手，数值恒等） */
+  const seqRange = seriesRange(seqSeriesMeta);
+  const seqWindowsCount = Math.max(0, seqRange.count - seqWindowYears + 1);
+  /** P11 序列 L3 soft（年度序列类：上年收宫后 Q1 未补录年度值 / 滚动 >6 个月）——命中时
+   *  由数据层 freshness 助手给详情句（键+插值，面板渲染），null = ok 零追加 */
+  const seriesFreshHint = seriesFreshnessHint(seqSeriesMeta);
+  const seriesFreshNote = seriesFreshHint ? t(seriesFreshHint.key, seriesFreshHint.params) : null;
 
   /** 序列口径句（P5 冗长治理：两处独立 seriesNote 段落删并，全文下沉 FieldTip 通道——
-   *  出处类信息经「一句话出处 + 全文 tooltip」判据挂序列选择器标签，触发点紧邻目标） */
-  const seriesNoteText = t("mc.seriesNote", {
-    name: t(INDEX_NAME_KEY[seriesId]),
-    firstYear: seqSeriesMeta.firstYear,
-    lastYear: seqSeriesMeta.firstYear + seqSeries.length - 1,
-    count: seqSeries.length,
-    kind: t(INDEX_KIND_KEY[seriesId]),
-    source: seqSeriesMeta.source,
-  });
+   *  出处类信息经「一句话出处 + 全文 tooltip」判据挂序列选择器标签，触发点紧邻目标；
+   *  P11：区间经 seriesRange() 派生 + 追加 {{fetched}} 拉取日期插值；L3 soft 详情句
+   *  命中时并入句尾（ok = 零追加），两处 FieldTip 共用同一段落） */
+  const seriesNoteText =
+    t("mc.seriesNote", {
+      name: t(seqSeriesMeta.nameKey),
+      firstYear: seqRange.start,
+      lastYear: seqRange.end,
+      count: seqRange.count,
+      kind: t(seqSeriesMeta.kindKey),
+      source: seqSeriesMeta.source,
+      fetched: seqSeriesMeta.fetchedAt,
+    }) + (seriesFreshNote ? `；${seriesFreshNote}` : "");
 
   /** S25 图表 hover 读数（p6-spec §2）：十字虚线 + 读数气泡，金额与图轴同源（chartData
    *  已按展示币种换算，格式化取 formatMoney 直出不再二次换算）。系列名复用既有键；
@@ -531,7 +534,7 @@ export default function MonteCarloPanel() {
             <Select
               size="small"
               value={seriesId}
-              options={INDEX_ORDER.map((id) => ({ label: t(INDEX_NAME_KEY[id]), value: id }))}
+              options={INDEX_ORDER.map((id) => ({ label: t(INDEX_SERIES[id].nameKey), value: id }))}
               onChange={(v: IndexId) => setSeriesId(v)}
               className="wf-input-full"
             />
@@ -822,7 +825,7 @@ export default function MonteCarloPanel() {
           />
           {/* 序列沿用面板既有 seriesId 选择器（同一 store 状态；面板顶层选择器仅在
               bootstrap 模式可见，此处为序列风险子区的可见入口）；P5 冗长治理：
-              seriesNote 全文经本标签 FieldTip 承载（原独立段落删除） */}
+              seriesNote 全文（含 P11 L3 soft 追加）经本标签 FieldTip 承载 */}
           <Text>
             {t("mc.seriesLabel")}
             <FieldTip text={seriesNoteText} />
@@ -830,7 +833,7 @@ export default function MonteCarloPanel() {
           <Select
             size="small"
             value={seriesId}
-            options={INDEX_ORDER.map((id) => ({ label: t(INDEX_NAME_KEY[id]), value: id }))}
+            options={INDEX_ORDER.map((id) => ({ label: t(INDEX_SERIES[id].nameKey), value: id }))}
             onChange={(v: IndexId) => setSeriesId(v)}
             style={{ width: 190 }}
           />

@@ -317,7 +317,10 @@ export function decodeShareState(hash: string): DecodeResult | null {
   if (!isNum(progress)) return null;
   if (method !== "equal_payment" && method !== "equal_principal") return null;
   if (returnMode !== "normal" && returnMode !== "bootstrap") return null;
-  if (seriesId !== "csi300" && seriesId !== "sp500") return null;
+  // P11 序列扩展：白名单四 id（C3 sp500long 本轮缓置，§7.3-3；下轮落库时补第五字面量。
+  // 与 src/data/indexSeries.ts INDEX_ORDER 硬同步——check:data 组 J0 逐 id 断言本条件串
+  // 含该 id 字面量；旧 id 永不改名，旧链接解码行为不变）
+  if (seriesId !== "csi300" && seriesId !== "sp500" && seriesId !== "csi300tr" && seriesId !== "cba00101") return null;
   if (!Array.isArray(bandsRaw)) return null;
   const bands: { lower: number; rate: number }[] = [];
   for (const b of bandsRaw) {

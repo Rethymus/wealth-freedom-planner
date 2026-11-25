@@ -9,16 +9,27 @@
  *   原速算表已按 ask 要求写入 note；
  * - 各国均未含社保/国民保险/地方税/附加税等，详见各表 note。
  *
- * 每套 note 均含固定声明：「内置简化税率表，基于 2025 年公开税档，不构成税务建议」。
+ * 每套 note 均含固定声明（年度句随表内 year 同步：「内置简化税率表，基于 {年度} 年公开税档，
+ * 不构成税务建议」——US/DE 表升 2026 后各表声明为对应年度字面量）。
  * 查证方式：WebSearch/WebFetch 官方与权威来源（见各 note），2026-11 查证。
  */
 import type { TaxTable } from "./types";
 
+/**
+ * @data-meta
+ *   YEAR: === 各表结构化 year 字段（L2 机读一致，check:data 组 K3 断言；头块省略 YEAR）
+ *   CHECKED_AT: T1–T5=2026-11-24（官方直读/采值轮）；T6/T8/T9=2026-11（查证轮复核受限）；T7=2026-11
+ *   SOURCE_TYPE: T1/T4/T6/T8/T9=official；T2/T3=media（Rev. Proc. 2025-32 经 Tax Foundation 转载核对）；T5/T7=official
+ *   EXPIRY: L2（法规/税表类——表内 year 落后当前适用年度即提示）
+ *   SOURCE: 逐表内联（见各条目上方 @data-meta 单行注释与 note）
+ */
 /** 税表区域固定声明（需求固定文案；每套税表 note 首句均含本声明，UI 据 disclaimerIncluded 去重显示） */
 export const TAX_TABLE_DISCLAIMER = "内置简化税率表，基于 2025 年公开税档，不构成税务建议。";
 
 export const TAX_TABLES: TaxTable[] = [
   {
+    // @data-meta YEAR=2025 CHECKED_AT=2026-11-24 SOURCE_TYPE=official EXPIRY=L2
+    // （个税法税率表 2019 起施行、延续不变；审计日未见修法迹象）
     countryCode: "CN",
     name: "中国综合所得税率（年度）",
     year: 2025,
@@ -48,51 +59,56 @@ export const TAX_TABLES: TaxTable[] = [
       "不含经营所得、劳务报酬单独计税等其他税目，不含年终奖单独计税选择。",
   },
   {
+    // @data-meta YEAR=2026 CHECKED_AT=2026-11-24 SOURCE_TYPE=media EXPIRY=L2
+    // （Rev. Proc. 2025-32 经 Tax Foundation 整理页转载核对；表值原始查证轮 2025-11）
     countryCode: "US",
-    name: "美国联邦所得税（2025，单身）",
-    year: 2025,
-    // OBBBA（2025-07 生效）将 2025 年标准扣除上调为 15,750 美元；
-    // 原 IRS Rev. Proc. 2024-40 公布值为 15,000 美元，本表采用生效后的 15,750
-    standardDeduction: 15750,
+    name: "美国联邦所得税（2026，单身）",
+    year: 2026,
+    // IRS Rev. Proc. 2025-32（2025-10 发布）：2026 税年标准扣除 16,100 美元
+    standardDeduction: 16100,
     bands: [
       { lower: 0, rate: 0.1 },
-      { lower: 11925, rate: 0.12 },
-      { lower: 48475, rate: 0.22 },
-      { lower: 103350, rate: 0.24 },
-      { lower: 197300, rate: 0.32 },
-      { lower: 250525, rate: 0.35 },
-      { lower: 626350, rate: 0.37 },
+      { lower: 12400, rate: 0.12 },
+      { lower: 50400, rate: 0.22 },
+      { lower: 105700, rate: 0.24 },
+      { lower: 201775, rate: 0.32 },
+      { lower: 256225, rate: 0.35 },
+      { lower: 640600, rate: 0.37 },
     ],
     disclaimerIncluded: true,
     note:
-      "内置简化税率表，基于 2025 年公开税档，不构成税务建议。" +
-      "来源：IRS Rev. Proc. 2024-40（2025 税档，2024-10 发布）；标准扣除 15,750 美元为《One Big Beautiful Bill Act》（2025-07-04 签署）对 2025 年度的上调值（原公布值 15,000）。" +
+      "内置简化税率表，基于 2026 年公开税档，不构成税务建议。" +
+      "来源：IRS Rev. Proc. 2025-32（2026 税档，2025-10 发布，经 Tax Foundation 整理页转载核对，2026-11-24 读取）。" +
       "口径：七档边际税率作用于应税所得（gross − standardDeduction），bands 即官方税档本身。" +
       "不含州/地方所得税、长期资本利得特殊税率、FICA 工薪税、替代性最低税（AMT）。",
   },
   {
+    // @data-meta YEAR=2026 CHECKED_AT=2026-11-24 SOURCE_TYPE=media EXPIRY=L2
+    // （同 T2：Rev. Proc. 2025-32 经 Tax Foundation 转载核对）
     countryCode: "US",
-    name: "美国联邦所得税（2025，已婚合并申报）",
-    year: 2025,
-    // OBBBA 上调后的 2025 年已婚合并申报标准扣除
-    standardDeduction: 31500,
+    name: "美国联邦所得税（2026，已婚合并申报）",
+    year: 2026,
+    // IRS Rev. Proc. 2025-32：2026 税年已婚合并申报标准扣除 32,200 美元
+    standardDeduction: 32200,
     bands: [
       { lower: 0, rate: 0.1 },
-      { lower: 23850, rate: 0.12 },
-      { lower: 96950, rate: 0.22 },
-      { lower: 206700, rate: 0.24 },
-      { lower: 394600, rate: 0.32 },
-      { lower: 501050, rate: 0.35 },
-      { lower: 751600, rate: 0.37 },
+      { lower: 24800, rate: 0.12 },
+      { lower: 100800, rate: 0.22 },
+      { lower: 211400, rate: 0.24 },
+      { lower: 403550, rate: 0.32 },
+      { lower: 512450, rate: 0.35 },
+      { lower: 768700, rate: 0.37 },
     ],
     disclaimerIncluded: true,
     note:
-      "内置简化税率表，基于 2025 年公开税档，不构成税务建议。" +
-      "来源：IRS Rev. Proc. 2024-40（2025 税档，2024-10 发布）；标准扣除 31,500 美元为《One Big Beautiful Bill Act》（2025-07-04 签署）对 2025 年度的上调值（原公布值 30,000）。" +
+      "内置简化税率表，基于 2026 年公开税档，不构成税务建议。" +
+      "来源：IRS Rev. Proc. 2025-32（2026 税档，2025-10 发布，经 Tax Foundation 整理页转载核对，2026-11-24 读取）。" +
       "口径：已婚合并申报（Married Filing Jointly）税档，作用于应税所得（gross − standardDeduction）。" +
       "不含州/地方所得税、长期资本利得特殊税率、FICA 工薪税、AMT；户主（Head of Household）等申报状态未提供。",
   },
   {
+    // @data-meta YEAR=2025 CHECKED_AT=2026-11-24 SOURCE_TYPE=official EXPIRY=L2
+    // （GOV.UK 官方页直读：2026/27 年度免税额与税档上限冻结延续、数值零变化，year 标注顺延登记）
     countryCode: "GB",
     name: "英国个人所得税（2025/26，英格兰·威尔士·北爱尔兰）",
     year: 2025,
@@ -112,35 +128,39 @@ export const TAX_TABLES: TaxTable[] = [
       "未含：苏格兰另设税档（与 EWN 不同）、国民保险（NIC）、股息税率、免税额 100,000 英镑以上递减（taper）规则。",
   },
   {
+    // @data-meta YEAR=2026 CHECKED_AT=2026-11-24 SOURCE_TYPE=official EXPIRY=L2
+    // （§32a EStG 官方法条库 gesetze-im-internet.de 直读；2026 公式全段重推）
     countryCode: "DE",
-    name: "德国所得税（2025，单身基础税率）",
-    year: 2025,
-    // Grundfreibetrag（基础免税额）2025 = 12,096 欧；本表 bands 作用于 zvE − 12,096
-    standardDeduction: 12096,
+    name: "德国所得税（2026，单身基础税率）",
+    year: 2026,
+    // Grundfreibetrag（基础免税额）2026 = 12,348 欧；本表 bands 作用于 zvE − 12,348
+    standardDeduction: 12348,
     bands: [
-      { lower: 0, rate: 0.157 },
-      { lower: 1782, rate: 0.19 },
-      { lower: 3565, rate: 0.223 },
-      { lower: 5347, rate: 0.256 },
-      { lower: 18106, rate: 0.301 },
-      { lower: 30866, rate: 0.347 },
-      { lower: 43625, rate: 0.397 },
-      { lower: 56384, rate: 0.42 },
-      { lower: 265730, rate: 0.45 },
+      { lower: 0, rate: 0.154 },
+      { lower: 1817, rate: 0.189 },
+      { lower: 3634, rate: 0.219 },
+      { lower: 5451, rate: 0.258 },
+      { lower: 18472, rate: 0.307 },
+      { lower: 31491, rate: 0.353 },
+      { lower: 44511, rate: 0.397 },
+      { lower: 57530, rate: 0.42 },
+      { lower: 265478, rate: 0.45 },
     ],
     disclaimerIncluded: true,
     note:
-      "内置简化税率表，基于 2025 年公开税档，不构成税务建议。" +
-      "来源：《德国所得税法》§32a EStG 2025 年度官方公式（经 Steuerfortentwicklungsgesetz 2024-12-23 修订；Haufe 法条库 2025 年原文，2025-11 查证）：" +
-      "zvE ≤12,096 欧：0；12,097–17,443 欧：(932.30·y+1,400)·y；17,444–68,480 欧：(176.64·z+2,397)·z+1,015.13；" +
-      "68,481–277,825 欧：0.42·zvE−10,911.92；≥277,826 欧：0.45·zvE−19,246.67（y、z 为超额部分的万分数）。" +
+      "内置简化税率表，基于 2026 年公开税档，不构成税务建议。" +
+      "来源：《德国所得税法》§32a EStG 2026 年度官方公式（gesetze-im-internet.de 官方法条库直读，2026-11-24）：" +
+      "zvE ≤12,348 欧：0；12,349–17,799 欧：(914.51·y+1,400)·y；17,800–69,878 欧：(173.10·z+2,397)·z+1,034.87；" +
+      "69,879–277,825 欧：0.42·zvE−11,135.63；≥277,826 欧：0.45·zvE−19,470.38（y、z 为超额部分的万分数）。" +
       "口径：官方公式含两段二次曲线，无法用线性分段精确表达；本表 bands 为对官方公式的分段线性近似" +
-      "（分段点取各区间边界与中点，每段税率经数值扫描微调），标准扣除按 Grundfreibetrag 12,096 欧建模。" +
-      "近似精度（已对 200–300,000 欧应税所得逐点扫描验证）：应税所得 >3,000 欧时与官方公式偏差 ≤2%；" +
-      "<3,000 欧的低收入段相对偏差可达约 10%（对应税额金额通常 <30 欧元）。" +
+      "（分段点承 2025 表同构：首段区间三等分 + 次段区间逐半中点 + 区界整段，每段税率经数值扫描微调——" +
+      "以割线斜率为初值、对相邻段联合网格搜索极小化最大相对偏差），标准扣除按 Grundfreibetrag 12,348 欧建模。" +
+      "近似精度（已对 200–300,000 欧应税所得逐点扫描验证）：应税所得 >3,000 欧时与官方公式偏差 ≤2%" +
+      "（实测最大约 1.6%）；<3,000 欧的低收入段相对偏差可达约 10%（对应税额金额通常 <30 欧元）。" +
       "未含：夫妻拆分制（Splitting）、团结附加税（Soli 5.5%，高收入起征）、教会税、社保缴费、子女免税额。",
   },
   {
+    // @data-meta YEAR=2025 CHECKED_AT=2026-11 SOURCE_TYPE=official EXPIRY=L2（复核受限：令和8年度税改调整未能核验，以在案令和7年度口径展示）
     countryCode: "JP",
     name: "日本所得税（2025，工薪综合课税）",
     year: 2025,
@@ -166,6 +186,7 @@ export const TAX_TABLES: TaxTable[] = [
       "未含：復興特別所得税（税额 ×2.1%）、住民税（约 10% 平准比例 + 均等割）——实际综合税负明显高于本表输出。",
   },
   {
+    // @data-meta YEAR=2025 CHECKED_AT=2026-11 SOURCE_TYPE=official EXPIRY=L2（复核受限：IRAS 官方页直读未达，YA2024 起结构延续的在案口径；YA2027 变动触发点=2027-02 预算案）
     countryCode: "SG",
     name: "新加坡个人所得税（YA 2025，税务居民）",
     year: 2025,
@@ -195,6 +216,7 @@ export const TAX_TABLES: TaxTable[] = [
       "未含：个人减免（earned income relief 1,000 新元等各项 relief）、YA2025 个人所得税回扣（60%，上限 500 新元）、非税务居民（15%/24%）税率。",
   },
   {
+    // @data-meta YEAR=2025 CHECKED_AT=2026-11 SOURCE_TYPE=official EXPIRY=L2（复核受限：ATO 官方页 403，2026–27 财年税率未能复核，以在案 2024–25（=2025–26）口径展示）
     countryCode: "AU",
     name: "澳大利亚个人所得税（2024–25 财年，居民）",
     year: 2025,
@@ -216,6 +238,7 @@ export const TAX_TABLES: TaxTable[] = [
       "未含：Medicare 征费（2%）、低收入所得税抵免（LITO）、非居民税率、HECS/HELP 学贷偿还。",
   },
   {
+    // @data-meta YEAR=2025 CHECKED_AT=2026-11 SOURCE_TYPE=official EXPIRY=L2（复核受限：CRA 2026 税年指数化公告未能核验，以在案 2025 口径展示；每年 11 月前后为固定复核点）
     countryCode: "CA",
     name: "加拿大联邦所得税（2025）",
     year: 2025,

@@ -228,7 +228,14 @@ const zhHant = {
     "entryEvidence": "醫療與證據",
     "entryNotice": "聲明",
     "evidenceNote1": "標註說明：「官方核證」= 官方原文頁面已直讀；「媒體核證」= 官方發佈數字經兩家及以上獨立媒體轉載覈對一致；「視頻口徑」= 僅見於原視頻或屬分析假設、未找到獨立權威來源。",
-    "evidenceNote2": "各條年份與口徑以行內標註為準；查證記錄見 docs/research-video-data.md。"
+    "evidenceNote2": "各條年份與口徑以行內標註為準；查證記錄見 docs/research-video-data.md。",
+    // P11 §3.3 新鍵（數據時效三檔 + 複核受限 + E5 清單；docs/p11-spec.md §3）
+    "freshnessSoft": "數據為 {{year}} 年度口徑",
+    "freshnessHard": "該數據已落後官方最新發布",
+    "freshnessSoftDetail": "本值基於 {{year}} 年度官方數據，最新發布窗口約 {{due}}；複核於 {{checked}}。",
+    "freshnessHardDetail": "官方已於 {{date}} 發布 {{newValue}}，當前展示值為 {{oldValue}}（{{year}} 年度）。",
+    "freshnessRestricted": "複核受限：最新官方發布未能核驗，以在案口徑展示",
+    "freshnessListTitle": "數據時效清單"
   },
   "pension": {
     "formulaNote": "簡化兩層公式：基礎養老金 ≈（社平工資 + 社平工資 × 繳費基數指數）÷ 2 × 繳費年限 × 1%；個人賬戶養老金 = 個人賬戶餘額估計 ÷ 計發月數。社平工資與繳費指數不做逐年增長假設（簡化口徑，見下方免責）。",
@@ -474,9 +481,13 @@ const zhHant = {
     "seriesTooltip": "用於自助抽樣的指數年度收益序列（有放回重抽，i.i.d.）；樣本區間、口徑與來源見提示詳情。",
     "indexCsi300": "滬深300（中國）",
     "indexSp500": "標普500（國際）",
-    "seriesNote": "{{name}}：{{firstYear}}–{{lastYear}} 年年度收益率，共 {{count}} 個樣本（{{kind}}）；來源：{{source}}",
+    // P11 §4 新序列顯示名 + 債類口徑鍵（三語同構；既有 seriesPriceOnly/seriesTotalReturn 零改動）
+    "indexCsi300Tr": "滬深300全收益（中國）",
+    "indexCba00101": "中債新綜合財富（債券）",
+    "seriesNote": "{{name}}：{{firstYear}}–{{lastYear}} 年年度收益率，共 {{count}} 個樣本（{{kind}}）；來源：{{source}}，拉取於 {{fetched}}",
     "seriesPriceOnly": "價格指數（不含股息，略低估總回報）",
     "seriesTotalReturn": "總回報（含股息再投資）",
+    "seriesTotalCoupon": "財富口徑（含票息按月再投資）",
     "placeholderBootstrap": "還沒有模擬結果——選好收益序列後點擊「運行模擬」，即可得到耗盡概率與期末財富分佈。",
     "chartNoteBootstrap": "橫軸為年份、縱軸單位為「萬」；圖中展示 {{count}} 條代表性抽樣路徑（淺色細線）與逐年中位數（粗線）。收益樣本取自所選指數年度序列的有放回重抽（i.i.d.，忽略年份順序）。同一種子 + 相同輸入 → 結果完全可復現（契約保證）。",
     "strategy": "支取策略",

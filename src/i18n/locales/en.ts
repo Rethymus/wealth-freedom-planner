@@ -268,6 +268,16 @@ const en = {
       "Tag legend: “officially verified” = read directly from the official source page; “media-verified” = an officially published figure confirmed consistent by two or more independent media outlets; “video claim” = seen only in the original video or an analytical assumption, with no independent authoritative source found.",
     evidenceNote2:
       " For each entry, the year and terms follow the inline annotation; the verification log is in docs/research-video-data.md.",
+    // P11 §3.3 new keys (data freshness tiers + verification-restricted + E5 list; docs/p11-spec.md §3)
+    freshnessSoft: "{{year}} vintage",
+    freshnessHard: "Lags the latest official release",
+    freshnessSoftDetail:
+      "Based on official {{year}} data; next release ≈ {{due}}, reviewed {{checked}}.",
+    freshnessHardDetail:
+      "Authority released {{newValue}} on {{date}}; shown value: {{oldValue}} ({{year}} vintage).",
+    freshnessRestricted:
+      "Verification restricted: latest release unverified; archived figure shown.",
+    freshnessListTitle: "Data freshness",
   },
   pension: {
     formulaNote:
@@ -570,11 +580,15 @@ const en = {
       "The index's annual return series used for bootstrapping (resampled with replacement, i.i.d.); see the tip details for the sample window, terms and source.",
     indexCsi300: "CSI 300 (China)",
     indexSp500: "S&P 500 (international)",
+    // P11 §4 new series display names + bond coupon kind key (three locales isomorphic; existing seriesPriceOnly/seriesTotalReturn unchanged)
+    indexCsi300Tr: "CSI 300 Total Return (China)",
+    indexCba00101: "ChinaBond New Composite (bonds)",
     seriesNote:
-      "{{name}}: annual returns for {{firstYear}}–{{lastYear}}, {{count}} samples in total ({{kind}}); source: {{source}}",
+      "{{name}}: annual returns for {{firstYear}}–{{lastYear}}, {{count}} samples ({{kind}}); source: {{source}}, fetched {{fetched}}",
     seriesPriceOnly:
       "Price index (dividends excluded; slightly understates total return)",
     seriesTotalReturn: "Total return (dividends reinvested)",
+    seriesTotalCoupon: "Wealth terms (coupons reinvested monthly)",
     placeholderBootstrap: "No simulation results yet — pick a return series and click “Run simulation” to get the depletion probability and the end-of-period wealth distribution.",
     chartNoteBootstrap:
       "The horizontal axis is years and the vertical axis is in 10k CNY units; the chart shows {{count}} representative sampled paths (thin light lines) and the year-by-year median (thick line). Return samples are drawn with replacement (i.i.d., ignoring year order) from the selected index's annual series. Same seed + same inputs → fully reproducible results (guaranteed by contract).",

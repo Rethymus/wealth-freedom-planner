@@ -17,7 +17,9 @@
  */
 import { Divider, Tag, Typography } from "@arco-design/web-react";
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   INSIGHT_CHAIN_STEPS,
   INSIGHT_CHILD_COST_REGIONS,
@@ -25,6 +27,8 @@ import {
   INSIGHT_MARKET_ENTRIES,
 } from "../../data/insights";
 import type { InsightEntry, InsightVerification } from "../../data/insights";
+import { FILE_FRESHNESS, INSIGHT_FRESHNESS } from "../../data/freshness";
+import type { InsightFreshness } from "../../data/freshness";
 import { FieldTip } from "../fields";
 import { SegBar, SlotPager } from "../slots";
 import { useIsCompactViewport, useIsNarrowViewport, useIsWorkbenchViewport } from "../hooks";
@@ -72,32 +76,69 @@ function SectionTitle({ titleKey }: { titleKey: string }) {
   );
 }
 
+/** 行级时效角标（P11 §3：ok 零渲染；soft=灰 Tag / hard=红 Tag；详情句并入行 FieldTip
+ *  尾部——零新布局高度。hard 详情句 {{newValue}} 仅在数据层显式携带已核证新值时填充
+ *  （三值齐备才走 hard 键，待证路径不出现数字占位——否则按 soft 展示在案口径） */
+function freshnessTagAndDetail(
+  fresh: InsightFreshness | undefined,
+  t: TFunction<"translation", undefined>,
+): { tag: ReactNode; detail: string } {
+  if (!fresh) return { tag: null, detail: "" };
+  const hard =
+    fresh.level === "hard" && fresh.newValue != null && fresh.newDate != null && fresh.oldValue != null;
+  return {
+    tag: (
+      <Tag size="small" color={hard ? "red" : "gray"}>
+        {t(hard ? "insights.freshnessHard" : "insights.freshnessSoft", { year: fresh.year })}
+      </Tag>
+    ),
+    detail: hard
+      ? t("insights.freshnessHardDetail", {
+          date: fresh.newDate,
+          newValue: fresh.newValue,
+          oldValue: fresh.oldValue,
+          year: fresh.year,
+        })
+      : t("insights.freshnessSoftDetail", {
+          year: fresh.year,
+          due: fresh.due ?? "—",
+          checked: fresh.checked,
+        }),
+  };
+}
+
 /** 通用数据行（链条 / 市场平均 / 医疗共用同一渲染；行挂 S4 hover 读数）。
  *  P10 compact（<768 压缩路线 (a)）：来源行全文下沉 FieldTip（图标零布局高度），
- *  行主体单行化——桌面（≥768）来源行可见不变 */
+ *  行主体单行化——桌面（≥768）来源行可见不变。
+ *  P11：行级时效角标按 labelKey 命中 INSIGHT_FRESHNESS（仅非 ok 项在案），详情句
+ *  并入本行 FieldTip 尾部（compact 通道既有，零新布局高度） */
 function EntryRows({ entries, compact }: { entries: (InsightEntry & { labelKey?: string })[]; compact: boolean }) {
   const { t } = useTranslation();
   return (
     <ol className="wf-insight-list">
-      {entries.map((entry) => (
-        <li key={entry.labelKey ?? entry.value} className="wf-insight-row">
-          <div className="wf-insight-main">
-            {entry.labelKey ? <Text>{t(entry.labelKey)}</Text> : null}
-            <Text bold className="wf-nowrap">{entry.value}</Text>
-            <Tag size="small" color={VERIFICATION[entry.verification].color}>
-              {t(VERIFICATION[entry.verification].key)}
-            </Tag>
-            {compact ? (
-              <FieldTip text={`${entry.source}；${entry.year}；${entry.scope}`} />
-            ) : null}
-          </div>
-          {compact ? null : (
-            <Text type="secondary" className="wf-insight-source">
-              {entry.source}；{entry.year}；{entry.scope}
-            </Text>
-          )}
-        </li>
-      ))}
+      {entries.map((entry) => {
+        const fresh = entry.labelKey ? INSIGHT_FRESHNESS[entry.labelKey] : undefined;
+        const { tag, detail } = freshnessTagAndDetail(fresh, t);
+        const tipText = `${entry.source}；${entry.year}；${entry.scope}${detail ? `；${detail}` : ""}`;
+        return (
+          <li key={entry.labelKey ?? entry.value} className="wf-insight-row">
+            <div className="wf-insight-main">
+              {entry.labelKey ? <Text>{t(entry.labelKey)}</Text> : null}
+              <Text bold className="wf-nowrap">{entry.value}</Text>
+              <Tag size="small" color={VERIFICATION[entry.verification].color}>
+                {t(VERIFICATION[entry.verification].key)}
+              </Tag>
+              {tag}
+              {compact ? <FieldTip text={tipText} /> : null}
+            </div>
+            {compact ? null : (
+              <Text type="secondary" className="wf-insight-source">
+                {tipText}
+              </Text>
+            )}
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -127,6 +168,16 @@ export default function InsightsPanel() {
   const chainRows = INSIGHT_CHAIN_STEPS.slice(
     safeSecPage * chainPerPage,
     safeSecPage * chainPerPage + chainPerPage,
+  );
+  /** P11 E5 第 2 分页「数据时效清单」（p10 红线 10 路线 (b) SlotPager 等高互换的延伸）：
+   *  页 1 = 声明（Footer 两行原样）、页 2.. = 九文件清单（每页行数复用 chainPerPage 档位：
+   *  ≤480 档 3 行/页、其余 4 行/页）；条目切换复位页码由既有 onChange 承载，页码随档位钳制 */
+  const listPages = Math.ceil(FILE_FRESHNESS.length / chainPerPage);
+  const noticeTotal = 1 + listPages;
+  const noticePage = Math.min(safeSecPage, noticeTotal - 1);
+  const listRows = FILE_FRESHNESS.slice(
+    Math.max(0, noticePage - 1) * chainPerPage,
+    Math.max(0, noticePage - 1) * chainPerPage + chainPerPage,
   );
 
   return (
@@ -266,15 +317,41 @@ export default function InsightsPanel() {
         <SlotPager label={t("insights.entryEvidence")} total={2} page={safeSecPage} onPage={setSecPage} />
       </div>
 
-      {/* —— E5 声明（单节；Footer 两行迁入，键复用不改名——§2-T11 信息迁移承载） —— */}
+      {/* —— E5 声明 + 数据时效清单（P11：1 + ⌈9/每页⌉ 页；页 1 = Footer 两行迁入原样，
+          页 2.. = 九文件文件级清单——p10 红线 10 路线 (b) SlotPager 等高互换延伸，
+          交互词汇零新增） —— */}
       <div className="wf-entry" hidden={entryId !== "notice"}>
-        <div className="wf-entry-sec">
-          <SectionTitle titleKey="insights.entryNotice" />
-          <div className={isNarrow ? "wf-entry-reading" : undefined} role="contentinfo">
-            <Text type="secondary" className="wf-insights-body">{t("app.footerDisclaimer")}</Text>
-            <Text type="secondary" className="wf-insights-body">{t("app.footerPrivacy")}</Text>
+        {noticePage === 0 ? (
+          <div className="wf-entry-sec">
+            <SectionTitle titleKey="insights.entryNotice" />
+            <div className={isNarrow ? "wf-entry-reading" : undefined} role="contentinfo">
+              <Text type="secondary" className="wf-insights-body">{t("app.footerDisclaimer")}</Text>
+              <Text type="secondary" className="wf-insights-body">{t("app.footerPrivacy")}</Text>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="wf-entry-sec">
+            <SectionTitle titleKey="insights.freshnessListTitle" />
+            <div className={isNarrow ? "wf-entry-reading" : undefined}>
+              {/* 列头（§7.3 回收②：四列并三列——年度·复核并合；freshnessColChecked 键
+                  三语在位保留；状态 Tag 沿 EntryRows 行尾 Tag 同款惯例、不设列头；
+                  回收登记：列头行裁剪（列语义由行字段顺序承载，细目见数据层头注释）） */}
+              {listRows.map((row) => (
+                <div key={row[0]} className="wf-insight-row">
+                  <div className="wf-insight-main">
+                    <Text bold className="wf-nowrap">{row[0]}</Text>
+                    <Text type="secondary" className="wf-nowrap">{row[1]} · {row[2]}</Text>
+                    <Text type="secondary" className="wf-nowrap">{row[3]}</Text>
+                    {row[4] ? (
+                      <Tag size="small" color="gray">{t("insights.freshnessRestricted")}</Tag>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <SlotPager label={t("insights.entryNotice")} total={noticeTotal} page={noticePage} onPage={setSecPage} />
       </div>
     </div>
   );

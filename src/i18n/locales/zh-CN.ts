@@ -249,6 +249,13 @@ const zhCN = {
     evidenceNote1:
       "标注说明：「官方核证」= 官方原文页面已直读；「媒体核证」= 官方发布数字经两家及以上独立媒体转载核对一致；「视频口径」= 仅见于原视频或属分析假设、未找到独立权威来源。",
     evidenceNote2: "各条年份与口径以行内标注为准；查证记录见 docs/research-video-data.md。",
+    // P11 §3.3 新键（数据时效三档 + 复核受限 + E5 清单；docs/p11-spec.md §3）
+    freshnessSoft: "数据为 {{year}} 年度口径",
+    freshnessHard: "该数据已落后官方最新发布",
+    freshnessSoftDetail: "本值基于 {{year}} 年度官方数据，最新发布窗口约 {{due}}；复核于 {{checked}}。",
+    freshnessHardDetail: "官方已于 {{date}} 发布 {{newValue}}，当前展示值为 {{oldValue}}（{{year}} 年度）。",
+    freshnessRestricted: "复核受限：最新官方发布未能核验，以在案口径展示",
+    freshnessListTitle: "数据时效清单",
   },
   pension: {
     formulaNote:
@@ -512,9 +519,13 @@ const zhCN = {
     seriesTooltip: "用于自助抽样的指数年度收益序列（有放回重抽，i.i.d.）；样本区间、口径与来源见提示详情。",
     indexCsi300: "沪深300（中国）",
     indexSp500: "标普500（国际）",
-    seriesNote: "{{name}}：{{firstYear}}–{{lastYear}} 年年度收益率，共 {{count}} 个样本（{{kind}}）；来源：{{source}}",
+    // P11 §4 新序列显示名 + 债类口径键（三语同构；既有 seriesPriceOnly/seriesTotalReturn 零改动）
+    indexCsi300Tr: "沪深300全收益（中国）",
+    indexCba00101: "中债新综合财富（债券）",
+    seriesNote: "{{name}}：{{firstYear}}–{{lastYear}} 年年度收益率，共 {{count}} 个样本（{{kind}}）；来源：{{source}}，拉取于 {{fetched}}",
     seriesPriceOnly: "价格指数（不含股息，略低估总回报）",
     seriesTotalReturn: "总回报（含股息再投资）",
+    seriesTotalCoupon: "财富口径（含票息按月再投资）",
     placeholderBootstrap: "还没有模拟结果——选好收益序列后点击「运行模拟」，即可得到耗尽概率与期末财富分布。",
     chartNoteBootstrap:
       "横轴为年份、纵轴单位为「万」；图中展示 {{count}} 条代表性抽样路径（浅色细线）与逐年中位数（粗线）。收益样本取自所选指数年度序列的有放回重抽（i.i.d.，忽略年份顺序）。同一种子 + 相同输入 → 结果完全可复现（契约保证）。",

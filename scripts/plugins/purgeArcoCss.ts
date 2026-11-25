@@ -93,6 +93,53 @@ const DENYLIST: readonly DenylistEntry[] = [
   // Tabs 卡片形态导航（type="card"）：全仓 Tabs 未传 type prop（AdvancedPanel 等
   // 走默认 line 形态）；dist 实测 36 规则 ≈ 6.9KB
   { name: "arco-tabs-header-nav-card", pattern: /\.arco-tabs-header-nav-card[a-z0-9_-]*/ },
+
+  // —— P10 回收扩充（docs/p10-spec.md §8.3-1 退役实测；启用对应形态前须先摘除条目）——
+  // Collapse 全族：P10 §2.3 把 4 处加性折叠（核心参数 Collapse / <768 明细 toggle /
+  // 敏感性 toggle / life 组内折叠）全面槽化，src/ grep Collapse 组件零命中（main.tsx
+  // 样式按需引入同步移除）；残存规则 = global.css 自身的 collapse 过渡/触控/兜底规则
+  //（随本条目一并回收）——runtime DOM 不再有折叠头
+  { name: "arco-collapse", pattern: /\.arco-collapse[a-z0-9_-]*/ },
+  // Card 可悬浮变体（hoverable prop）：src/ grep 'hoverable' 零命中——卡片悬浮反馈由
+  // S19 .wf-output-card:hover 承载（宪法 §3.2 表面色口径），组件库 hoverable 形态不在役
+  { name: "arco-card-hoverable", pattern: /\.arco-card-hoverable(?![a-z0-9_-])/ },
+  // Card 小尺寸变体（size="small"）：全仓 Card 均默认档（BasicCalculator 输出/输入卡、
+  // AdvancedPanel 壳退役后无 small 卡）；grep 'Card[^>]*size="small"' 零命中
+  { name: "arco-card-size-small", pattern: /\.arco-card-size-small(?![a-z0-9_-])/ },
+  // Alert 关闭钮：全仓 closable Alert 零命中（迁移提示随 P10 改 Message 气泡、wasm
+  // 异常横幅非 closable）；关闭命中区扩展（WF-05 ::after）规则随之死代码化
+  { name: "arco-alert-close", pattern: /\.arco-alert-close[a-z0-9_-]*/ },
+  // Table 固定列 / 展开行形态：src/ grep 'fixed:|expandedRow|rowSelection' 零命中
+  // （D7 首列 sticky 为自有 CSS 承载，不经 arco-table-col-fixed）；grep 实测零命中
+  { name: "arco-table-col-fixed", pattern: /\.arco-table-col-fixed[a-z0-9_-]*/ },
+  { name: "arco-table-expand", pattern: /\.arco-table-(?:cell-expand|row-expand)[a-z0-9_-]*/ },
+
+  // —— P10 骨架修复轮扩充（2026-11-24 尺寸门禁回收；逐条附证据，启用对应形态前
+  //    须先摘除条目再施工）——
+  // Typography 内联操作钮全族（copy/edit/expand/collapse 操作类）：src/ grep
+  // 'copyable|editable|expandable' 零命中（contenteditable 命中为键盘豁免注释，
+  // 非组件 prop）；另经 IAB 全任务页贪心遍历（A1 协议同款）收集运行时类名，
+  // arco-typography-operation* 零出现。dist 实测 11 规则 ≈ 1.2KB
+  { name: "arco-typography-operation", pattern: /\.arco-typography-operation[a-z0-9_-]*/ },
+  // Typography 省略号结构（arco-ellipsis / -content / -action / ellipsis-single /
+  // -multiple / -collapsed / -mirror）：全仓 Text/Title 未传 ellipsis prop（grep
+  // 'ellipsis' 命中均为 CSS text-overflow 与注释）；同款运行时类名遍历零出现。
+  // 注意：Card 头部标题截断为组件库自有 white-space 样式，不经 arco-ellipsis 类。
+  // dist 实测 10 规则 ≈ 0.8KB
+  { name: "arco-ellipsis", pattern: /\.arco-ellipsis[a-z0-9_-]*/ },
+  // Checkbox 全族：src/ 组件级 grep 'Checkbox' 零命中（P5 头注所列「级联链」仅为
+  // 按需样式引入路径，非运行时渲染——Menu 同例已删）；IAB 全任务页贪心遍历
+  // （A1 协议同款，六视口×全槽态）运行时类名收集 arco-checkbox* 零出现。
+  // dist 实测 30 规则 ≈ 3.7KB
+  { name: "arco-checkbox", pattern: /\.arco-checkbox[a-z0-9_-]*/ },
+  // Tabs 纵排形态（*-vertical / tabs-vertical）：全仓 Tabs 未传 vertical / 相关
+  // layout prop（grep 'vertical' 命中为 Descriptions layout 与透镜文案，不产生
+  // tabs 类名）；同款运行时类名遍历零出现。dist 实测 19 规则 ≈ 2.0KB
+  { name: "arco-tabs-vertical", pattern: /\.arco-tabs[a-z_-]*-vertical|\.arco-tabs-vertical/ },
+  // Button large 变体：全仓 Button 仅 default / small / mini 三档（grep
+  // 'size="large"' 零命中）；运行时类名遍历 arco-btn-size-large 零出现。
+  // dist 实测 13 规则 ≈ 1.2KB
+  { name: "arco-btn-size-large", pattern: /\.arco-btn-size-large(?![a-z0-9_-])/ },
 ];
 
 export interface PurgeStats {
