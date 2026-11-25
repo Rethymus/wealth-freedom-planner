@@ -24,7 +24,7 @@ import type { TaxTable } from "./types";
  *   SOURCE: 逐表内联（见各条目上方 @data-meta 单行注释与 note）
  */
 /** 税表区域固定声明（需求固定文案；每套税表 note 首句均含本声明，UI 据 disclaimerIncluded 去重显示） */
-export const TAX_TABLE_DISCLAIMER = "内置简化税率表，基于 2025 年公开税档，不构成税务建议。";
+export const TAX_TABLE_DISCLAIMER = "内置简化税率表，基于 2025/2026 年公开税档（逐表年份见表内 note 首句），不构成税务建议。";
 
 export const TAX_TABLES: TaxTable[] = [
   {

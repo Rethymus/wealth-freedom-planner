@@ -334,7 +334,7 @@ export default function InsightsPanel() {
             <SectionTitle titleKey="insights.freshnessListTitle" />
             <div className={isNarrow ? "wf-entry-reading" : undefined}>
               {/* 列头（§7.3 回收②：四列并三列——年度·复核并合；freshnessColChecked 键
-                  三语在位保留；状态 Tag 沿 EntryRows 行尾 Tag 同款惯例、不设列头；
+                  P11 验收 F2 勘误：该键已随列头裁剪一并裁去、三语均无此键；状态 Tag 沿 EntryRows 行尾 Tag 同款惯例、不设列头；
                   回收登记：列头行裁剪（列语义由行字段顺序承载，细目见数据层头注释）） */}
               {listRows.map((row) => (
                 <div key={row[0]} className="wf-insight-row">
