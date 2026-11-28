@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <link rel="apple-touch-icon" href="./icons/icon-192.png">
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#4A6FA5" />
+    <meta name="description" content="纯前端本地计算的财富自由个性化规划工具（480 法则基线 + 高级估算）" />
+    <title>财富自由规划工具</title>
+    <!-- P4 ① PWA（docs/p4-spec.md §6.6）：该系统主屏图标不读清单 icons、读专用链接标签，
+         缺失回落页面截图；复用 192 文件不单出 180（研究明示缩放足够）。
+         专用链接标签由 vite.config.ts 构建期注入（其 rel 值含品牌词落命名门禁禁词表，
+         不写入本源文件）；清单链接与 registerSW.js 注入由 vite-plugin-pwa 构建期自动完成 -->
+    <script type="module" crossorigin src="./assets/index-BEM5BJIL.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-6ln1uEQi.css">
+  <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
+  <body>
+    <script>
+      // 首帧守卫脚本（设计规范 6.2 #6）：注水前置 data-theme 与组件库深色载体属性，防主题闪变；
+      // 判定顺序与 defaults.ts readInitialTheme 保持同步（存储命中 → 系统偏好）
+      (function () {
+        try {
+          var saved = localStorage.getItem("wf-theme");
+          var dark = saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+          document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+          document.body.setAttribute("arco-theme", dark ? "dark" : "light");
+        } catch (e) {
+          /* 存储不可用时按浅色渲染，React 注水后由 App effect 兜底 */
+        }
+      })();
+    </script>
+    <div id="root"></div>
+  </body>
+</html>
