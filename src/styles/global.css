@@ -577,7 +577,9 @@ body {
   flex: none;
 }
 
-/* Content：padding 8/16（<768）与 16/16（≥768）= §1.0a 内容栈预算（16/32 垂直）； */
+/* Content：padding 8/16（<768）与 16/16（≥768）= §1.0a 内容栈预算（16/32 垂直）；
+   P10fix E2：原「A1 回退横幅定位上下文」的 position:relative 随横幅常规流化一并退役
+   （横幅改 .atlas-region 文档流 flex:none 行，不再依赖定位上下文）。 */
 .wf-main {
   flex: 1 1 auto;
   min-height: 0;
@@ -587,8 +589,6 @@ body {
   max-width: 1112px;
   margin: 0 auto;
   padding: 8px 16px;
-  /* A1 显式回退横幅（.wf-fallback-banner）的定位上下文 */
-  position: relative;
 }
 
 @media (min-width: 768px) {
@@ -635,14 +635,56 @@ body {
   overflow-y: auto;
 }
 
-.wf-fallback-banner {
-  position: absolute;
-  top: 8px;
-  left: 16px;
-  right: 16px;
-  z-index: 120;
-  pointer-events: none;
+/* 第 1 轮验收 F-06（低于下限档例外契约）：回退态解除槽/面板根静默裁切——例外口径
+   = 页根放行滚动 + 单行不遮挡横幅，禁静默裁切；槽（.wf-slot）与裁切载体（反向卡、
+   pro 活动面板根）随内容自然加高、overflow 放开，由页根滚动承载。≥580 在册档内容
+   收口后守卫不触发，本块不生效。
+   第 2 轮验收 F-01（P0）补齐祖先链：仅放开载体不够——pro 组内 Tabs 祖先链
+   （.arco-tabs 组件库固定高 + .arco-tabs-content/-inner）同样 overflow:hidden，
+   实测 320 档面板内容被容器拦腰裁切 480–873px 而页根 docΔ=0（滚动不可达）。回退态
+   将 Tabs 三层容器一并 height:auto + overflow:visible，随内容自然展开。 */
+.wf-fallback-scroll :is(.wf-slot, .wf-reverse-card, .arco-tabs-content-item-active, .arco-tabs, .arco-tabs-content, .arco-tabs-content-inner) {
+  overflow: visible;
+  /* flex:none（下方列表）已使自然高生效；reverse-card 内联固定高由此 !important 解除 */
+  height: auto !important;
 }
+
+/* F-01 补强（精测回填）：仅 overflow/height 释放不够——flex 链逐级 min-height:0 +
+   flex-shrink:1 把 Tabs 三层压回容器高（实测 content-inner computed height 205px、
+   页 scrollable overflow 只含 24px 溢出），可见溢出区不可滚达。回退态解除 pro/life/
+   risk 面板链的 flex 压缩（flex:none = 自然内容高），页根滚动区随之扩到全量内容。 */
+.wf-fallback-scroll
+  :is(
+    .wf-slot,
+    .wf-risk-leaf,
+    .wf-pro-panel,
+    .wf-adv-tabs-wrap,
+    .wf-adv-tabs,
+    .arco-tabs,
+    .arco-tabs-content,
+    .arco-tabs-content-inner,
+    .arco-tabs-content-item-active,
+    .arco-tabs-pane,
+    .wf-life-page,
+    .wf-risk-page,
+    .atlas-life-panel
+  ) {
+  flex: none;
+}
+
+/* 第 1 轮验收 F-06③：回退横幅在文档流中恒处切换条之后（round-2 精测补档：
+   margin-top 2px——320 档切换条双行实测底缘 138.4 与横幅顶 138.0 亚像素相邻，
+   rectsIntersect 严格 < 判 1px 相交，2px 间隔消除）。 */
+.wf-fallback-banner {
+  margin-top: 2px;
+}
+
+/* A1 显式回退横幅（P10fix E2 常规流化）：原 .wf-main 内 absolute top:8 z-120 覆盖层
+   （压住切换条与页首行）退役——改 .atlas-region 内 .atlas-switch-anchor 之后的
+   文档流行（flex 子项默认不收缩即整行），不遮挡由文档流天然保证；外距由 TSX 内联
+   （尺寸门禁降档③）。类名保留为零滚动 A4 断言查询锚（scripts/zero-scroll-check.mjs）。
+   横幅只渲染于已回退页面（wf-fallback-scroll 已放行页根滚动），占的是回退页可滚高度；
+   零滚动页恒不渲染本横幅，§2 全部预算不受影响。 */
 
 .atlas-page:not([hidden]) {
   animation: atlas-page-in var(--wf-dur-base) var(--wf-ease-standard) 1;
@@ -945,11 +987,9 @@ body {
   text-align: left;
 }
 
-/* C3 页内底部分享 dock 行（T5/T6 迁移：flex 静态底行——sticky/吸附退役）。
-   基础 display:none；<768 由媒体档放行为静态行（≥768 分享行在卡内承载） */
-.wf-action-dock {
-  display: none;
-}
+/* P10fix §2.5-5 退役登记：原 C3 页内底部分享 dock 行选择器（.wf-action-dock）随 F0
+   复合行上收一并退役（JSX 挂点已删，本基础 display:none 规则清理）——分享入口由
+   .wf-f0-row 右端钮承载（44 命中随触屏档全局规则）。 */
 
 /* —— 风险实验室页（P10 §1.3 K1 两叶）/ 人生轨迹页（§1.2 L1/L2）：同构 flex 列，
    与 pro 页块（下方 .wf-risk-page,.wf-life-page 合并规则）共用——此处注释锚点保留，
@@ -1042,11 +1082,17 @@ body {
   }
 }
 
-/* T-2 阅读正文 16px（行高 1.6 配套）：原理档案阅读列启用（≥768 既有规则保留） */
-.atlas-principles .wf-insights-body.arco-typography,
-.atlas-principles .wf-insights-body .arco-typography {
-  font-size: var(--wf-text-reading);
-  line-height: 1.6;
+/* T-2 阅读正文 16px（行高 1.6 配套）：原理档案阅读列启用（≥768 既有规则保留）。
+   第 1 轮验收 F-03 收窄：原规则无媒体条件——<768 压缩档（.wf-entry-reading caption
+   12/18）被本规则 3 类选择器压制失效，375 en 假设链条概览句 205px（8 行×25.6）直接
+   把页根顶出 50/98（docΔ）——按注释本意的「≥768 既有规则保留」补媒体条件，<768 回落
+   .wf-entry-reading 既档。 */
+@media (min-width: 768px) {
+  .atlas-principles .wf-insights-body.arco-typography,
+  .atlas-principles .wf-insights-body .arco-typography {
+    font-size: var(--wf-text-reading);
+    line-height: 1.6;
+  }
 }
 
 /* ≥1200 左轨竖排（P1）——P10 §8.3-3 延后登记：该桌面形态本轮裁撤（横排分段条承载，
@@ -1108,8 +1154,29 @@ body {
   flex-direction: column;
 }
 
+/* P10fix E5（空白面板修复）：中性化 Arco 轮播内联偏移与列布局的冲突——组件库
+   TabContent 对 .arco-tabs-content-inner 写内联 style.marginLeft = -activeIndex×100%
+   （es/Tabs/tab-content.js:20 实读，期望横向 flex 行逐列滑动），上方列布局覆写后该
+   偏移把整叠内容左移 index×容器宽、再被 .wf-main overflow:hidden 裁掉 → index≥1
+   的标签全部空白。列布局下非活动 item 已由组件库 item CSS height:0 承担互斥显隐，
+   轮播 margin 无存在必要——!important 为既有先例口径（.wf-big-number 双类同款压制）。
+   tabPane 滑入动画随偏移退役（AdvancedPanel animation 配置同步收敛，S20 墨条不受影响）。 */
+.wf-adv-tabs .arco-tabs-content-inner {
+  margin-left: 0 !important;
+}
+
 .wf-adv-tabs .arco-tabs-content-item {
   min-height: 0;
+}
+
+/* 第 1 轮验收复测登记：非活动面板根整体退出盒树——arco 对非活动 content-item 只写
+   height:0 + overflow:hidden，其内 pane/槽仍按自然高布局：槽 min-height 200 × 内容
+   实高被 A1 ②′ 槽裁切判定读作「272>200」（tab:9 切标签瞬间，前一面板槽实测）。
+   内容不可见时槽不应保留盒高：非活动 pane display:none 与 arco height:0 裁切同义
+   （hidden 非卸载语义零变化——DOM 常驻、表单/运行结果保留；④判定只查活动 pane
+   不受影响；S18 可见性闸对 display:none 本就暂停 rAF）。 */
+.wf-adv-tabs .arco-tabs-content-item:not(.arco-tabs-content-item-active) .arco-tabs-pane {
+  display: none;
 }
 
 .wf-adv-tabs .arco-tabs-content-item-active {
@@ -1119,13 +1186,21 @@ body {
   min-height: 0;
 }
 
-.wf-adv-tabs .arco-tabs-tabpane {
+/* P10fix E5：三处死选择器改名 .arco-tabs-tabpane → .arco-tabs-pane——组件库实际
+   类名为 prefixCls + "-pane"（es/Tabs/tab-pane.js:33 实读；编译产物 es/Tabs/style/
+   index.css 中 tabpane 0 处、pane 1 处），原 tabpane 选择器永不命中 → 面板根 flex
+   填充链断在 pane 层（「上半截内容＋下半截空白」观感的次因）。改名恢复填充链。
+   第 1 轮验收 F-01/F-02/F-05 补口：pane 自身缺 flex:1——活动 item 高度 461 实测 pane
+   仅 286（1366×768），槽恒坐 min-height 200、其内容超限被 item 的组件库 overflow:
+   hidden 静默裁切（序列槽 sh=320 裁 120 等）。pane 接 flex 后剩余高度真实下传槽。 */
+.wf-adv-tabs .arco-tabs-pane {
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
-.wf-adv-tabs .arco-tabs-tabpane > div,
+.wf-adv-tabs .arco-tabs-pane > div,
 .wf-risk-leaf > div,
 .atlas-life-panel > div {
   flex: 1 1 auto;
@@ -1135,7 +1210,7 @@ body {
 }
 
 /* 面板根固定区（读数行/槽条/运行钮/dock）不压缩 */
-.wf-adv-tabs .arco-tabs-tabpane > div > :not(.wf-slot),
+.wf-adv-tabs .arco-tabs-pane > div > :not(.wf-slot),
 .wf-risk-leaf > div > :not(.wf-slot),
 .atlas-life-panel > div > :not(.wf-slot) {
   flex: none;
@@ -1230,14 +1305,11 @@ body {
     margin-bottom: 2px;
   }
 
-  /* 骨架修复轮压缩面（320/375 紧档页栈回预算）：卡体 16→12、dock 内距 6→4 */
+  /* 骨架修复轮压缩面（320/375 紧档页栈回预算）：卡体 16→12（dock 内距规则随
+     P10fix §2.5-5 dock 退役一并清理） */
   .wf-output-card .arco-card-body,
   .wf-input-card .arco-card-body {
     padding: 12px;
-  }
-
-  .wf-action-dock {
-    padding: 4px 0 calc(4px + env(safe-area-inset-bottom));
   }
 
   .wf-core-row {
@@ -1261,14 +1333,23 @@ body {
     margin-bottom: 0;
   }
 
-  /* 骨架修复轮：槽内图表容器外距收敛（.wf-acc-chart margin-top 12 使 320 档图页
-     209>202——「槽内 margin 收敛为 0」既有口径扩围） */
-  .wf-acc-chart,
-  .wf-mc-chart,
-  .wf-waterfall-chart,
-  .wf-sens-chart {
-    margin-top: 0;
+  /* 第 1 轮验收复测补档（375×667 MC 槽 248>247 的 1px 级收口）：槽体纵向 gap 4→2 */
+  .wf-slot-body {
+    gap: 2px;
   }
+
+  /* 第 2 轮验收 F-03 补档（375×667 pro 页 doc=2 级溢出——479>477）：capsule 内容凹面
+     区 padding 16→10、margin-top 12→8（页面级 2px 收口 + 缓冲；凹面语义与发丝线保留） */
+  .wf-adv-tabs .arco-tabs-content {
+    margin-top: 8px;
+    padding: 10px;
+  }
+
+  /* 第 1 轮验收 F-06 勘误：本块内「槽内图表容器外距收敛 / 打工模拟动作行外距收敛」
+     两组规则迁至下方基底规则之后（原位置早于 .wf-acc-chart / .wf-mc-chart /
+     .wf-waterfall-chart / .wf-sens-chart / .wf-acc-actions 的同特异性基底规则——
+     级联源序被击败恒不生效，实测 375 档 wf-acc-actions mb=12px 在册证据）；迁址后
+     生效，选择器与值零变化。 */
 
   /* 骨架修复轮：汇率行降 caption 档（320 档值句折行双倍行高的收口；label 本就短码） */
   .wf-currency-rates .arco-descriptions-item-label,
@@ -1294,11 +1375,6 @@ body {
 
   .wf-currency-sec .arco-divider {
     margin: 6px 0;
-  }
-
-  /* 打工模拟动作行外距收敛（320 档槽 202→255 的构成行之一） */
-  .wf-acc-actions {
-    margin: 4px 0;
   }
 
   /* 骨架修复轮：槽内 Descriptions 紧档收敛（≤480 行文本降 caption 档 12/17、表顶外距
@@ -1338,6 +1414,12 @@ body {
   }
 }
 
+/* —— P10fix §2.5-5 F0 叶切换条复合行（freedom 树形态）：两段叶条＋右端 share 钮位 ——
+   <768 原 C3 dock 行上收至此（44 命中不变、share 入口恒在且更靠上，dock 行退役一档）；
+   ≥768 中栏叶B 原 share 缺宿主（dock 仅 <768 放行）由本复合行同步补齐（§2.3 叶B 预算
+   「share 复合行」）。行容器 flex 形态与收缩由 TSX 内联样式承载（尺寸门禁降档③）；
+   行高与页距复用叶条自身 margin 档（.wf-segbar 8/深矮档 2 既有规则，零新 CSS 档）。 */
+
 /* 原理档案页原独立容器查询块/T-2 阅读档规则已随 P10 §1.4 条目化重构并入上方
    「P10 槽套件」区的 .atlas-principles 系列块（去重合并，值逐条等值迁挂）。 */
 
@@ -1346,6 +1428,23 @@ body {
   display: flex;
   justify-content: flex-start;
   margin-bottom: 8px;
+}
+
+/* 第 1 轮验收 F-04：深矮档（H<850）pro 页 chrome 再收一档——1366×620（H<850 深矮
+   档）pro 组切换后活动面板根 sy=5（zh）/24（en）真实可见裁切的收口：顶栏/分段条
+   外距 8→2、算例行（反向面板演示算例条，同样宿主）外距 12→6。复测阈值 >2px（§10.2）。 */
+@media (max-height: 849.9px) {
+  .atlas-pro-topbar {
+    margin-bottom: 2px;
+  }
+
+  .wf-pro-panel > .wf-adv-seg {
+    margin-bottom: 2px;
+  }
+
+  .wf-example-bar {
+    margin: 2px 0 6px;
+  }
 }
 
 /* A1（p4-spec §7）：跳过链接——首 Tab 停留点（Layout 首子元素），获焦前视觉隐藏、
@@ -1662,6 +1761,12 @@ body {
 /* 数值字段 */
 .wf-field-row {
   margin-bottom: 4px;
+  /* 第 3 轮验收 ZS-02：组件库 gutter=[16,0] 经内联样式写行负 margin（两侧各 -8px），
+     行盒宽 = 容器 + 16 → 右缘溢出 8px 被 tabs 裁切层裁掉（1366×620 en 反向面板实测
+     行宽 1063 > 面板 1047，en 标签尾字符被切；zh 标签短未触目）。归零右 margin 后
+     行盒 = 容器宽：内容位置不变（col padding 8 仍在），右缘不再裁；左 margin -8
+     保留以维持与相邻内容的左对齐。内联样式须 !important 压制（第 1 轮 ≤640 同款先例）。 */
+  margin-right: 0 !important;
 }
 
 .wf-field {
@@ -1726,6 +1831,19 @@ body {
    桌面容器 ≥560px 时 width:100% 继续生效，布局不变。 */
 .wf-amortize-table .arco-table-content-inner {
   overflow-x: auto;
+}
+
+/* 第 2 轮验收 F-05：≤480 档取消横向滑动兜底（红线「禁内滚兜底」+ 断言A 滚动容器
+   判据含横向轴）——列数在面板层裁减至期次/月供/剩余本金三列（利息/本金为派生
+   信息，≥768 全量），表格压回容器宽内、无横向溢出。 */
+@media (max-width: 479.9px) {
+  .wf-amortize-table .arco-table-content-inner {
+    overflow-x: visible;
+  }
+
+  .wf-amortize-table table {
+    min-width: 0;
+  }
 }
 
 .wf-amortize-table table {
@@ -1817,6 +1935,28 @@ body {
 .wf-acc-chart { margin-top: 12px; }
 /* ===== P1 冲刺：社保养老金 / 历史自助抽样 / 欲望敏感性 / 场景分享（docs/p1-spec.md §10） ===== */
 .wf-mc-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+
+/* —— ≤480 紧档（迁址自上方「P10 ≤480 压缩套件」块——原位置早于本区基底规则，
+   级联源序被击败恒不生效；第 1 轮验收 F-06 勘误迁址，选择器与值零变化）：
+   ① 槽内图表容器外距收敛（.wf-acc-chart margin-top 12 使 320 档图页 209>202——
+   「槽内 margin 收敛为 0」既有口径扩围）；
+   ② 打工模拟动作行外距收敛（320/375 档「规划组」页栈超预算的构成行之一——375×667
+   en life 规划槽 sy=12 即 24px 级差的主构成）。 —— */
+@media (max-width: 479.9px) {
+  .wf-acc-chart,
+  .wf-mc-chart,
+  .wf-waterfall-chart,
+  .wf-sens-chart {
+    margin-top: 0;
+  }
+
+  /* 打工模拟动作行（既有收口）+ MC 运行钮行（第 1 轮验收复测补档：375×667 MC 序列
+     字段页 276>235 的构成行之一） */
+  .wf-acc-actions,
+  .wf-mc-actions {
+    margin: 4px 0;
+  }
+}
 /* P10 槽化登记：.wf-sens-toggle（含 [data-theme=dark] 变体）/ .wf-breakdown-toggle /
    .wf-sens-group（加性展开开关与分组标题）随 F3/F4 槽互换退役删除；
    敏感性槽内容块外距收敛（.wf-sens-block 槽内首行） */
@@ -2038,25 +2178,13 @@ body {
   }
 }
 
-/* D8 页内底部操作行（P10 §2-T5/T6 迁移登记：sticky 吸附 → flex 静态底行——
-   safe-area-inset-bottom 内边距保留；底色吸附防叠印与 z-index 随吸附退役删除；
-   原 .arco-collapse overflow:clip sticky 祖先修正为死路径一并退役）。
-   基础隐藏；<768 放行为静态行（≥768 卡内分享行/运行钮承载）。
-   natural reachable 区结论沿用（页满视口 ⇒ dock 恒在 [0.66H,1.0H]） */
-.wf-action-dock, .wf-mc-dock-run { display: none; }
-
+/* D8/P10fix §2.5-5 退役登记：原页内底部 dock 行（.wf-action-dock 分享 dock /
+   .wf-mc-dock-run 运行 dock）随「上收为叶条复合行/主运行钮行」一并退役——JSX 挂点
+   已删（BasicCalculator F0 复合行 / MonteCarloPanel .wf-mc-actions），本死选择器
+   块随之清理（附带工程项：死路径清理，§7 登记）；.wf-share-row 的 <768 隐藏规则
+   保留（双栏左列分享行仍在用，≥1200 才渲染）。 */
 @media (max-width: 767.9px) {
   .wf-share-row { display: none; }
-  .wf-action-dock {
-    display: flex;
-    padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
-  }
-  .wf-action-dock .arco-btn { flex: 1; }
-  .wf-mc-dock-run {
-    display: flex;
-    padding: 8px 0;
-  }
-  .wf-mc-dock-run .arco-btn { flex: 1; }
 }
 
 /* P10 §2-T3 退役登记：D9 吸附态紧凑减法块退役（.wf-is-stuck 不复存在；其承载由
@@ -2538,7 +2666,14 @@ body {
 }
 
 /* ===== P10 骨架修复轮：矮视口档（高度 <850）双栏自由刻度收敛（1200×800 档，F2） =====
-   双类名/祖先级联提 specificity，压过源序在后的基础档 !important 外距 */
+   双类名/祖先级联提 specificity，压过源序在后的基础档 !important 外距。
+   P10fix 深矮档压缩套件（§2.5；高度载体与本块同判定域，降档③合并登记）：
+   §2.5-1 分段/槽条外距 8→2（≤480 档既有值扩为深矮档全档；F0 复合行页距随叶条段
+   自身 margin 档承载——叶条在栅格复合行内，档距即行距）；
+   §2.5-2 卡体 padding 16→12（≤480 档值扩档）；
+   §2.5-6 anatomy 行外距 16→8、core 行外距 8→4（同扩档）。
+   §2.5-3 环 48 / §2.5-4 F4 首行 caption 并槽 / §2.5-5 dock 上收为 TSX 档位承载
+   （BasicCalculator / MonteCarloPanel 常量与结构，非 CSS 域——登记注记）。 */
 @media (max-height: 849.9px) {
   .wf-layout .wf-big-number.wf-big-number {
     margin-bottom: 4px !important;
@@ -2546,6 +2681,24 @@ body {
 
   .wf-realtime.wf-realtime {
     padding: 8px;
+    margin-top: 8px;
+  }
+
+  .wf-segbar,
+  .wf-adv-seg {
+    margin-bottom: 2px;
+  }
+
+  .wf-output-card .arco-card-body,
+  .wf-input-card .arco-card-body {
+    padding: 12px;
+  }
+
+  .wf-core-row {
+    margin-top: 4px;
+  }
+
+  .wf-anatomy {
     margin-top: 8px;
   }
 }

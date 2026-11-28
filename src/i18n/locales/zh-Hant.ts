@@ -13,6 +13,8 @@ const zhHant = {
     "themeToLight": "切換到淺色主題",
     "languageLabel": "語言",
     "wasmFailed": "計算核心加載失敗：{{message}}。頁面可正常瀏覽，但所有計算結果暫不可用；請刷新頁面重試，或確認部署時 wasm 靜態資源完整。",
+    "renderError": "頁面渲染出現異常，該區域暫時不可用；點擊重新加載恢復（已輸入的參數保存於本頁，刷新後恢復默認）。",
+    "reload": "重新加載",
     "currencyNotice": "金額已按 1 人民幣 = {{rate}} {{code}} 換算展示（匯率時點：{{time}}）；輸入以展示幣種填寫、自動回寫為人民幣口徑；所有公式與幣種無關。",
     "currencyFallback": "匯率暫不可用：僅切換貨幣符號，數值保持人民幣口徑；可稍後在「稅務估算與多幣種校驗」面板重試獲取。",
     "footerDisclaimer": "本工具基於公開統計與簡化假設，僅為規劃參考，不構成投資建議。",
@@ -35,7 +37,7 @@ const zhHant = {
     "outputTitle": "財富自由參考線（480 法則基線）",
     "liveUpdate": "隨輸入實時更新",
     "invalidRealReturn": "實際回報率為 {{pct}}（≤ 0）：名義回報率需高於通脹率才能形成「收益跑贏通脹」的正循環，無法計算臨界值。請展開「核心參數」調整。",
-    "summaryPrefix": "按當前參數，你的財富自由參考線約為",
+    "summaryPrefix": "按當前參數，財富自由參考線約為",
     "summaryPartChild": "含育兒預留",
     "summaryPartHealth": "含健康預留",
     "summaryPartMajor": "含重大投入預留",
@@ -158,7 +160,8 @@ const zhHant = {
       "risk": "風險實驗室",
       "riskDesc": "我的計劃承受得住變化嗎",
       "principles": "原理檔案",
-      "principlesDesc": "為什麼這樣計算"
+      "principlesDesc": "為什麼這樣計算",
+      // P10fix §11.2 降檔登記（§9.2 降檔序④）：五個 <480 短形態標籤鍵整組下一輪隨渲染接線一併補齊
     },
     "pro": {
       "label": "專業模式",
@@ -291,7 +294,10 @@ const zhHant = {
     "majorInvestment": "重大投入",
     "majorInvestmentTooltip": "購房首付、大額教育等一次性支出。",
     "regionUrbanCn": "中國城鎮",
-    "swipeHint": "左右滑動查看全部列"
+    "swipeHint": "左右滑動查看全部列",
+    // P10fix §11.2 偏差登記（尺寸門禁降檔序① 擴展）：共享參數單源化四組級布爾的鎖標
+    // aria / hint / 恢復鈕三語鍵未新增 common.paramSync*——全部復用既有 mc.meanSync*
+    // 三鍵（語義同文，鍵值零改動；鍵域歸屬 common.* 待後續統一輪登記遷移）。A12 新鍵計數 = 5。
   },
   "reverse": {
     "totalAssets": "已有總資產",

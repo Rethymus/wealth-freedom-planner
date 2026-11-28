@@ -21,7 +21,11 @@ const { Text } = Typography;
 /** 中国城镇基准条目（engel 系数与偏离检测共用；偏离锚点/阈值取数据层字段） */
 const CN_BENCHMARK = REGIONAL_BENCHMARKS.find((b) => b.countryCode === "CN") ?? null;
 
-export default function CurrencySection({ paged, page }: { paged?: boolean; page?: number } = {}) {
+export default function CurrencySection({
+  paged,
+  page,
+  ratesPerPage,
+}: { paged?: boolean; page?: number; ratesPerPage?: number } = {}) {
   const { t } = useTranslation();
   /** 骨架修复轮：汇率行恒横排（label「CNY（¥）」为短标签，纵排在 320 档使页 0 达
    *  664px 超槽——横排 6 行 ≈204px 收口；既有「防长 label 挤压」的纵排前提不成立，
@@ -85,10 +89,12 @@ export default function CurrencySection({ paged, page }: { paged?: boolean; page
 
   return (
     <div className="wf-currency-sec">
-      {/* P10 槽态分页（TaxPanel 三态槽 currency 态承载）：paged=true 时三页等高互换——
-          第 0 页 = 币种选择 + 刷新，第 1 页 = 汇率表 + 来源行，第 2 页 = 区域偏离 +
-          恩格尔系数（骨架修复轮再分页：320 档页 0 全量 664px 超槽 381 的收口）；
-          缺省（paged 未传）整段原样渲染 */}
+      {/* P10 槽态分页（TaxPanel 三态槽 currency 态承载）：paged=true 时等高互换——
+          契约 A（ratesPerPage 未传，≥768）三页：第 0 页 = 币种选择 + 刷新，第 1 页 =
+          汇率表 + 来源行，第 2 页 = 区域偏离 + 恩格尔系数（骨架修复轮再分页：320 档
+          页 0 全量 664px 超槽 381 的收口）；契约 B（ratesPerPage=N，<768 紧档，第 1 轮
+          验收复测补档：375×667 汇率表页 347>299）四页：0 选择 / 1 汇率表前 N 行 /
+          2 余行 + 来源行 / 3 偏离与恩格尔；缺省（paged 未传）整段原样渲染 */}
       <div className="wf-field" style={{ marginBottom: 12 }} hidden={paged === true && page !== 0}>
         <div className="wf-field-label">
           <Text>{t("currency.label")}</Text>
@@ -120,7 +126,7 @@ export default function CurrencySection({ paged, page }: { paged?: boolean; page
         ) : null}
       </div>
 
-      {rates && !(paged === true && page !== 1) ? (
+      {rates && !(paged === true && page !== 1 && page !== 2) ? (
         <>
           <Descriptions
             border
@@ -129,36 +135,48 @@ export default function CurrencySection({ paged, page }: { paged?: boolean; page
             layout="horizontal"
             column={{ xs: 1, md: 3 }}
             title={null}
-            data={CURRENCIES.map((c) => {
-              const rate = rates.rates[c.code];
-              return {
-                label: `${c.code}（${c.symbol}）`,
-                value:
-                  typeof rate === "number" && Number.isFinite(rate)
-                    ? t("currency.rateLine", { base: rates.base, rate: formatNumber(rate, 4), target: c.code })
-                    : t("currency.rateUnavailable"),
-              };
-            })}
+            data={(() => {
+              const rows = CURRENCIES.map((c) => {
+                const rate = rates.rates[c.code];
+                return {
+                  label: `${c.code}（${c.symbol}）`,
+                  value:
+                    typeof rate === "number" && Number.isFinite(rate)
+                      ? t("currency.rateLine", { base: rates.base, rate: formatNumber(rate, 4), target: c.code })
+                      : t("currency.rateUnavailable"),
+                };
+              });
+              /* 第 1 轮验收复测补档（375×667 税务汇率表页 347>299）：紧档汇率表两页
+                  等高互换——ratesPerPage 传入时页 1 = 前 N 行、页 2 = 余行 + 来源行
+                  （信息零丢失）；未传（≥768 三页契约）整表单页原样 */
+              return typeof ratesPerPage === "number"
+                ? page === 2
+                  ? rows.slice(ratesPerPage)
+                  : rows.slice(0, ratesPerPage)
+                : rows;
+            })()}
           />
-          <div className="wf-field-hint">
-            <Text type="secondary">
-              {t("currency.sourceLine", {
-                source: rates.source,
-                offlineNote: rates.offline ? t("currency.offlineNote") : "",
-                updated: rates.ratesUpdatedAt ? rates.ratesUpdatedAt : t("currency.rateUnavailable"),
-                fetchedAt: formatTimestamp(rates.fetchedAt, t("currency.noTimestamp")),
-                note: rates.note ? `；${rates.note}` : "",
-              })}
-            </Text>
-          </div>
+          {!(typeof ratesPerPage === "number" && page === 1) ? (
+            <div className="wf-field-hint">
+              <Text type="secondary">
+                {t("currency.sourceLine", {
+                  source: rates.source,
+                  offlineNote: rates.offline ? t("currency.offlineNote") : "",
+                  updated: rates.ratesUpdatedAt ? rates.ratesUpdatedAt : t("currency.rateUnavailable"),
+                  fetchedAt: formatTimestamp(rates.fetchedAt, t("currency.noTimestamp")),
+                  note: rates.note ? `；${rates.note}` : "",
+                })}
+              </Text>
+            </div>
+          ) : null}
         </>
-      ) : !(paged === true && page !== 1) ? (
+      ) : !(paged === true && page !== 1 && page !== 2) ? (
         <Text type="secondary">{t("currency.loadingRates")}</Text>
       ) : null}
 
       {paged ? <Divider style={{ margin: "8px 0 8px" }} /> : <Divider style={{ margin: "16px 0 12px" }} />}
 
-      {!paged || page === 2 ? (
+      {!paged || page === 3 || (typeof ratesPerPage !== "number" && page === 2) ? (
         <>
           {benchmarkAlert ? (
             <Alert

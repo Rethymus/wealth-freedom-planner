@@ -179,7 +179,10 @@ export default function AdvancedPanel({ initialPanelKey }: AdvancedPanelProps = 
             type="capsule"
             activeTab={activeByGroup[g.id] ?? g.panels[0].key}
             lazyload
-            animation={{ inkBar: true, tabPane: true }}
+            /* P10fix E5：animation 收敛为 { inkBar: true }——tabPane 滑入动画随其载体
+                （content-inner 轮播 margin 偏移）退役（§5-2 配置诚实，S20 墨条动画
+                在 header 域不受影响），避免死配置。 */
+            animation={{ inkBar: true }}
             onChange={(v: string) => setActiveByGroup((m) => ({ ...m, [g.id]: v }))}
           >
             {g.panels.map((p) => (

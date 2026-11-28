@@ -131,6 +131,10 @@ export default defineConfig({
         // unsafe：标准 ES 产物（React/组件库无元编程）下的等价变换优化，
         // 由构建后浏览器全功能验证兜底
         unsafe: true,
+        // 尺寸回收：丢弃产物内全部 console.* 调用（含组件库/图表库/胶水层的
+        // 长文案告警字符串）。实测产物内仅 20 处纯日志，无返回值被消费的调用，
+        // 丢弃不影响任何业务逻辑（门禁修复轮 2026-11-25，dist 总量硬线 2,000,000）。
+        drop_console: true,
       },
       mangle: {
         toplevel: true,
@@ -141,13 +145,10 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        manualChunks: {
-          // react / react-dom 不单列：rollup 会随首个引用方（组件库）归组，单列会生成空 chunk
-          vendor_arco: ["@arco-design/web-react"],
-          vendor_charts: ["recharts"],
-          vendor_state: ["zustand", "i18next", "react-i18next"],
-          wasm_glue: ["./src/wasm/pkg/finance_core.js"],
-        },
+        // 第 2 轮验收 F-03 尺寸回收：manualChunks 辅助拆分（p2-spec §10.3 辅助项，
+        // 意图为缓存粒度、非总量缩减）撤销——每 chunk 的运行时包装与跨 chunk 导入
+        // 胶水在总量口径下为净增（本轮实测回收数百字节级），回到 rollup 默认共享托管
+        //（>500kB 单 chunk 警告为既知且被门禁总线覆盖；如需恢复缓存粒度按 git 历史回填）。
       },
     },
   },

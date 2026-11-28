@@ -16,7 +16,7 @@ import { effectiveMonthsDivisor, PENSION_WAGE_SOURCE_NOTE } from "../../data/pen
 import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { AmountField, FieldRow, FieldTip, IntField, NumberField } from "../fields";
 import { SegBar, SlotBox, SlotPager } from "../slots";
-import { useAnimatedNumber, useFinanceCall, useIsNarrowViewport, useIsWorkbenchViewport, useMoney } from "../hooks";
+import { useAnimatedNumber, useFinanceCall, useIsCompactViewport, useIsNarrowViewport, useIsWorkbenchViewport, useMoney, useShortViewport } from "../hooks";
 
 const { Text } = Typography;
 
@@ -75,6 +75,11 @@ export default function PensionPanel() {
   const [slot, setSlot] = useState<"out" | "params">("out");
   const [outPage, setOutPage] = useState(0);
   const [paramPage, setParamPage] = useState(0);
+  /** 第 2 轮验收 F-03：窄宽/矮高档（≤480 紧档 ∨ H<850 深矮档）结果表横向布局的标签/值
+   *  争宽致行高 57–109px，375×812 主表页 dy=119、调整表页 dy=153。该档改纵排
+   *  （layout vertical：label 上、value 下，整行宽承载）+ 结果分页加深（主表 5 行拆
+   *  2+2+1，调整/桥接/覆盖文本各自成页）——页数随档收敛、页码钳制。桌面三页不变。 */
+  const stackedTier = useIsCompactViewport() || useShortViewport();
 
   const resultOpacity = { opacity: loading ? 0.45 : 1 } as const;
   /** P10 §8 尺寸回收：三张结果表共用同一形态入参（展开注入；防抖降透明随表） */
@@ -82,10 +87,32 @@ export default function PensionPanel() {
     border: true,
     size: "small",
     style: resultOpacity,
-    layout: "horizontal" as const,
+    layout: (stackedTier ? "vertical" : "horizontal") as "vertical" | "horizontal",
     column: (isWorkbench || isNarrow ? 1 : { xs: 1, md: 2 }) as 1 | { xs: number; md: number },
     tableLayout: (isWorkbench ? "fixed" : "auto") as "fixed" | "auto",
   } as const;
+  /** 第 2 轮验收 F-03：结果行数据化（三表行元素单源），供分档分页切片。
+   *  行类型按 arco DescriptionsItem 渲染口径（label/value 均为 ReactNode）。 */
+  const mainData: Array<{ label: React.ReactNode; value: React.ReactNode }> = data
+    ? [
+        {
+          label: t("pension.monthlyPension"),
+          value: (
+            <Text bold className="wf-nowrap">
+              {money(animatedPensionMonthly)}
+            </Text>
+          ),
+        },
+        { label: t("pension.basicPart"), value: <span className="wf-nowrap">{money(data.basicPensionMonthly)}</span> },
+        { label: t("pension.accountPart"), value: <span className="wf-nowrap">{money(data.accountPensionMonthly)}</span> },
+        { label: t("pension.yearsToRetire"), value: `${data.yearsToRetire} ${t("units.yearUnit")}` },
+        { label: t("pension.monthsUsed"), value: `${effectiveMonths} ${t("pension.monthsUnit")}` },
+      ]
+    : [];
+  /** 页码钳制（ReverseCard safeEditPage 同款）：数据未就绪只 1 页（防分页落空页） */
+  const outTotal = data ? (stackedTier ? 5 : 3) : 1;
+  const safeOutPage = Math.min(outPage, outTotal - 1);
+
 
   return (
     <div ref={hostRef}>
@@ -111,27 +138,16 @@ export default function PensionPanel() {
         {slot === "out" ? (
           <div className="wf-slot-body">
             {/* 防抖窗口内金额来自上一轮 wasm 结果；loading 期间整表降透明度（既有口径）。
-                槽内分页 3 页：主表 5 行 / 调整后 3 行 + 覆盖率注 / 桥接 2 行 + 口径注 */}
-            {data && outPage === 0 ? (
-              <Descriptions
-                {...tbl}
-                data={[
-                  {
-                    label: t("pension.monthlyPension"),
-                    value: (
-                      <Text bold className="wf-nowrap">
-                        {money(animatedPensionMonthly)}
-                      </Text>
-                    ),
-                  },
-                  { label: t("pension.basicPart"), value: <span className="wf-nowrap">{money(data.basicPensionMonthly)}</span> },
-                  { label: t("pension.accountPart"), value: <span className="wf-nowrap">{money(data.accountPensionMonthly)}</span> },
-                  { label: t("pension.yearsToRetire"), value: `${data.yearsToRetire} ${t("units.yearUnit")}` },
-                  { label: t("pension.monthsUsed"), value: `${effectiveMonths} ${t("pension.monthsUnit")}` },
-                ]}
-              />
+                槽内分页（第 2 轮验收 F-03 分档）：桌面常规 3 页（主表 5 行 / 调整后 3 行 +
+                覆盖率注 / 桥接 2 行 + 口径注）；窄宽/深矮档（stackedTier）结果表纵排 +
+                加深为 5 页（主表 2+2+1 / 调整后整表 / 覆盖率与桥接），页码钳制。 */}
+            {data && safeOutPage === 0 ? (
+              <Descriptions {...tbl} data={stackedTier ? mainData.slice(0, 2) : mainData} />
             ) : null}
-            {data && outPage === 1 ? (
+            {data && stackedTier && safeOutPage > 0 && safeOutPage < 3 ? (
+              <Descriptions {...tbl} data={mainData.slice(safeOutPage * 2 - 1, safeOutPage * 2 + 1)} />
+            ) : null}
+            {data && safeOutPage === (stackedTier ? 3 : 1) ? (
               <>
                 <Descriptions
                   {...tbl}
@@ -158,44 +174,45 @@ export default function PensionPanel() {
                     {t("pension.coverageFull")}
                   </Text>
                 ) : null}
-                {/* P5 §5 冗长治理：coverageHint + resultNote 合并键，估算口径一句话内联 */}
-                <Text type="secondary" className="wf-panel-note">
+                {/* P5 §5 冗长治理：coverageHint + resultNote 合并键，估算口径一句话内联。
+                    紧档（stackedTier）口径注 sr-only——调整表 en 纵排页在 375×667 槽 247
+                    边界（213+38 超 9px），注转 sr-only 后零布局高度（读屏可达） */}
+                <Text type="secondary" className={stackedTier ? "wf-panel-note wf-sr-only" : "wf-panel-note"}>
                   {t("pension.coverageNote")}
                 </Text>
               </>
             ) : null}
-            {data && outPage === 2 ? (
+            {data && safeOutPage === (stackedTier ? 4 : 2) ? (
               <>
                 {/* P7/P0-1 桥接块（§4.2）：bridgeYears > 0 才渲染（缺省 = 0 不占位） */}
                 {data.bridgeYears > 0 ? (
-                  <>
-                    <Descriptions
-                      {...tbl}
-                      title={t("pension.bridgeTitle")}
-                      data={[
-                        { label: t("pension.bridgeYearsLabel"), value: `${data.bridgeYears} ${t("units.yearUnit")}` },
-                        {
-                          label: t("pension.bridgeFundingLabel"),
-                          value: (
-                            <Text bold className="wf-nowrap">
-                              {money(data.bridgeFundingNeeded)}
-                            </Text>
-                          ),
-                        },
-                      ]}
-                    />
-                    <Text type="secondary" className="wf-panel-note">
-                      {t("pension.bridgeNote")}
-                    </Text>
-                  </>
-                ) : (
-                  <Text type="secondary" className="wf-panel-note">
-                    {t("pension.coverageNote")}
-                  </Text>
-                )}
+                  <Descriptions
+                    {...tbl}
+                    title={t("pension.bridgeTitle")}
+                    data={[
+                      { label: t("pension.bridgeYearsLabel"), value: `${data.bridgeYears} ${t("units.yearUnit")}` },
+                      {
+                        label: t("pension.bridgeFundingLabel"),
+                        value: (
+                          <Text bold className="wf-nowrap">
+                            {money(data.bridgeFundingNeeded)}
+                          </Text>
+                        ),
+                      },
+                    ]}
+                  />
+                ) : null}
+                <Text type="secondary" className="wf-panel-note">
+                  {data.bridgeYears > 0 ? t("pension.bridgeNote") : t("pension.coverageNote")}
+                </Text>
               </>
             ) : null}
-            <SlotPager label={t("advanced.pensionTitle")} total={3} page={outPage} onPage={setOutPage} />
+            <SlotPager
+              label={t("advanced.pensionTitle")}
+              total={outTotal}
+              page={safeOutPage}
+              onPage={setOutPage}
+            />
           </div>
         ) : (
           <div className="wf-slot-body">

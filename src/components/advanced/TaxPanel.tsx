@@ -15,7 +15,7 @@ import { useCalculatorStore } from "../../store/useCalculatorStore";
 import { calcTax } from "../../services/finance";
 import { FieldRow, AmountField, FieldTip } from "../fields";
 import { SegBar, SlotBox, SlotPager } from "../slots";
-import { useFinanceCall, useIsNarrowViewport, useMoney } from "../hooks";
+import { useFinanceCall, useIsCompactViewport, useIsNarrowViewport, useMoney } from "../hooks";
 import CurrencySection from "./CurrencySection";
 
 const { Text } = Typography;
@@ -133,6 +133,12 @@ export default function TaxPanel() {
    *  多币种态内两页（汇率 / 基准与恩格尔——超行走槽内分页） */
   const [slot, setSlot] = useState<"out" | "params" | "currency">("params");
   const [currencyPage, setCurrencyPage] = useState(0);
+  /** 第 1 轮验收复测补档（375×667 税务汇率表页 347>299）：<640 紧档多币种态四页
+   *  （0 选择 / 1 汇率表前 5 行 / 2 余行 + 来源行 / 3 偏离与恩格尔，CurrencySection
+   *  契约 B）；≥768 三页契约不变。页码随档位钳制 */
+  const isCompactTax = useIsCompactViewport();
+  const currencyPages = isCompactTax ? 4 : 3;
+  const safeCurrencyPage = Math.min(currencyPage, currencyPages - 1);
 
   return (
     <div>
@@ -255,8 +261,8 @@ export default function TaxPanel() {
             {/* P5 T7 同族类：多币种校验区迁入槽第三态（原 Divider + 标题行结构退役——
                 标题信息由槽切换条段标签承载，键值不变）。骨架修复轮：页 0 币种选择 /
                 页 1 汇率表 / 页 2 区域偏离与恩格尔三页等高互换（320 档收口登记） */}
-            <CurrencySection paged page={currencyPage} />
-            <SlotPager label={t("advanced.taxTitle")} total={3} page={Math.min(currencyPage, 2)} onPage={setCurrencyPage} />
+            <CurrencySection paged page={safeCurrencyPage} ratesPerPage={isCompactTax ? 5 : undefined} />
+            <SlotPager label={t("advanced.taxTitle")} total={currencyPages} page={safeCurrencyPage} onPage={setCurrencyPage} />
           </div>
         )}
       </SlotBox>

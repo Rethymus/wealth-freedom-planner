@@ -16,6 +16,8 @@ const zhCN = {
     languageLabel: "语言",
     wasmFailed:
       "计算核心加载失败：{{message}}。页面可正常浏览，但所有计算结果暂不可用；请刷新页面重试，或确认部署时 wasm 静态资源完整。",
+    renderError: "页面渲染出现异常，该区域暂时不可用；点击重新加载恢复（已输入的参数保存于本页，刷新后恢复默认）。",
+    reload: "重新加载",
     currencyNotice:
       "金额已按 1 人民币 = {{rate}} {{code}} 换算展示（汇率时点：{{time}}）；输入以展示币种填写、自动回写为人民币口径；所有公式与币种无关。",
     currencyFallback:
@@ -41,7 +43,7 @@ const zhCN = {
     liveUpdate: "随输入实时更新",
     invalidRealReturn:
       "实际回报率为 {{pct}}（≤ 0）：名义回报率需高于通胀率才能形成「收益跑赢通胀」的正循环，无法计算临界值。请展开「核心参数」调整。",
-    summaryPrefix: "按当前参数，你的财富自由参考线约为",
+    summaryPrefix: "按当前参数，财富自由参考线约为",
     summaryPartChild: "含育儿预留",
     summaryPartHealth: "含健康预留",
     summaryPartMajor: "含重大投入预留",
@@ -167,6 +169,10 @@ const zhCN = {
       riskDesc: "我的计划承受得住变化吗",
       principles: "原理档案",
       principlesDesc: "为什么这样计算",
+      // P10fix §11.2 降档登记（§9.2 降档序④ 缩施工面）：五个 <480 短形态标签键
+      // （freedom/life/risk/principles/proShort，≤3 字硬门禁对象）整组下一轮随渲染
+      // 接线一并补齐——本轮 TaskSwitcher 组件零改动（U4 红线 5），短键零消费点；
+      // <480 现行单行省略＋aria 全文兜底机制延续，check:i18n 行 1 门禁随键一同登记。
     },
     pro: {
       label: "专业模式",
@@ -319,6 +325,10 @@ const zhCN = {
     majorInvestmentTooltip: "购房首付、大额教育等一次性支出。",
     regionUrbanCn: "中国城镇",
     swipeHint: "左右滑动查看全部列",
+    // P10fix §11.2 偏差登记（尺寸门禁降档序① 扩展）：共享参数单源化四组级布尔的锁标
+    // aria / hint / 恢复钮三语键未新增 common.paramSync*——全部复用既有 mc.meanSync*
+    // 三键（语义同文：跟随基础模式核心参数 / 点击解锁 / 恢复跟随核心参数，键值零改动；
+    // 键域归属 common.* 待后续统一轮登记迁移）。A12 新键计数 = 5（atlas.nav.*Short）。
   },
   reverse: {
     totalAssets: "已有总资产",

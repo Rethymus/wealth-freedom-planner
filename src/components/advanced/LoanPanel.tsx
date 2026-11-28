@@ -76,6 +76,9 @@ export default function LoanPanel() {
     { title: t("loan.colInterest"), dataIndex: "interestPart", align: "right", render: (v: number) => moneyFixed(v) },
     { title: t("loan.colRemaining"), dataIndex: "remaining", align: "right", render: (v: number) => moneyFixed(v) },
   ];
+  /** 第 2 轮验收 F-05：≤480 档裁减派生列（利息/本金）至三列无横向溢出（表格容器
+   *  min-width 560 与窄容器冲突是横向内滚兜底的根因；≥768 五列全量）。
+   *  裁减在 Table columns 处按 isNarrow 过滤执行。 */
 
   return (
     <div ref={hostRef}>
@@ -95,6 +98,15 @@ export default function LoanPanel() {
       <SlotBox height={200}>
         {slot === "out" ? (
           <div className="wf-slot-body">
+            {/* 第 2 轮验收 F-07 同族：结果未就绪（防抖/首算窗口 data=null）时槽内仅剩
+                分页器 = 大片空白槽（375×667 en 资产组实测 h=337 空槽）；补「计算中」
+                占位（common.computing 三语在册键，瞬态文本即可——首算完成即被内容
+                替换；错误反馈仍由槽外 Alert 承载） */}
+            {!data ? (
+              <Text type="secondary" style={{ marginTop: 8 }}>
+                {t("common.computing")}
+              </Text>
+            ) : null}
             {data && outPage === 0 ? (
               <>
                 <Descriptions
@@ -111,7 +123,10 @@ export default function LoanPanel() {
                     { label: t("loan.totalRepayment"), value: moneyFixed(inputs.principal + data.totalInterest) },
                   ]}
                 />
-                <Text type="secondary" className="wf-panel-note">
+                {/* 第 1 轮验收复测补档：<768 口径注转 sr-only（读屏可达、零布局高度——
+                    ReverseCard 紧档口径注同款先例；en 注 3 行 54px 使 375×667 结果页
+                    208>205。桌面 ≥768 原样） */}
+                <Text type="secondary" className={isNarrow ? "wf-panel-note wf-sr-only" : "wf-panel-note"}>
                   {t("loan.rowsNote", { total: formatNumber(data.rows.length, 0) })}
                 </Text>
               </>
@@ -123,7 +138,7 @@ export default function LoanPanel() {
                     槽内禁止内滚兜底——A1 判定 ②） */}
                 <Text type="secondary" className="wf-swipe-hint">{t("common.swipeHint")}</Text>
                 <Table
-                  columns={columns}
+                  columns={isNarrow ? columns.filter((c) => c.dataIndex !== "principalPart" && c.dataIndex !== "interestPart") : columns}
                   data={data.rows.slice(0, 12)}
                   pagination={{ pageSize: 6, size: "mini", simple: true }}
                   size="small"

@@ -257,10 +257,12 @@ export default function RentalPanel() {
   /** P10 槽契约（§1.2 L4/L5；life 资产组与 pro 购房组两宿主共用）：结果 ⇄ 参数两态
    *  等高互换（槽 320 = D5 宽档图位）；超行走槽内分页——结果 3 页（摘要 / 瀑布图 240
    *  D5 档：收租图 280 并入 240 档为 p10-spec §1.2 L5 有意变更登记 / 年度明细），
-   *  参数 2 页（城市预设 + 两列紧凑栅格） */
+   *  参数 3 页（第 3 轮验收 F-01：房价租金利率年限 / 持有成本 / 城市参数） */
   const [slot, setSlot] = useState<"out" | "params">("out");
   const [outPage, setOutPage] = useState(0);
   const [paramPage, setParamPage] = useState(0);
+  // 页码钳制（ReverseCard safeEditPage 同款）：分段/翻页越界时落最后一页，防空页
+  const safeParamPage = Math.min(paramPage, 2);
 
   const { loading, result } = useFinanceCall(() => calcRental(inputs), [inputs]);
 
@@ -456,13 +458,17 @@ export default function RentalPanel() {
       <SlotBox height={200}>
         {slot === "params" ? (
           <div className="wf-slot-body">
-      {CITY_RENT_PARAMS.length === 0 ? (
+      {/* 第 3 轮验收 F-01 分档分页：参数槽 2→3 页——城市分组选择器与字段共存时
+          实测 359>334 静默裁切 +25/+55；拆页后每页 ≤3 行两列栅格。paramPage 语义：
+          0 = 房价/租金/首付/利率/年限、1 = 持有成本、2 = 城市参数。 */}
+      {safeParamPage === 2 && CITY_RENT_PARAMS.length === 0 ? (
         <Alert
           type="info"
           style={{ marginBottom: 12 }}
           content={t("rental.cityEmpty")}
         />
-      ) : (
+      ) : null}
+      {safeParamPage === 2 && CITY_RENT_PARAMS.length > 0 ? (
         <div className="wf-field" style={{ marginBottom: 12 }}>
           <div className="wf-field-label">
             <Text>{t("rental.cityParams")}</Text>
@@ -474,7 +480,7 @@ export default function RentalPanel() {
             value={group || undefined}
             placeholder={t("rental.tierPlaceholder")}
             onChange={applyGroup}
-            style={{ width: 400 }}
+            style={{ width: "100%", maxWidth: 400 }}
             allowClear
             className="wf-pressable"
           >
@@ -483,7 +489,6 @@ export default function RentalPanel() {
                 .filter((g) => CN_GROUPS.includes(g.group))
                 .map((g) => (
                   <Select.Option key={g.group} value={g.group}>
-                    {/* P10 §8 尺寸回收：选项行样式迁样式层（.wf-tier-opt，双组共用） */}
                     <span className="wf-tier-opt">
                       <span>{t(GROUP_LABEL_KEYS[g.group])}</span>
                       <span className="wf-tier-opt-ex">{g.examples}</span>
@@ -510,56 +515,56 @@ export default function RentalPanel() {
             </Tag>
           ) : null}
           {group && selectedRange && repParams ? (
-            /* ≤480 紧档：三行口径注全量下沉 FieldTip（P5 口径，信息路径零丢失——
-               槽 260 内城市选择与字段共存） */
-            isCompact ? (
-              <div className="wf-field-hint">
-                <Text type="secondary">
-                  {t("tiers.gradingNoteShort")}
-                  <FieldTip
-                    text={`${t("rental.tierHint", {
-                      tier: selectedGroupLabel,
-                      cities: selectedCitiesText,
-                      lo: selectedRange.lo,
-                      hi: selectedRange.hi,
-                      currencyNote,
-                    })}；${t("tiers.representativeNote", { city: t(CITY_NAME_KEY[repParams.city]) })}；${t("tiers.gradingNote1")} ${t("tiers.gradingNote2")}`}
-                  />
-                </Text>
-              </div>
-            ) : (
-              <>
-                <div className="wf-field-hint">
-                  <Text type="secondary">
-                    {t("rental.tierHint", {
-                      tier: selectedGroupLabel,
-                      cities: selectedCitiesText,
-                      lo: selectedRange.lo,
-                      hi: selectedRange.hi,
-                      currencyNote,
-                    })}
-                  </Text>
-                </div>
-                <div className="wf-field-hint">
-                  <Text type="secondary">
-                    {t("tiers.representativeNote", { city: t(CITY_NAME_KEY[repParams.city]) })}
-                  </Text>
-                </div>
-                {/* P5 §5 冗长治理：分级口径注压 ≤1 行 + 全文（2 段拼接键）进 FieldTip */}
+              /* ≤480 紧档：三行口径注全量下沉 FieldTip（P5 口径，信息路径零丢失——
+                 槽 260 内城市选择与字段共存） */
+              isCompact ? (
                 <div className="wf-field-hint">
                   <Text type="secondary">
                     {t("tiers.gradingNoteShort")}
-                    <FieldTip text={`${t("tiers.gradingNote1")} ${t("tiers.gradingNote2")}`} />
+                    <FieldTip
+                      text={`${t("rental.tierHint", {
+                        tier: selectedGroupLabel,
+                        cities: selectedCitiesText,
+                        lo: selectedRange.lo,
+                        hi: selectedRange.hi,
+                        currencyNote,
+                      })}；${t("tiers.representativeNote", { city: t(CITY_NAME_KEY[repParams.city]) })}；${t("tiers.gradingNote1")} ${t("tiers.gradingNote2")}`}
+                    />
                   </Text>
                 </div>
-              </>
-            )
-          ) : null}
+              ) : (
+                <>
+                  <div className="wf-field-hint">
+                    <Text type="secondary">
+                      {t("rental.tierHint", {
+                        tier: selectedGroupLabel,
+                        cities: selectedCitiesText,
+                        lo: selectedRange.lo,
+                        hi: selectedRange.hi,
+                        currencyNote,
+                      })}
+                    </Text>
+                  </div>
+                  <div className="wf-field-hint">
+                    <Text type="secondary">
+                      {t("tiers.representativeNote", { city: t(CITY_NAME_KEY[repParams.city]) })}
+                    </Text>
+                  </div>
+                  {/* P5 §5 冗长治理：分级口径注压 ≤1 行 + 全文（2 段拼接键）进 FieldTip */}
+                  <div className="wf-field-hint">
+                    <Text type="secondary">
+                      {t("tiers.gradingNoteShort")}
+                      <FieldTip text={`${t("tiers.gradingNote1")} ${t("tiers.gradingNote2")}`} />
+                    </Text>
+                  </div>
+                </>
+              )
+            ) : null}
         </div>
-      )}
+      ) : null}
 
       <FieldRow className="wf-slot-row">
-        {paramPage === 0 ? (
+        {safeParamPage === 0 ? (
           <>
         <AmountField
           xs={12}
@@ -601,9 +606,6 @@ export default function RentalPanel() {
           onChange={(v) => setInputs({ loanAnnualRatePct: v })}
           suffix="%"
         />
-          </>
-        ) : (
-          <>
         <IntField
           xs={12}
           md={12}
@@ -616,6 +618,9 @@ export default function RentalPanel() {
           suffix={t("units.yearUnit")}
           hint={t("loan.yearsHint", { max: LOAN_YEARS_LIMIT.max })}
         />
+          </>
+        ) : safeParamPage === 1 ? (
+          <>
         <PercentField
           xs={12}
           md={12}
@@ -667,13 +672,21 @@ export default function RentalPanel() {
           suffix="%"
         />
           </>
-        )}
+        ) : null}
       </FieldRow>
-      {/* 参数槽分页（2 页：房价租金利率 / 持有成本） */}
-      <SlotPager label={t("advanced.rentalTitle")} total={2} page={paramPage} onPage={setParamPage} />
+      {/* 参数槽分页（第 3 轮验收 F-01 分档分页：2→3 页——第 3 页 = 城市参数），页码钳制
+          （safeParamPage，ReverseCard safeEditPage 同款）防分段/翻页越界落空页 */}
+      <SlotPager label={t("advanced.rentalTitle")} total={3} page={safeParamPage} onPage={setParamPage} />
           </div>
         ) : (
           <div className="wf-slot-body">
+      {/* 第 2 轮验收 F-07 同族：结果未就绪（data=null）时槽内仅剩分页器 = 空白槽；
+          补「计算中」占位（common.computing 三语在册键，瞬态——首算完成即被内容替换） */}
+      {!data ? (
+        <Text type="secondary" style={{ marginTop: 8 }}>
+          {t("common.computing")}
+        </Text>
+      ) : null}
       {data && outPage === 0 ? (
         <>
           <Descriptions

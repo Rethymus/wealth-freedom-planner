@@ -31,7 +31,7 @@ import { FILE_FRESHNESS, INSIGHT_FRESHNESS } from "../../data/freshness";
 import type { InsightFreshness } from "../../data/freshness";
 import { FieldTip } from "../fields";
 import { SegBar, SlotPager } from "../slots";
-import { useIsCompactViewport, useIsNarrowViewport, useIsWorkbenchViewport } from "../hooks";
+import { useIsCompactViewport, useIsNarrowViewport, useIsWorkbenchViewport, useShortViewport } from "../hooks";
 
 const { Text } = Typography;
 
@@ -154,14 +154,18 @@ export default function InsightsPanel() {
    *  p10-spec §1.4 分节栈形态由本页级切换替代，节点数 +2 分节页器，键零新增）。 */
   const [secPage, setSecPage] = useState(0);
   const isCompact = useIsCompactViewport();
+  /** P10fix §2.5-8：深矮档（H<850）分页档与 ≤480 档同值收敛——E2 链条「分步 3 页×3 行
+   *  ≤158」（红线 10 路线 (b) 条目内二级切换的深矮档承载，§7 预算分页词汇零新增）；
+   *  850≤H 的标准档维持 4 行/页。 */
+  const isShort = useShortViewport();
   /** 压缩档（路线 (a)：来源行全文下沉 FieldTip）——全视口恒启用（P10 实测回填：
    *  1180 阅读列下链条 5 行带来源 ≈ 768 > 槽，来源下沉后达标；
    *  EntryRows 的来源行信息由行内 FieldTip 承载，零丢失） */
   const isNarrow = true;
   void useIsNarrowViewport;
   void useIsWorkbenchViewport;
-  /** E2 链条每页行数（≤480 档 3 行 / 其余 4 行）；末页 = 锚点分节 */
-  const chainPerPage = isCompact ? 3 : 4;
+  /** E2 链条每页行数（≤480 档与深矮档 3 行 / 其余 4 行）；末页 = 锚点分节 */
+  const chainPerPage = isCompact || isShort ? 3 : 4;
   const chainPages = Math.ceil(INSIGHT_CHAIN_STEPS.length / chainPerPage);
   const chainTotal = chainPages + 1;
   const safeSecPage = Math.min(secPage, chainTotal - 1);
@@ -171,13 +175,15 @@ export default function InsightsPanel() {
   );
   /** P11 E5 第 2 分页「数据时效清单」（p10 红线 10 路线 (b) SlotPager 等高互换的延伸）：
    *  页 1 = 声明（Footer 两行原样）、页 2.. = 九文件清单（每页行数复用 chainPerPage 档位：
-   *  ≤480 档 3 行/页、其余 4 行/页）；条目切换复位页码由既有 onChange 承载，页码随档位钳制 */
+   *  ≤480 档 3 行/页、其余 4 行/页）；条目切换复位页码由既有 onChange 承载，页码随档位钳制。
+   *  第 2 轮验收 F-04 补档：≤480 紧档 Footer 两行在 375 槽宽各折 3–4 行，声明页超 12px
+   *  （539>480）——紧档拆两页（声明 / 隐私），清单页顺延；桌面两行同页不变。 */
   const listPages = Math.ceil(FILE_FRESHNESS.length / chainPerPage);
-  const noticeTotal = 1 + listPages;
+  const noticeTotal = (isCompact ? 2 : 1) + listPages;
   const noticePage = Math.min(safeSecPage, noticeTotal - 1);
   const listRows = FILE_FRESHNESS.slice(
-    Math.max(0, noticePage - 1) * chainPerPage,
-    Math.max(0, noticePage - 1) * chainPerPage + chainPerPage,
+    Math.max(0, noticePage - (isCompact ? 2 : 1)) * chainPerPage,
+    Math.max(0, noticePage - (isCompact ? 2 : 1)) * chainPerPage + chainPerPage,
   );
 
   return (
@@ -293,18 +299,12 @@ export default function InsightsPanel() {
         <SlotPager label={t("insights.entryData")} total={2} page={safeSecPage} onPage={setSecPage} />
       </div>
 
-      {/* —— E4 医疗与证据（页 1 = 医疗预留 / 页 2 = 证据说明） —— */}
+      {/* —— E4 医疗与证据（页 1 = 证据说明 / 页 2 = 医疗预留；P10fix §2.5-8 有意变更登记：
+          原「医疗预留在前」的 8 行 EntryRows 超 E4 分节槽 ≤115 预算、证据说明 ≤6 行达标，
+          两分节经 SlotPager 等高互换、节序互换不影响每页高度约束——内容零删，
+          节序为有意变更（p10fix-spec §2.5-8），条目切换复位页码语义不变） —— */}
       <div className="wf-entry" hidden={entryId !== "evidence"}>
         {safeSecPage === 0 ? (
-          <div className="wf-entry-sec">
-            <SectionTitle titleKey="insights.healthTitle" />
-            <EntryRows entries={INSIGHT_HEALTH_ENTRIES} compact={isNarrow} />
-            <div className={isNarrow ? "wf-insights-body wf-entry-reading" : "wf-insights-body"}>
-              <Text type="secondary">{t("insights.healthShort")}</Text>
-              <FieldTip text={joinParts(t("insights.healthNote1"), t("insights.healthNote2"))} />
-            </div>
-          </div>
-        ) : (
           <div className="wf-entry-sec">
             <SectionTitle titleKey="insights.evidenceTitle" />
             <div className={isNarrow ? "wf-insights-body wf-entry-reading" : "wf-insights-body"}>
@@ -313,19 +313,39 @@ export default function InsightsPanel() {
               <FieldTip text={joinParts(t("insights.evidenceNote1"), t("insights.evidenceNote2"))} />
             </div>
           </div>
+        ) : (
+          <div className="wf-entry-sec">
+            <SectionTitle titleKey="insights.healthTitle" />
+            <EntryRows entries={INSIGHT_HEALTH_ENTRIES} compact={isNarrow} />
+            <div className={isNarrow ? "wf-insights-body wf-entry-reading" : "wf-insights-body"}>
+              <Text type="secondary">{t("insights.healthShort")}</Text>
+              <FieldTip text={joinParts(t("insights.healthNote1"), t("insights.healthNote2"))} />
+            </div>
+          </div>
         )}
         <SlotPager label={t("insights.entryEvidence")} total={2} page={safeSecPage} onPage={setSecPage} />
       </div>
 
       {/* —— E5 声明 + 数据时效清单（P11：1 + ⌈9/每页⌉ 页；页 1 = Footer 两行迁入原样，
           页 2.. = 九文件文件级清单——p10 红线 10 路线 (b) SlotPager 等高互换延伸，
-          交互词汇零新增） —— */}
+          交互词汇零新增；第 2 轮验收 F-04 紧档拆声明/隐私两页，清单页顺延） —— */}
       <div className="wf-entry" hidden={entryId !== "notice"}>
         {noticePage === 0 ? (
           <div className="wf-entry-sec">
             <SectionTitle titleKey="insights.entryNotice" />
             <div className={isNarrow ? "wf-entry-reading" : undefined} role="contentinfo">
               <Text type="secondary" className="wf-insights-body">{t("app.footerDisclaimer")}</Text>
+              {!isCompact ? (
+                <Text type="secondary" className="wf-insights-body">{t("app.footerPrivacy")}</Text>
+              ) : null}
+            </div>
+          </div>
+        ) : isCompact && noticePage === 1 ? (
+          <div className="wf-entry-sec">
+            {/* 紧档隐私页小节头复用「声明」条目名（app.footerPrivacy 全文作 divider
+                标题会整段入题——错误粒度）；语义由 role=contentinfo + 正文承载 */}
+            <SectionTitle titleKey="insights.entryNotice" />
+            <div className={isNarrow ? "wf-entry-reading" : undefined} role="contentinfo">
               <Text type="secondary" className="wf-insights-body">{t("app.footerPrivacy")}</Text>
             </div>
           </div>

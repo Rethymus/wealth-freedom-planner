@@ -110,13 +110,20 @@ export function useIsCompactViewport(): boolean {
 }
 
 /**
- * 双栏工作台判定（≥ 1200px，与 global.css 工作台网格断点一一对应；V1/V2 修复专用：
- * 工作台两栏是 400px 定宽左栏与被 1112px 容器封顶的右栏，容器实际宽度小于组件库
- * viewport 级 md 断点所假设的可用宽度，viewport 级多列 Descriptions 会在栏内溢出被
- * tabs 裁切层静默裁掉——两栏内的 Descriptions 以本判定切单列键值行）。
+ * 双栏工作台判定（≥ 1200px 且视口高度 ≥ 880px；P10fix E1 高度驱动形态降级——
+ * docs/p10fix-spec.md §1.1/§2.2）。宽度维与 global.css 工作台网格断点一一对应
+ * （V1/V2 修复专用：工作台两栏是 400px 定宽左栏与被 1112px 容器封顶的右栏，容器
+ * 实际宽度小于组件库 viewport 级 md 断点所假设的可用宽度，viewport 级多列
+ * Descriptions 会在栏内溢出被 tabs 裁切层静默裁掉——两栏内的 Descriptions 以本判定
+ * 切单列键值行）。高度维为 E1 修复新增：双栏页栈静态预算左列 742 / 右列 628
+ * （p10fix-spec §1.1 在册），880 = max(742, 628) ＋ chrome 124 ＋ slack 14——
+ * H < 880 时双栏不可达 580 下限零滚动预算域，整体降为叶树形态（E1 三个破功视口
+ * 1366×768 / 1366×650 / 1280×720 的溢出源由此整体消除）；1440×900 / 1920×1080
+ * 保持双栏。落点唯一：本 hook 是双栏形态的唯一激活路径（.wf-freedom-split 无 CSS
+ * media query 副本，BasicCalculator isWorkbench 分支单点渲染）。
  * 与 useIsNarrowViewport 同构：惰性初始化直读 matchMedia，首帧即得正确值。
  */
-const WORKBENCH_MEDIA_QUERY = "(min-width: 1200px)";
+const WORKBENCH_MEDIA_QUERY = "(min-width: 1200px) and (min-height: 880px)";
 
 export function useIsWorkbenchViewport(): boolean {
   const [isWorkbench, setIsWorkbench] = useState(() => window.matchMedia(WORKBENCH_MEDIA_QUERY).matches);
@@ -132,8 +139,12 @@ export function useIsWorkbenchViewport(): boolean {
 
 /** 矮视口判定（视口高度 < 850px；P10 骨架修复轮新增）：高度维度的档位判定——
  *  与 useIsNarrowViewport 同构（matchMedia 惰性初始化，首帧即得正确值）。
- *  用途：双栏自由刻度在 1200×800 档的档位压缩（反向卡 228→190、进度环 72→56），
- *  使双栏页栈回到 756 预算内（A1 判定①）。 */
+ *  用途勘误（P10fix §1.1 连带登记）：注释原文「双栏 1200×800 档的档位压缩
+ *  （反向卡 228→190、进度环 72→56）」中 190 为陈旧值——反向卡矮档代码常量为
+ *  170（ReversePanel.tsx REVERSE_CARD_HEIGHT_SHORT 228/170，以代码为准）；
+ *  且 WORKBENCH_MEDIA_QUERY 已增高度维（H≥880 才双栏），「双栏 ∧ 矮档」组合
+ *  成为空集——本判定现服务于叶树/单列形态的档位压缩（进度环 48、龙卷风图 180、
+ *  反向卡 170、反向卡编辑分页 3 页×2 字段）与 global.css 深矮档压缩块。 */
 const SHORT_HEIGHT_MEDIA_QUERY = "(max-height: 849.9px)";
 
 export function useShortViewport(): boolean {

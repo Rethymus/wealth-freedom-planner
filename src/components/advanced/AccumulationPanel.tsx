@@ -10,6 +10,7 @@
  * 文案经 react-i18next 三语化。
  */
 import {Alert, Button, Descriptions, Empty, Grid, Progress, Radio, Spin, Typography} from "@arco-design/web-react";
+import { IconLock } from "@arco-design/web-react/icon";
 import { useMemo, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
@@ -30,6 +31,7 @@ import { cnyToDisplay } from "../../services/currency";
 import { LIMITS, MOTION_DURATIONS, resolveThemeTokens } from "../../data/defaults";
 import type { AccumulationOutput, RequiredSavingOutput } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
+import { effectiveAccumulationSim } from "../../store/effectiveInputs";
 import { AmountField, FieldRow, FieldTip, IntField, PathsField, PercentField } from "../fields";
 import { SegBar, SlotBox, SlotPager } from "../slots";
 import { EmptyRulerArt } from "../EmptyRuler";
@@ -64,6 +66,50 @@ export default function AccumulationPanel() {
   const synced = useCalculatorStore((s) => s.accumulationTargetSynced);
   const setSynced = useCalculatorStore((s) => s.setAccumulationTargetSynced);
   const baseline = useCalculatorStore((s) => s.baselineInputs);
+  /** P10fix §3.2 普查 #6/#8/#9：月开销与两均值单源化口径标志（mcMeansSynced 五要素模板
+   *  推广）——锁态（默认 true）显示层取 baseline 派生直显、运行提交帧同帧解析覆盖，
+   *  派生口径统一在 effectiveInputs.ts 纯函数模块（零面板切片写入）；解锁 = 显式动作
+   *  同时把当刻核心值落入切片（unlock*Patch 快照）。普查 #7 targetValue 联动
+   *  （accumulationTargetSynced）不迁移零变化、#14 currentAssets 裁定不联动。 */
+  const accExpenseSynced = useCalculatorStore((s) => s.accExpenseSynced);
+  const accMeansSynced = useCalculatorStore((s) => s.accMeansSynced);
+  const setSyncFlag = useCalculatorStore((s) => s.setSyncFlag);
+  /** 有效输入（显示/运行同源）：月开销与两均值锁定键取 baseline 派生，其余键切片原值 */
+  const effAcc = effectiveAccumulationSim(inputs, baseline, {
+    expense: accExpenseSynced,
+    means: accMeansSynced,
+  });
+  /** 锁标（解锁触发点；月开销 / 两均值各一）——aria 三语键复用 mc.meanSync*（§11.2 降档登记）；
+   *  解锁快照内联当刻核心值字面量（消除解锁即见旧值错位；§9.2 降档登记） */
+  const expenseLockButton = (
+    <Button
+      size="mini"
+      type="text"
+      className="wf-pressable"
+      aria-label={t("mc.meanSyncLockAria")}
+      icon={<IconLock />}
+      onClick={() => {
+        setSyncFlag("accExpenseSynced", false);
+        setInputs({ monthlyExpense: baseline.monthlyExpense });
+      }}
+    />
+  );
+  const meansLockButton = (
+    <Button
+      size="mini"
+      type="text"
+      className="wf-pressable"
+      aria-label={t("mc.meanSyncLockAria")}
+      icon={<IconLock />}
+      onClick={() => {
+        setSyncFlag("accMeansSynced", false);
+        setInputs({ nominalReturnMeanPct: baseline.nominalReturnPct, inflationMeanPct: baseline.inflationPct });
+      }}
+    />
+  );
+  /** 锁态 hint/suffix 复用（两均值三字段共用） */
+  const accMeansHint = accMeansSynced ? t("mc.meanSyncHint") : undefined;
+  const accMeansSuffix = accMeansSynced ? meansLockButton : "%";
   const displayCode = useCalculatorStore((s) => s.currency.display);
   const colorBlindFriendly = useCalculatorStore((s) => s.colorBlindFriendly);
   const theme = useCalculatorStore((s) => s.theme);
@@ -137,10 +183,10 @@ export default function AccumulationPanel() {
         currentAssets: inputs.currentAssets,
         targetValue: effectiveTarget,
         years: inputs.years,
-        nominalReturnMeanPct: inputs.nominalReturnMeanPct,
-        inflationMeanPct: inputs.inflationMeanPct,
+        nominalReturnMeanPct: effAcc.nominalReturnMeanPct,
+        inflationMeanPct: effAcc.inflationMeanPct,
       }),
-    [inputs.currentAssets, effectiveTarget, inputs.years, inputs.nominalReturnMeanPct, inputs.inflationMeanPct],
+    [inputs.currentAssets, effectiveTarget, inputs.years, effAcc.nominalReturnMeanPct, effAcc.inflationMeanPct],
     { debounceMs: TARGET_DEBOUNCE_MS, enabled: mode === "reverse" },
   );
   const revData: RequiredSavingOutput | null =
@@ -153,8 +199,10 @@ export default function AccumulationPanel() {
     setRunning(true);
     // T15：提交帧同步快照目标值（与下方 calcAccumulation 入参同一值、同一帧）
     setSubmittedTarget(effectiveTarget);
-    // 运行时取当刻联动目标值提交（不回写 store）；calcAccumulation 内部已捕获全部异常，此处仅兜底
-    calcAccumulation({ ...inputs, targetValue: effectiveTarget })
+    // 运行时取当刻联动目标值提交（不回写 store）；calcAccumulation 内部已捕获全部异常，此处仅兜底。
+    // P10fix §3.2：提交帧解析用 effAcc——锁态月开销/两均值取 baseline 现值同帧覆盖
+    // （与 MonteCarloPanel run() 的 effectiveInputs 同帧提交先例完全同构）
+    calcAccumulation({ ...effAcc, targetValue: effectiveTarget })
       .then((r) => setResult(r))
       .catch((e: unknown) =>
         setResult({ ok: false, error: e instanceof Error ? e.message : String(e), notReady: false }),
@@ -163,14 +211,15 @@ export default function AccumulationPanel() {
   };
 
   /** 蒙特卡洛验证：以「月储蓄 = 月支出 + S」重跑正向模拟（S = 反推所需月储蓄），
-   *  给出目标年限内达成概率（docs/p2-spec.md §5.2）；失败走既有 error Alert */
+   *  给出目标年限内达成概率（docs/p2-spec.md §5.2）；失败走既有 error Alert。
+   *  P10fix：月支出取 effAcc（锁态 = baseline 派生，与显示/运行同源） */
   const runVerify = () => {
     if (!revData) return;
     setVerifyRunning(true);
     calcAccumulation({
-      ...inputs,
+      ...effAcc,
       targetValue: effectiveTarget,
-      monthlyIncome: inputs.monthlyExpense + revData.requiredMonthlySaving,
+      monthlyIncome: effAcc.monthlyExpense + revData.requiredMonthlySaving,
       years: inputs.years,
     })
       .then((r) => setVerifyState(r))
@@ -197,13 +246,14 @@ export default function AccumulationPanel() {
       column.sort((a, b) => a - b);
       row.median = median(column);
       // 展示口径目标线 = effectiveTarget × (1 + 通胀均值)^year（契约不含各路径目标序列，
-      // 各路径实际判定使用其自身通胀样本——图下注释注明）
-      row.target = convert(effectiveTarget * Math.pow(1 + inputs.inflationMeanPct / 100, y + 1));
+      // 各路径实际判定使用其自身通胀样本——图下注释注明）。P10fix：通胀均值取 effAcc
+      //（锁态 = baseline 派生，与图同帧同源）
+      row.target = convert(effectiveTarget * Math.pow(1 + effAcc.inflationMeanPct / 100, y + 1));
       rows.push(row);
     }
     return rows;
     // convert 随展示币种变化须重算（rate > 0 线性缩放）；rate=1 时与现状逐位一致
-  }, [result, effectiveTarget, inputs.inflationMeanPct, rate]);
+  }, [result, effectiveTarget, effAcc.inflationMeanPct, rate]);
 
   const data = result?.ok === true ? result.data : null;
   /** 统一错误提示：正向运行 / 反推闭式解 / 蒙特卡洛验证任一步失败均走既有 error Alert */
@@ -215,15 +265,17 @@ export default function AccumulationPanel() {
   const chartPathCount = data ? Math.min(MAX_CHART_PATHS, data.samplePaths.length) : 0;
 
   /** F1 支出口径一致性：面板「月支出」与自由刻度「每月开销」不一致即警示（字段 hint）+
-   *  一键同步按钮（显式动作，不自动改值——手动输入不被静默覆盖的既有语义不变） */
-  const expenseMismatched = inputs.monthlyExpense !== baseline.monthlyExpense;
-  /** 月储蓄（可为负；负值以跌色展示，正值以涨色展示） */
-  const saving = inputs.monthlyIncome - inputs.monthlyExpense;
+   *  一键同步按钮（显式动作，不自动改值）。P10fix §3.2 普查 #6：accExpenseSynced 锁态
+   *  （默认）下字段显示即派生值，警示与同步钮仅在解锁态有意义（hint 改单源化共用句） */
+  const expenseMismatched = !accExpenseSynced && inputs.monthlyExpense !== baseline.monthlyExpense;
+  /** 月储蓄（可为负；负值以跌色展示，正值以涨色展示）。P10fix：月支出取 effAcc
+   *  （锁态 = baseline 派生，与字段显示/运行口径同源） */
+  const saving = inputs.monthlyIncome - effAcc.monthlyExpense;
   const savingText = money(saving);
   /** 整句经 i18n 插值后定位储蓄数值子串，按正负着色（同串渲染，不拆文案键） */
   const savingLine = t("accumulation.savingLine", {
     income: money(inputs.monthlyIncome),
-    expense: money(inputs.monthlyExpense),
+    expense: money(effAcc.monthlyExpense),
     saving: savingText,
   });
   const savingIdx = savingLine.lastIndexOf(savingText);
@@ -255,6 +307,11 @@ export default function AccumulationPanel() {
   const [slot, setSlot] = useState<"out" | "params">("out");
   const [outPage, setOutPage] = useState(0);
   const [paramPage, setParamPage] = useState(0);
+  /** 第 2 轮验收 F-07：结果段可达页数随模式/数据收敛（ReverseCard safeEditPage 同款
+   *  钳制）——正推未运行仅页 0（口径行+空态）有内容、运行后四页全量；反推仅页 0
+   *  （反解大数字）有内容。页码钳制消除「pager 停末页切分段落入无内容页」。 */
+  const outTotal = mode === "forward" ? (data ? 4 : 1) : 1;
+  const safeOutPage = Math.min(outPage, outTotal - 1);
   /** S25 图表 hover 读数（p6-spec §2）：十字虚线 + 读数气泡（中位与展示口径目标线两行；
    *  50 条抽样路径不入气泡降噪）。金额与图轴同源（chartData 已按展示币种换算，formatMoney
    *  直出不再二次换算）；系列名复用既有键。触屏无 hover 无气泡，分位 Descriptions 兜底 */
@@ -342,18 +399,25 @@ export default function AccumulationPanel() {
             convertRate={rate}
           />
         ) : null}
+        {/* P10fix §3.2 普查 #6：锁态字段形态（disabled + 派生值直显 + 尾部锁标，
+            形态复制 MC #11/#12 mcMeansSynced 模板）；解锁态 → 现字段原样可编 + 不一致警示 */}
         <AmountField
           label={t("accumulation.monthlyExpense")}
           tooltip={t("accumulation.monthlyExpenseTooltip")}
-          value={inputs.monthlyExpense}
+          value={effAcc.monthlyExpense}
           onChange={(v) => setInputs({ monthlyExpense: v })}
+          disabled={accExpenseSynced}
           prefix={symbol}
-          suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
+          suffix={accExpenseSynced ? expenseLockButton : displayCode === "CNY" ? t("units.yuanPerMonth") : undefined}
           convertRate={rate}
           hint={
-            expenseMismatched
-              ? t("accumulation.expenseMismatchHint", { value: money(baseline.monthlyExpense) })
-              : undefined
+            isCompact
+              ? undefined
+              : accExpenseSynced
+                ? t("mc.meanSyncHint")
+                : expenseMismatched
+                  ? t("accumulation.expenseMismatchHint", { value: money(baseline.monthlyExpense) })
+                  : undefined
           }
         />
         <AmountField
@@ -367,22 +431,26 @@ export default function AccumulationPanel() {
           }}
           prefix={symbol}
           suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
-          hint={synced ? t("accumulation.syncedHint") : undefined}
+          hint={synced && !isCompact ? t("accumulation.syncedHint") : undefined}
           convertRate={rate}
         />
           </>
         ) : paramPage === 1 ? (
           <>
-        {/* 反推模式为确定性口径：只消费均值，隐藏两个标准差字段（§5.2 字段清单） */}
+        {/* 反推模式为确定性口径：只消费均值，隐藏两个标准差字段（§5.2 字段清单）。
+            P10fix §3.2 普查 #8/#9：两均值锁态字段形态（disabled + 派生值直显 + 尾部锁标，
+            模板同 MC #11/#12；正推/反推两分支同构处理） */}
         {mode === "forward" ? (
           <>
             <PercentField
               md={12}
               label={t("mc.returnMean")}
               tooltip={t("mc.returnMeanTooltip")}
-              value={inputs.nominalReturnMeanPct}
+              value={effAcc.nominalReturnMeanPct}
               onChange={(v) => setInputs({ nominalReturnMeanPct: v })}
-              suffix="%"
+              disabled={accMeansSynced}
+              hint={accMeansHint}
+              suffix={accMeansSuffix}
             />
             <PercentField
               md={12}
@@ -398,18 +466,22 @@ export default function AccumulationPanel() {
             md={12}
             label={t("mc.returnMean")}
             tooltip={t("mc.returnMeanTooltip")}
-            value={inputs.nominalReturnMeanPct}
+            value={effAcc.nominalReturnMeanPct}
             onChange={(v) => setInputs({ nominalReturnMeanPct: v })}
-            suffix="%"
+            disabled={accMeansSynced}
+            hint={accMeansHint}
+            suffix={accMeansSuffix}
           />
         )}
         <PercentField
           md={12}
           label={t("mc.inflationMean")}
           tooltip={t("mc.inflationMeanTooltip")}
-          value={inputs.inflationMeanPct}
+          value={effAcc.inflationMeanPct}
           onChange={(v) => setInputs({ inflationMeanPct: v })}
-          suffix="%"
+          disabled={accMeansSynced}
+          hint={accMeansHint}
+          suffix={accMeansSuffix}
         />
         {mode === "forward" ? (
           <PercentField
@@ -491,10 +563,23 @@ export default function AccumulationPanel() {
               {t("accumulation.expenseSyncButton", { value: money(baseline.monthlyExpense) })}
             </Button>
           ) : null}
+          {/* P10fix §3.2 普查 #6/#8/#9：月开销/两均值一键恢复联动（三语键共用
+              mc.meanSyncRestore；锁态字段值直接派生自 baseline，disabled 无键入
+              无受控回写缺陷路径） */}
+          {!accExpenseSynced ? (
+            <Button size="small" onClick={() => setSyncFlag("accExpenseSynced", true)} className="wf-pressable">
+              {t("mc.meanSyncRestore")}
+            </Button>
+          ) : null}
+          {!accMeansSynced ? (
+            <Button size="small" onClick={() => setSyncFlag("accMeansSynced", true)} className="wf-pressable">
+              {t("mc.meanSyncRestore")}
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {/* 参数槽分页（3 页：基础四字段 / 均值标准差 / 模拟参数） */}
-      <SlotPager label={t("advanced.accumulationTitle")} total={3} page={paramPage} onPage={setParamPage} />
+      <SlotPager label={t("advanced.accumulationTitle")} total={3} page={Math.min(paramPage, 2)} onPage={setParamPage} />
           </div>
         ) : (
           <div className="wf-slot-body">
@@ -502,7 +587,7 @@ export default function AccumulationPanel() {
       {/* 结果槽（正向）：页 0 = 月储蓄口径行 + 达成/存续双指标 + 空态；页 1 = 首达分布；
           页 2 = 期末分布 + 目标线叙事与图注（S15 落点约束：叙事行随图容器迁至同槽）；
           页 3 = 路径图（D5 档） */}
-      {mode === "forward" && outPage === 0 ? (
+      {mode === "forward" && safeOutPage === 0 ? (
         <>
           {/* 月储蓄口径行：储蓄数值按正负着色（负 = 跌色，正 = 涨色） */}
           <div>
@@ -583,7 +668,7 @@ export default function AccumulationPanel() {
 
       {error ? <Alert type="error" style={{ marginTop: 4 }} content={error} /> : null}
 
-      {data && mode === "forward" && outPage === 0 ? (
+      {data && mode === "forward" && safeOutPage === 0 ? (
         <>
           <div className="wf-acc-progress">
             <Text>{t("accumulation.fiLabel")}</Text>
@@ -614,7 +699,7 @@ export default function AccumulationPanel() {
           ) : null}
         </>
       ) : null}
-      {data && mode === "forward" && outPage === 1 ? (
+      {data && mode === "forward" && safeOutPage === 1 ? (
         <>
           <Descriptions
             {...tbl}
@@ -629,7 +714,7 @@ export default function AccumulationPanel() {
           />
         </>
       ) : null}
-      {data && mode === "forward" && outPage === 2 ? (
+      {data && mode === "forward" && safeOutPage === 2 ? (
         <>
           <Descriptions
             {...tbl}
@@ -665,7 +750,7 @@ export default function AccumulationPanel() {
           </Text>
         </>
       ) : null}
-      {data && mode === "forward" && outPage === 3 && chartData.length > 0 ? (
+      {data && mode === "forward" && safeOutPage === 3 && chartData.length > 0 ? (
         <>
           <div
               className="wf-acc-chart"
@@ -748,14 +833,16 @@ export default function AccumulationPanel() {
             </div>
         </>
       ) : null}
-      {mode === "forward" && !data && outPage === 0 ? (
+      {mode === "forward" && !data && safeOutPage === 0 ? (
         /* C6 空态组件化：未运行空态从 Alert 改为 Empty（复用现有键，改写句式）；
-           T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入 */
-        <Empty style={{ marginTop: 8 }} icon={<EmptyRulerArt size={56} />} description={t("accumulation.placeholder")} />
+           T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入。
+           第 1 轮验收复测补档：紧档插图 56→32（375×667 空态页 = 模式行 44 + Empty 108
+           + 分页器 44 = 208 > 槽 205，降档后 166 ≤ 205；视觉档位压缩非退役） */
+        <Empty style={{ marginTop: 8 }} icon={<EmptyRulerArt size={isCompact ? 32 : 56} />} description={t("accumulation.placeholder")} />
       ) : null}
       {/* 结果槽分页（正向 4 页 / 反推单页不渲染分页器） */}
       {mode === "forward" ? (
-        <SlotPager label={t("advanced.accumulationTitle")} total={4} page={outPage} onPage={setOutPage} />
+        <SlotPager label={t("advanced.accumulationTitle")} total={outTotal} page={safeOutPage} onPage={setOutPage} />
       ) : null}
           </div>
         )}

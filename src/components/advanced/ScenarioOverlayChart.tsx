@@ -49,8 +49,12 @@ export default function ScenarioOverlayChart(props: {
 }) {
   const { t } = useTranslation();
   const { base, scen, scenName, depletedYear, tokens, symbol, convert, reducedMotion } = props;
-  /** 图高三档 / YAxis 宽 / 紧凑档（D5，与两既有折线图同 hook 同参数） */
+  /** 图高三档 / YAxis 宽 / 紧凑档（D5，与两既有折线图同 hook 同参数）。
+   *  第 1 轮验收复测补档：≤480 紧档槽内图 240→160（375×667 叠影页实容 347（240 档）
+   *  > 槽 299——图 160 档后 267 ≤ 299；首改 200 档实测仍超即再降一档，D5 档位扩展
+   *  登记，桌面三档不变） */
   const { chartHeight, yAxisWidth, isCompact } = useChartMetrics();
+  const overlayHeight = isCompact ? 160 : chartHeight;
   /** age 对齐合并（两路径 horizon / 起始年龄可不同——切片差异，以 age 为键各成序列） */
   const rows: OvRow[] = [];
   const map = new Map<number, OvRow>();
@@ -113,7 +117,7 @@ export default function ScenarioOverlayChart(props: {
   return (
     <div>
       <div role="img" aria-label={t("scenario.overlayChartAria", { name: scenName })}>
-        <ResponsiveContainer width="100%" height={chartHeight}>
+        <ResponsiveContainer width="100%" height={overlayHeight}>
           <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
             {renderTip()}
             <CartesianGrid stroke={tokens.chartGrid} vertical={false} />

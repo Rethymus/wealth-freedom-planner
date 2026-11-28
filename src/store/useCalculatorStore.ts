@@ -120,6 +120,29 @@ interface CalculatorState {
    *  accumulationTargetSynced / pensionMonthsSynced（零新交互词汇） */
   mcMeansSynced: boolean;
   setMcMeansSynced: (v: boolean) => void;
+  /** P10fix §3.2 共享参数单源化四组级布尔（mcMeansSynced 五要素模板推广；普查 #1–#10、
+   *  #8/#9，docs/p10fix-spec.md §3.1/§3.2）：true = 跟随核心参数派生锁定（显示层取
+   *  baseline 派生直显、运行提交帧同帧解析覆盖，锁态零面板切片写入——派生口径统一在
+   *  src/store/effectiveInputs.ts 纯函数模块）；false = 显式解锁独立（解锁动作同时把
+   *  当刻核心值落入面板切片，快照消除「解锁即见旧值」错位）。
+   *  四标志全部默认 true 入 businessDefaults 清单；不入 localStorage（业务输入不落盘
+   *  纪律，mcMeansSynced 注释原文），跨会话仅经分享链接 / 情景存档携带（share v7
+   *  载荷第 14–17 键）。普查 #13/#14 currentAssets 不联动（语义异名裁定）、#7
+   *  accumulationTargetSynced / pensionMonthsSynced 不迁移零变化。
+   *  setter 合一（尺寸门禁降档登记）：setSyncFlag(key, v) 单动作承载四标志写入口径，
+   *  key 白名单 = 四键联合类型（mcMeansSynced 既有专用 setter 原样保留）。 */
+  /** 反向估算五字段（reverse 切片：子女预留/健康预留/重大投入/回报/通胀——原手动同步钮集合） */
+  reverseSynced: boolean;
+  /** 蒙特卡洛年支出（= baseline 月开销 ×12 派生收编） */
+  mcSpendSynced: boolean;
+  /** 打工积累月开销（直取 baseline 同名值） */
+  accExpenseSynced: boolean;
+  /** 打工积累两均值（同 mcMeansSynced 机制） */
+  accMeansSynced: boolean;
+  setSyncFlag: (
+    key: "reverseSynced" | "mcSpendSynced" | "accExpenseSynced" | "accMeansSynced",
+    v: boolean,
+  ) => void;
   /** 自助抽样收益序列选择 */
   monteCarloSeriesId: IndexId;
   setMonteCarloSeriesId: (v: IndexId) => void;
@@ -191,12 +214,28 @@ function businessDefaults() {
     monteCarloReturnMode: "normal" as MonteCarloReturnMode,
     monteCarloSeriesId: "csi300" as IndexId,
     mcMeansSynced: true,
+    // P10fix §3.2：共享参数单源化四组级布尔，默认全 true（锁态派生锁定）
+    reverseSynced: true,
+    mcSpendSynced: true,
+    accExpenseSynced: true,
+    accMeansSynced: true,
     strategyLegacyNotice: false,
   };
 }
 
 /** 币种默认值：初始态与 resetAll 共用，防两处字面量漂移（base 固定 CNY，仅展示币种可换） */
 const DEFAULT_CURRENCY: CurrencySetting = { base: "CNY", display: "CNY" };
+
+/** P10fix v7：单源化四口径标志的载荷 ⇄ 状态映射（buildShareState 装配与 applyShareState
+ *  恢复共用同一键序——发送方所见 = 接收方所得；与 mcMeansSynced「随载荷恢复」同口径） */
+function syncFlagsOf(src: Pick<ShareState, "reverseSynced" | "mcSpendSynced" | "accExpenseSynced" | "accMeansSynced">) {
+  return {
+    reverseSynced: src.reverseSynced,
+    mcSpendSynced: src.mcSpendSynced,
+    accExpenseSynced: src.accExpenseSynced,
+    accMeansSynced: src.accMeansSynced,
+  };
+}
 
 /** 界面偏好初始值：只在模块加载时读一次存储（展示币种 + 色盲友好开关，均带合法性校验） */
 const initialPrefs = readInitialPrefs();
@@ -278,6 +317,10 @@ export const useCalculatorStore = create<CalculatorState>()((set, get) => ({
   // P10 §4：MC 均值口径标志。锁态（true）不写 monteCarloInputs 两字段——显示与运行
   // 提交帧均从 baselineInputs 派生（MonteCarloPanel 同帧解析，先例 accumulationTargetSynced）
   setMcMeansSynced: (v) => set({ mcMeansSynced: v }),
+  // P10fix §3.2：共享参数单源化四组级布尔 setter（合一动作；mcMeansSynced 专用 setter
+  // 先例同形）。锁态（true）零面板切片写入——显示与运行提交帧均经 effectiveInputs.ts
+  // 派生；解锁（false）由面板显式动作同时落当刻核心值快照
+  setSyncFlag: (key, v) => set({ [key]: v } as Partial<CalculatorState>),
   setMonteCarloReturnMode: (v) => set({ monteCarloReturnMode: v }),
   setMonteCarloSeriesId: (v) => set({ monteCarloSeriesId: v }),
   clearStrategyLegacyNotice: () => set({ strategyLegacyNotice: false }),
@@ -318,6 +361,10 @@ export const useCalculatorStore = create<CalculatorState>()((set, get) => ({
       monteCarloReturnMode: decoded.state.monteCarloReturnMode,
       monteCarloSeriesId: decoded.state.monteCarloSeriesId,
       mcMeansSynced: decoded.state.mcMeansSynced, // P10 v6：MC 均值口径标志随链接恢复（发送方所见 = 接收方所得）
+      // P10fix v7：单源化四口径标志随链接恢复（与 mcMeansSynced 同口径——随载荷恢复标志
+      // 本身；与下方 accumulationTargetSynced/pensionMonthsSynced 恢复 false 的历史口径
+      // 不同，两套口径并存登记，旧两键本轮零改动——p10fix-spec §3.4 偏差登记）
+      ...syncFlagsOf(decoded.state),
       taxInputs: decoded.state.tax,
       accumulationInputs: decoded.state.accumulation,
       accumulationTargetSynced: false, // 目标值以链接携带的原值呈现，不联动
@@ -345,6 +392,9 @@ export const useCalculatorStore = create<CalculatorState>()((set, get) => ({
       monteCarloReturnMode: s.monteCarloReturnMode,
       monteCarloSeriesId: s.monteCarloSeriesId,
       mcMeansSynced: s.mcMeansSynced, // P10 v6：口径标志入载荷（锁态派生值随 baseline 入链，两处一致）
+      // P10fix v7：单源化四口径标志入载荷（第 14–17 键；发送方所见 = 接收方所得，
+      // 锁态派生值不单独入载荷——随 baseline 切片入链）
+      ...syncFlagsOf(s),
       tax: s.taxInputs,
       accumulation: s.accumulationInputs,
       progressCurrentAssets: s.progressInputs.currentAssets,

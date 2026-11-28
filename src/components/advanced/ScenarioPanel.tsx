@@ -37,7 +37,7 @@ import { FieldTip } from "../fields";
 import { EmptyRulerArt } from "../EmptyRuler";
 import { SegBar, SlotBox, SlotPager } from "../slots";
 import ScenarioOverlayChart from "./ScenarioOverlayChart";
-import { useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
+import { useIsCompactViewport, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
 
 const { Text } = Typography;
 
@@ -131,6 +131,8 @@ async function computeColumn(
 
 export default function ScenarioPanel() {
   const { t } = useTranslation();
+  /** 第 1 轮验收复测补档：紧档档位（≤480 空态插图降档 32，见下方 compare 表空态） */
+  const isCompact = useIsCompactViewport();
   const displayCode = useCalculatorStore((s) => s.currency.display);
   const colorBlindFriendly = useCalculatorStore((s) => s.colorBlindFriendly);
   const theme = useCalculatorStore((s) => s.theme);
@@ -511,10 +513,12 @@ export default function ScenarioPanel() {
         </div>
         {validCols.length === 0 ? (
           /* T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入；
-             文案改写为「缺什么——下一步」句式（改值不增键） */
+             文案改写为「缺什么——下一步」句式（改值不增键）。
+             第 1 轮验收复测补档：紧档插图 56→32（375×667 空表页 = 表头 96 + Empty 108
+             = 216 > 槽 200，降档后 174 ≤ 200；视觉档位压缩非退役） */
           <Empty
             style={{ marginTop: 8 }}
-            icon={<EmptyRulerArt size={56} />}
+            icon={<EmptyRulerArt size={isCompact ? 32 : 56} />}
             description={t("scenario.listEmpty")}
           />
         ) : (

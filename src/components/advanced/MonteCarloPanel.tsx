@@ -41,10 +41,11 @@ import type { IndexId, MonteCarloReturnMode } from "../../data/indexSeries";
 import { seriesFreshnessHint } from "../../data/freshness";
 import type { MonteCarloOutput, SequenceDirection, SequenceSimOutput, WithdrawalStrategy } from "../../wasm/bridge";
 import { useCalculatorStore } from "../../store/useCalculatorStore";
+import { effectiveMonteCarlo } from "../../store/effectiveInputs";
 import { AmountField, FieldRow, FieldTip, IntField, NumberField, PathsField, PercentField } from "../fields";
 import { SegBar, SlotBox, SlotPager } from "../slots";
 import { EmptyRulerArt } from "../EmptyRuler";
-import { compactXInterval, useAnimatedNumber, useChartMetrics, useIsNarrowViewport, useMoney, usePrefersReducedMotion } from "../hooks";
+import { compactXInterval, useAnimatedNumber, useChartMetrics, useIsNarrowViewport, useMoney, usePrefersReducedMotion, useShortViewport } from "../hooks";
 
 const { Text } = Typography;
 const { Col } = Grid;
@@ -101,17 +102,30 @@ export default function MonteCarloPanel() {
    *  核心值落入面板切片（消除解锁即见旧值的错位），此后与核心参数无关联 */
   const mcMeansSynced = useCalculatorStore((s) => s.mcMeansSynced);
   const setMcMeansSynced = useCalculatorStore((s) => s.setMcMeansSynced);
-  /** 锁态运行提交帧：两均值取 baseline 现值（inflationMean 两模式都参与正态抽样故两模式
-   *  都覆盖；returnMean 仅 normal 消费，bootstrap 下传入无害——分布由所选序列决定） */
-  const effectiveInputs = mcMeansSynced
-    ? { ...inputs, nominalReturnMeanPct: baseline.nominalReturnPct, inflationMeanPct: baseline.inflationPct }
-    : inputs;
-  /** 解锁（显式动作）：口径标志置 false + 当刻核心值落入切片（回场值即所见值，无错位） */
+  /** P10fix §3.2 普查 #10：年支出口径标志（mcMeansSynced 同构推广；锁态显示层取
+   *  baseline 月开销 ×12 派生直显、运行提交帧同帧覆盖——派生口径统一在
+   *  effectiveInputs.ts，零面板切片写入） */
+  const mcSpendSynced = useCalculatorStore((s) => s.mcSpendSynced);
+  const setSyncFlag = useCalculatorStore((s) => s.setSyncFlag);
+  /** 锁态运行提交帧：两均值 + 年支出取 baseline 现值（inflationMean 两模式都参与正态
+   *  抽样故两模式都覆盖；returnMean 仅 normal 消费，bootstrap 下传入无害——分布由
+   *  所选序列决定）。P10fix：内联派生式收编进 effectiveInputs.ts 纯函数模块
+   *  （check-param-sync 机制 A 可直载断言的同一真源） */
+  const effectiveInputs = effectiveMonteCarlo(inputs, baseline, {
+    means: mcMeansSynced,
+    spend: mcSpendSynced,
+  });
+  /** 解锁（显式动作）：口径标志置 false + 当刻核心值落入切片（回场值即所见值，无错位；
+   *  mcMeansSynced 模板要素③——解锁快照内联当刻核心值字面量，P10fix §9.2 降档登记） */
   const unlockMeans = () => {
     setMcMeansSynced(false);
     setInputs({ nominalReturnMeanPct: baseline.nominalReturnPct, inflationMeanPct: baseline.inflationPct });
   };
-  /** 锁标（解锁触发点；两字段共用同一按钮元素） */
+  const unlockSpend = () => {
+    setSyncFlag("mcSpendSynced", false);
+    setInputs({ annualSpend: baseline.monthlyExpense * 12 });
+  };
+  /** 锁标（解锁触发点；两均值字段共用同一按钮元素）＋ 锁态 hint/suffix 常量（三处复用） */
   const lockButton = (
     <Button
       size="mini"
@@ -120,6 +134,19 @@ export default function MonteCarloPanel() {
       aria-label={t("mc.meanSyncLockAria")}
       icon={<IconLock />}
       onClick={unlockMeans}
+    />
+  );
+  const mcMeansHint = mcMeansSynced ? t("mc.meanSyncHint") : undefined;
+  const mcMeansSuffix = mcMeansSynced ? lockButton : "%";
+  /** 年支出锁标（P10fix 普查 #10；aria 三语键复用 mc.meanSync*——§11.2 降档登记） */
+  const spendLockButton = (
+    <Button
+      size="mini"
+      type="text"
+      className="wf-pressable"
+      aria-label={t("mc.meanSyncLockAria")}
+      icon={<IconLock />}
+      onClick={unlockSpend}
     />
   );
   const displayCode = useCalculatorStore((s) => s.currency.display);
@@ -135,6 +162,11 @@ export default function MonteCarloPanel() {
   /** 图表响应式三档（docs/p3-spec.md §6.4 D5）：高度 240/280/320、YAxis 宽 56/72、紧凑档 X 刻度 ≤5。
    *  P10 ≤480 紧档：槽内图 200（D5 320 紧档登记），槽 240 与分页行共存 */
   const { chartHeight, yAxisWidth, isCompact } = useChartMetrics();
+  /** 第 1 轮验收复测补档（375×667 槽 235）：紧档 ∧ 深矮档图表 150（运行后图表页 =
+   *  图 + 注 + 分页器 44，180 档实测 254>235 静默裁切——D5 档位再降档登记，运行态
+   *  用户可达；紧档非矮（H≥850）保 180；≥768 三档不变） */
+  const isShortMc = useShortViewport();
+  const mcChartH = isCompact ? (isShortMc ? 150 : 180) : 240;
 
   const [result, setResult] = useState<FinanceResult<MonteCarloOutput> | null>(null);
   const [running, setRunning] = useState(false);
@@ -154,15 +186,35 @@ export default function MonteCarloPanel() {
   const [outPage, setOutPage] = useState(0);
   const [paramPage, setParamPage] = useState(0);
   const [seqPage, setSeqPage] = useState(0);
-  /** 骨架修复轮（F1/F9）：序列态分页档位化——≤480 紧档 4 页（0 模式方向 / 1 参数与
-   *  运行 / 2 命运图 / 3 读数表），其余 3 页（0 控制与运行 / 1 图 / 2 表）。
-   *  原 4 页中页 1/3 为空页的旧档退役；页码随档位钳制 */
-  const isCompactMc = isCompact;
-  const seqTotal = isCompactMc ? 4 : 3;
-  const seqPageFields = isCompactMc ? 1 : 0;
-  const seqPageChart = isCompactMc ? 2 : 1;
-  const seqPageTables = isCompactMc ? 3 : 2;
+  /** P2-F2 序列风险对照运行态（第 2 轮验收 F-07：序列段可达页数依赖本态，声明前置） */
+  const [seqState, setSeqState] = useState<SeqState | null>(null);
+  /** 骨架修复轮（F1/F9）→ 第 1 轮验收 F-01 全档统一：序列态四页（0 模式/方向/序列
+   *  控制、1 参数与运行、2 命运图、3 读数表）。原非紧档 3 页把「控制 + 字段 + 运行 +
+   *  空态」同页压 200 槽——1366×768 槽 sh=320 实测裁 120（zh）、en 150–171（60/60
+   *  在册格逐格复现）；四页拆分后各页 ≤ 槽预算（含 1366×620 深矮档槽 322）。页码随
+   *  档位钳制；≤480 紧档四页语义零变化。 */
+  const seqPageFields = 1;
+  const seqPageChart = 2;
+  const seqPageTables = 3;
+  /** 第 2 轮验收 F-07：序列段可达页数随运行态收敛——未运行时读数表/命运图为空页
+   *  （E5 同类空白判据），分页器只到「控制+字段与运行」两页；运行后四页全量可达，
+   *  页码随可达数钳制（ReverseCard safeEditPage 同款）。 */
+  const seqTotal = seqState ? 4 : 2;
   const safeSeqPage = Math.min(seqPage, seqTotal - 1);
+  /** 第 1 轮验收 F-05/F-02 紧档补页（≤480；≥768 四页不变）：参数态 p0「模式+策略+核心
+   *  字段」en 实测 436 > 375×667 槽 290（en hint 折 4 行）——紧档拆为五页（0 模式与
+   *  策略、1 核心字段+同步/恢复、2 均值标准差年限、3 路径种子、4 策略带参数），各页
+   *  ≤290；非紧档页序不变（mode 行与字段同页）。页码随档位钳制。
+   *  第 2 轮验收 F-07 补档：策略带参数页仅 threshold/percent 策略存在（fixed 无带参数
+   *  → 该页为空页，E5 同类判据）——参数段可达页数随策略收敛，页码钳制（固定策略时
+   *  bands 页索引保留但落在钳制之外不可达）。 */
+  const hasBands = (inputs.strategy ?? "fixed") !== "fixed";
+  const paramTotal = (isCompact ? 5 : 4) - (hasBands ? 0 : 1);
+  const safeParamPage = Math.min(paramPage, paramTotal - 1);
+  /** 第 1 轮验收复测补档（375×667）：紧档锁态 hint 行不渲染（ReverseFields 先例：
+   *  P10fix 偏差登记「恒高容不下每字段 +20px hint 行；锁 affordance 为可见 icon 锁标
+   *  按钮（aria 同源）」）——en hint 折 4 行使参数字段页 195>槽 235。锁语义由 disabled
+   *  形态 + 尾部锁标按钮 aria（mc.meanSyncLockAria）承载，≥768 hint 原样。 */
 
   // 图表 SVG 属性经主题解析函数取解析值（规范第 8 节）：组件不感知主题，
   // 深浅选组与色盲友好替换均在函数内完成；主题切换即重渲染换色，
@@ -208,7 +260,6 @@ export default function MonteCarloPanel() {
   const [seqRate, setSeqRate] = useState(SEQ_INITIAL_RATE_DEFAULT);
   const [seqSaving, setSeqSaving] = useState(SEQ_ANNUAL_SAVING_DEFAULT);
   const [seqRunning, setSeqRunning] = useState(false);
-  const [seqState, setSeqState] = useState<SeqState | null>(null);
   const [seqError, setSeqError] = useState<string | null>(null);
 
   const seqSeriesMeta = INDEX_SERIES[seriesId];
@@ -351,17 +402,19 @@ export default function MonteCarloPanel() {
   const animatedMedianTerminal = useAnimatedNumber(data?.medianTerminal ?? 0, undefined, hostRef);
   /** 图表实际绘制的路径条数（契约 50 条；按返回数据兜底） */
   const chartPathCount = data ? Math.min(MAX_CHART_PATHS, data.samplePaths.length) : 0;
-  /** 初始支取率（输入侧实时）= 年支出（基期）÷ 当前资产；currentAssets = 0 显示「—」（除零防护） */
+  /** 初始支取率（输入侧实时）= 有效年支出（基期）÷ 当前资产；currentAssets = 0 显示
+   *  「—」（除零防护）。P10fix：年支出经 mcSpendSynced 派生（effectiveInputs 同源） */
   const initialRateText =
     inputs.currentAssets > 0
-      ? `${formatNumber((inputs.annualSpend / inputs.currentAssets) * 100, 2)}%`
+      ? `${formatNumber((effectiveInputs.annualSpend / inputs.currentAssets) * 100, 2)}%`
       : "—";
 
   /** F1 支出口径一致性：MC「年支出（基期）」≠ 自由刻度「每月开销」×12 时给字段警示 +
-   *  一键同步（仅提示与显式动作，不自动改值——MONTE_CARLO_DEFAULTS.annualSpend 为
-   *  编译期常量，仅作初始值，不随 store 联动是既有口径，本处不改变该数据流） */
+   *  一键同步（仅提示与显式动作，不自动改值）。P10fix §3.2 普查 #10：派生式收编——
+   *  mcSpendSynced 锁态（默认）下字段显示即派生值，警示与同步钮仅在解锁态有意义
+   *  （锁态切片不参与显示/运行，hint 改单源化共用句） */
   const baselineAnnualSpend = baseline.monthlyExpense * 12;
-  const spendMismatched = inputs.annualSpend !== baselineAnnualSpend;
+  const spendMismatched = !mcSpendSynced && inputs.annualSpend !== baselineAnnualSpend;
 
   /** 序列窗口数（seq.note1 的 {{count}}：滚动窗起点数 = 序列长度 − 窗长 + 1）；
    *  P11：区间三件套经 seriesRange() 单一真源派生（数据层助手，数值恒等） */
@@ -547,7 +600,7 @@ export default function MonteCarloPanel() {
         </>
       ) : null}
       {/* P2-F1 阈值带参数（strategy = "threshold"；四个带参数共用 mc.thresholdBandTooltip） */}
-      {paramPage === 3 && inputs.strategy === "threshold" && inputs.threshold ? (
+      {safeParamPage === (isCompact ? 4 : 3) && inputs.threshold ? (
         <FieldRow className="wf-slot-row">
           <NumberField
             md={12}
@@ -611,7 +664,7 @@ export default function MonteCarloPanel() {
       ) : null}
 
       {/* P2-F1 余额比例参数（strategy = "percent"；地板 / 上限 0 = 关闭） */}
-      {paramPage === 3 && inputs.strategy === "percent" && inputs.percent ? (
+      {safeParamPage === (isCompact ? 4 : 3) && inputs.percent ? (
         <FieldRow className="wf-slot-row">
           <NumberField
             md={12}
@@ -648,7 +701,7 @@ export default function MonteCarloPanel() {
       ) : null}
 
       <FieldRow className="wf-slot-row">
-        {paramPage === 0 ? (
+        {safeParamPage === (isCompact ? 1 : 0) ? (
           <>
         <AmountField
           label={t("mc.currentAssets")}
@@ -659,22 +712,29 @@ export default function MonteCarloPanel() {
           suffix={displayCode === "CNY" ? t("units.yuan") : undefined}
           convertRate={rate}
         />
+        {/* P10fix §3.2 普查 #10：锁态字段形态（disabled + 派生值直显 + 尾部锁标，
+            形态复制 #11/#12 mcMeansSynced 模板）；解锁态 → 现字段原样可编 + 不一致警示 */}
         <AmountField
           label={t("mc.annualSpend")}
           tooltip={t("mc.annualSpendTooltip")}
-          value={inputs.annualSpend}
+          value={effectiveInputs.annualSpend}
           onChange={(v) => setInputs({ annualSpend: v })}
+          disabled={mcSpendSynced}
           prefix={symbol}
-          suffix={displayCode === "CNY" ? t("units.yuanPerYear") : undefined}
+          suffix={mcSpendSynced ? spendLockButton : displayCode === "CNY" ? t("units.yuanPerYear") : undefined}
           convertRate={rate}
           hint={
-            spendMismatched
-              ? t("mc.annualSpendMismatchHint", { value: money(baselineAnnualSpend) })
-              : undefined
+            isCompact
+              ? undefined
+              : mcSpendSynced
+                ? t("mc.meanSyncHint")
+                : spendMismatched
+                  ? t("mc.annualSpendMismatchHint", { value: money(baselineAnnualSpend) })
+                  : undefined
           }
         />
           </>
-        ) : paramPage === 1 ? (
+        ) : safeParamPage === (isCompact ? 2 : 1) ? (
           <>
         {/* 自助抽样模式下名义回报均值/标准差不参与计算（分布由所选序列决定），隐藏两个字段；
             通胀均值/标准差保留（通胀仍按正态分布抽样）。
@@ -685,11 +745,11 @@ export default function MonteCarloPanel() {
             md={12}
             label={t("mc.returnMean")}
             tooltip={t("mc.returnMeanTooltip")}
-            value={mcMeansSynced ? baseline.nominalReturnPct : inputs.nominalReturnMeanPct}
+            value={effectiveInputs.nominalReturnMeanPct}
             onChange={(v) => setInputs({ nominalReturnMeanPct: v })}
             disabled={mcMeansSynced}
-            hint={mcMeansSynced ? t("mc.meanSyncHint") : undefined}
-            suffix={mcMeansSynced ? lockButton : "%"}
+            hint={isCompact ? undefined : mcMeansHint}
+            suffix={mcMeansSuffix}
           />
         ) : null}
         {returnMode === "normal" ? (
@@ -706,11 +766,11 @@ export default function MonteCarloPanel() {
           md={12}
           label={t("mc.inflationMean")}
           tooltip={t("mc.inflationMeanTooltip")}
-          value={mcMeansSynced ? baseline.inflationPct : inputs.inflationMeanPct}
+          value={effectiveInputs.inflationMeanPct}
           onChange={(v) => setInputs({ inflationMeanPct: v })}
           disabled={mcMeansSynced}
-          hint={mcMeansSynced ? t("mc.meanSyncHint") : undefined}
-          suffix={mcMeansSynced ? lockButton : "%"}
+          hint={isCompact ? undefined : mcMeansHint}
+          suffix={mcMeansSuffix}
         />
         <PercentField
           md={12}
@@ -732,7 +792,7 @@ export default function MonteCarloPanel() {
           hint={t("mc.yearsHint", { max: YEARS_LIMIT.max })}
         />
           </>
-        ) : paramPage === 2 ? (
+        ) : safeParamPage === (isCompact ? 3 : 2) ? (
           <>
         <PathsField
           md={12}
@@ -757,10 +817,12 @@ export default function MonteCarloPanel() {
           </>
         )}
       </FieldRow>
-      {/* 参数槽分页（4 页：核心 / 均值标准差年限 / 路径种子 / 策略参数）；页 0 = 同步/恢复按钮在位 */}
-      {paramPage === 0 ? (
+      {/* 参数槽分页（非紧档 4 页：模式策略+核心 / 均值标准差年限 / 路径种子 / 策略参数；
+          ≤480 紧档 5 页——F-05 拆分见上方 paramPage* 常量注）；字段页 = 同步/恢复按钮在位 */}
+      {safeParamPage === (isCompact ? 1 : 0) ? (
         <>
-      {/* F1 支出口径一致性一键同步：仅在不一致时渲染（显式动作，不自动改值）；
+      {/* F1 支出口径一致性一键同步：仅解锁态且不一致时渲染（显式动作，不自动改值；
+          锁态下字段显示即派生值、按钮无意义不渲染——P10fix 普查 #10 收编）；
           字段显示刷新走 NumberField 的外部值重挂载机制（fields.ts inputEpoch） */}
       {spendMismatched ? (
         <Button
@@ -779,9 +841,16 @@ export default function MonteCarloPanel() {
           {t("mc.meanSyncRestore")}
         </Button>
       ) : null}
+      {/* P10fix §3.2 普查 #10：年支出一键恢复联动（三语键共用 mc.meanSyncRestore——
+          既有 mc.meanSync* 三键维持原样不迁移，§11.2 登记） */}
+      {!mcSpendSynced ? (
+        <Button size="small" onClick={() => setSyncFlag("mcSpendSynced", true)} className="wf-pressable">
+          {t("mc.meanSyncRestore")}
+        </Button>
+      ) : null}
         </>
       ) : null}
-      <SlotPager label={t("advanced.mcTitle")} total={4} page={paramPage} onPage={setParamPage} />
+      <SlotPager label={t("advanced.mcTitle")} total={paramTotal} page={safeParamPage} onPage={setParamPage} />
           </div>
         ) : slot === "seq" ? (
           <div className="wf-slot-body">
@@ -888,8 +957,17 @@ export default function MonteCarloPanel() {
         {safeSeqPage === seqPageFields && seqError ? <Alert type="error" style={{ marginBottom: 8 }} content={seqError} /> : null}
         {seqState === null ? (
           safeSeqPage === seqPageFields ? (
-            /* T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入 */
-            <Empty icon={<EmptyRulerArt size={56} />} description={t("seq.placeholder")} />
+            /* T6 = S6 空态人格化：同族「未上弦的刻度尺」图形经 Empty icon 参数注入。
+               第 1 轮验收 F-01 复测补档（375×667 槽 235）：紧档引导行移至图表页（§2.5-4
+               「空态引导行并入槽内容」落地——字段页运行钮旁不再有容纳行：zh 引导 38px
+               使 276>235）；非紧档本页仍为图形化 Empty（S6 视觉档位压缩非退役） */
+            isCompact ? null : (
+              <Empty icon={<EmptyRulerArt size={56} />} description={t("seq.placeholder")} />
+            )
+          ) : safeSeqPage === seqPageChart ? (
+            isCompact ? (
+              <Text type="secondary" className="wf-panel-note">{t("seq.placeholder")}</Text>
+            ) : null
           ) : null
         ) : seqState.kind === "rolling" ? (
           <>
@@ -903,9 +981,9 @@ export default function MonteCarloPanel() {
                   years: seqWindowYears,
                 })}
               >
-                {/* P10 槽档：命运曲线图 ≤480 紧档 180（骨架修复轮 D5 再登记 200→180——
-                    320 档图+分页器 211>202 收口），其余 240 */}
-                <ResponsiveContainer width="100%" height={isCompact ? 180 : 240}>
+                {/* P10 槽档：命运曲线图紧档 180→∧深矮档 150（复测补档，见 mcChartH 注），
+                    其余 240 */}
+                <ResponsiveContainer width="100%" height={mcChartH}>
                   {/* S25：与主线图同 syncId 联动（value 按年份值对齐） */}
                   <LineChart data={seqChartData} syncId="wf-mc" syncMethod="value" margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
                     {/* S25 读数气泡 */}
@@ -1086,8 +1164,8 @@ export default function MonteCarloPanel() {
                 median: money(data.medianTerminal),
               })}
             >
-              {/* P10 槽档：主图 ≤480 紧档 180（骨架修复轮 D5 再登记 200→180），其余 240 */}
-              <ResponsiveContainer width="100%" height={isCompact ? 180 : 240}>
+              {/* P10 槽档：主图紧档 180→∧深矮档 150（复测补档，见 mcChartH 注），其余 240 */}
+              <ResponsiveContainer width="100%" height={mcChartH}>
                 <LineChart data={chartData} syncId="wf-mc" syncMethod="value" margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
                   {/* S25 读数气泡 */}
                   {renderMainTip()}
@@ -1175,13 +1253,10 @@ export default function MonteCarloPanel() {
         {data ? t("mc.doneAria", { prob: formatNumber(depletionPercent, 1), median: money(data.medianTerminal) }) : ""}
       </span>
 
-      {/* D8 面板尾部 sticky-bottom 复用按钮（docs/p3-spec.md §6.7）：与既有运行按钮同 run 处理
-          函数、同 loading/disabled 口径；<768 生效（样式层断点控制显隐），常驻拇指自然可达区 */}
-      <div className="wf-mc-dock-run">
-        <Button type="primary" loading={running} onClick={run} disabled={running} className="wf-pressable">
-          {t("mc.run")}
-        </Button>
-      </div>
+      {/* P10fix §2.5-5 偏差登记：D8 面板尾部 dock 复用按钮退役——运行入口上收为面板
+          既有 .wf-mc-actions 主运行钮行（同 run 处理函数 / 同 loading/disabled 口径、
+          44 命中不变、位置更靠上），<768 dock 行高度（52–60px）从 risk/pro 页栈移除；
+          原「拇指可达区」承载由主钮行恒驻兑现（信息路径零丢失——入口唯一且恒在）。 */}
     </div>
   );
 }

@@ -27,6 +27,7 @@ import { useCalculatorStore } from "./store/useCalculatorStore";
 import { useDisplayRate, usePrefersReducedMotion } from "./components/hooks";
 import { FieldTip } from "./components/fields";
 import BasicCalculator from "./components/BasicCalculator";
+import ErrorBoundary from "./components/ErrorBoundary";
 import AdvancedPanel from "./components/AdvancedPanel";
 import TaskSwitcher from "./components/TaskSwitcher";
 import LifeTaskPage from "./components/TaskPages";
@@ -100,56 +101,105 @@ interface AppProps {
 }
 
 /**
- * A1 显式回退守卫（p10-spec §1.0a / 红线 9；骨架修复轮新增）：轮询活动页根
- * （.atlas-page:not([hidden])）的 scrollHeight > clientHeight——内容栈超出页框即挂
- * .wf-fallback-scroll（页根放行 overflow-y:auto，样式层承载）并置位横幅态。
+ * A1 显式回退守卫（p10-spec §1.0a / 红线 9；骨架修复轮新增；第 1 轮验收 F-06 扩面）：
+ * 轮询活动页根（.atlas-page:not([hidden])）——检出任一即挂 .wf-fallback-scroll
+ * （页根放行 overflow-y:auto，样式层承载）并置位横幅态：
+ * ① 页根 scrollHeight > clientHeight（横幅占流修正：横幅插入会压缩页框，其高度不计
+ *   入「内容超框」——否则回退态自持：横幅插入 → 页框变小 → 仍判溢出 → 横幅永不撤，
+ *   375×667 en life 规划 3px 级差实测踩中）；
+ * ② 槽级静默裁切（F-06：守卫原仅页根溢出触发，overflow:hidden 载体的裁切静默漏检）
+ *   —— .wf-slot / .wf-reverse-card / .wf-risk-leaf / pro 活动面板根任一
+ *   scrollHeight > clientHeight 同责检出。检出后样式层（global.css 回退态块）解除
+ *   裁切载体 overflow、槽随内容自然加高，由页根滚动承载——低于下限档例外契约
+ *   「放行滚动 + 明示横幅，禁静默裁切」由此兑现（槽放宽后页根溢出接棒维持回退态，
+ *   无需独立回退闩）。
  * 「不支持零滚动」的高度（IME 深收缩、env>0 机型、清单外极矮视口）由此回退为
  * 可滚动视图 + 明示横幅，替代 overflow:hidden 静默裁切；六验收视口内容收口后
  * 不触发。轮询口径：定时器 + resize + 任务切换重排（页内状态切换 600ms 内收敛，
  * 单次检查为一次 querySelector + 两整数比较，开销可忽略）。返回横幅挂载态。
  */
-function useZeroScrollFallback(activeTask: string): boolean {
-  const [fallback, setFallback] = useState(false);
+function useZeroScrollFallback(activeTask: string, wasmReady: boolean): boolean {
+  /** 首帧即回退（F-06② 收口）：innerHeight < 580 = 硬性下限物理极限档——横幅 + 放行
+   *  是该档登记预期形态，自首帧直置（wasm 内容爆出时刻不定，任何「溢出后再追认」
+   *  链路都存在采样竞态）；后续由检查链路按溢出实况维持/撤销。 */
+  const [fallback, setFallback] = useState(() => window.innerHeight < 580);
+  /** wasm 就绪门槛（第 3 轮验收 F-06）：ref 供 check 同步读取（effect 重跑不重置） */
+  const wasmReadyRef = useRef(wasmReady);
+  wasmReadyRef.current = wasmReady;
   useEffect(() => {
-    let timer = 0;
+    /** 物理极限档即检即回退（不进为挂载稳态设计的双确认）；effect 期取值一次，
+     *  变高视口由 resize 链路重评 */
+    const belowFloorViewport = window.innerHeight < 580;
     let timer2 = 0;
-    /** 双确认防抖：挂载瞬态（wasm 引导/首帧布局未定）可能短暂超框——首次检出只记
-     *  候选并在 ~320ms 后复核，复核仍溢出才回退；退避即时（一测非溢出立即撤）。 */
-    let pending = false;
+    /** 双确认防抖（第 2 轮验收 F-06）：挂载瞬态（wasm 引导/首帧布局未定）可能短暂
+     *  超框——首检只置候选并 320ms 后复检，复检仍溢出才挂类/渲染横幅（确认期内不挂，
+     *  截图冻结环境复检不得时零溢出不卡横幅）；退避即时：一测非溢出立即撤。物理极限
+     *  档例外：随 initializer 首帧即挂且不因「暂未见溢出」撤防（撤防窗口即静默采样
+     *  窗口）。 */
+    let awaitingConfirm = false;
+    let engaged = belowFloorViewport;
     const check = () => {
       const page = document.querySelector<HTMLElement>(".atlas-page:not([hidden])");
       if (!page) {
-        pending = false;
+        awaitingConfirm = false;
+        engaged = false;
         setFallback(false);
         return;
       }
-      const over = page.scrollHeight > page.clientHeight + 1;
-      if (over && !pending) {
-        pending = true;
-        timer2 = window.setTimeout(check, 320);
-        return;
+      // wasm 就绪门槛（第 3 轮验收 F-06）：≥580 档在计算核心就绪前不判定——核心完成
+      // 引发结果填充重排，布局未定帧的溢出判定会挂出「闪现横幅→自愈→撤」链路；物理
+      // 极限档不受门槛（横幅+放行自首帧在位，class 维持不中断）。
+      if (!belowFloorViewport && !wasmReadyRef.current) return;
+      // 物理极限档按「当前」视口重评（第 3 轮验收复现修复）：effect 挂载期快照
+      // （下方 belowFloorViewport）跨档后失效——320×568 挂载 → resize/复用至 ≥580
+      // 时旧快照使解除分支（!belowFloorViewport 门控）永不可达 = 回退态卡死
+      // （横幅/class 失配或横幅常驻），且违反档位契约（例外档只按挂载时点登记）。
+      const belowFloorNow = window.innerHeight < 580;
+      const banner = document.querySelector<HTMLElement>(".wf-fallback-banner");
+      const bannerH = banner?.getBoundingClientRect().height ?? 0;
+      const slotOver = Array.from(
+        page.querySelectorAll(".wf-slot, .wf-reverse-card, .wf-risk-leaf, .arco-tabs-content-item-active"),
+        (el) => el.scrollHeight > el.clientHeight + 1,
+      ).some(Boolean);
+      // 槽级检出经回退态放宽后槽随内容加高 → 页根溢出接棒自持。
+      // bannerH 占流修正仅 ≥580 档启用（防横幅插入自持）；物理极限档按裸溢出判——
+      // 例外档溢出小于横幅高时（373>347 vs 横幅 44）修正会错杀登记预期的常驻回退
+      const over =
+        slotOver ||
+        page.scrollHeight > page.clientHeight + (belowFloorNow ? 1 : bannerH + 1);
+      /** 320ms 确认期：首检只置候选并定时复检（复检前不挂类/不渲染横幅——截图冻结
+       *  环境冻结复检时零溢出不卡横幅）；复检仍溢出才挂。物理极限档跳过确认期。 */
+      if (over && !engaged) {
+        if (belowFloorNow) engaged = true; // 物理极限档即检即回退（首帧已在位）
+        else if (awaitingConfirm) engaged = true;
+        else {
+          awaitingConfirm = true;
+          timer2 = window.setTimeout(check, 320);
+          return;
+        }
+      } else if (!over && !belowFloorNow) {
+        awaitingConfirm = false;
+        engaged = false;
       }
-      pending = over && pending && page.scrollHeight > page.clientHeight + 1;
-      page.classList.toggle("wf-fallback-scroll", pending);
-      setFallback(pending);
+      page.classList.toggle("wf-fallback-scroll", engaged);
+      setFallback(engaged);
     };
-    const schedule = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(check, 280);
-    };
-    schedule();
-    window.addEventListener("resize", schedule);
-    const periodic = window.setInterval(schedule, 600);
+    const onResize = () => check(); // resize = 新布局重评（check 开销 = 一次 querySelectorAll，可同步直跑）
+    // 提交帧同步首检（物理极限档：engaged 随 initializer 已 true——类必须随横幅同帧在位，
+    // 否则「横幅已渲染但释列类未挂」窗口内采样 = 静默裁切（457>353 复现）；
+    // ≥580 档瞬态经 awaitingConfirm 门控在确认期不挂类，不复活 F-06 闪现）
+    check();
+    window.addEventListener("resize", onResize);
+    const periodic = window.setInterval(check, 600);
     return () => {
-      window.clearTimeout(timer);
-      window.clearTimeout(timer2);
       window.clearInterval(periodic);
-      window.removeEventListener("resize", schedule);
+      window.clearTimeout(timer2);
+      window.removeEventListener("resize", onResize);
       document
         .querySelectorAll(".atlas-page.wf-fallback-scroll")
         .forEach((el) => el.classList.remove("wf-fallback-scroll"));
     };
-  }, [activeTask]);
+  }, [activeTask, wasmReady]);
   return fallback;
 }
 
@@ -234,8 +284,13 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
     setRoute({ ...next, explicit: true, canonical: true });
   };
 
-  /** A1 显式回退守卫（useZeroScrollFallback，本文件上方）：随活动任务重排 */
-  const zeroScrollFallback = useZeroScrollFallback(route.task);
+  /** A1 显式回退守卫（useZeroScrollFallback，本文件上方）：随活动任务重排 + wasm
+   *  就绪门槛（第 3 轮验收 F-06：wasm 计算完成引发布局跳变，≥580 档在布局未定帧
+   *  判定溢出会挂出「横幅+放行→自愈→撤」的闪现——ready 前不判定）。 */
+  const zeroScrollFallback = useZeroScrollFallback(
+    route.task,
+    wasmBootstrap?.phase === "ready",
+  );
 
   /** 深链规范化：URL 显式携带参数但非 canonical 形态（越界值 / 冗余写法 / 多余参数序）
    *  → 挂载即 replaceState 规范化，静默无提示（路由无数据损失，§4.3 与分享损坏警示分级）；
@@ -290,11 +345,16 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
     }
   };
 
-  /** 一次性迁移说明（§8.5 ②；P10 §2.1 迁移登记）：Alert 布局横幅 → Message 气泡
-   *  （覆盖层，零布局高度——内容与键值不变）；会话级瞬态不入盘（wf-route §2.3 同口径），
-   *  仅挂载时提示一次。 */
+  /** 一次性迁移说明（§8.5 ②；P10 §2.1 迁移登记；P10fix E2 层叠修复）：Alert 布局横幅
+   *  → Message 气泡（覆盖层，零布局高度——内容与键值不变）。E2 修复：组件库默认
+   *  position:'top'（es/Message/index.js:45 实读）的顶部气泡压在 C2 任务切换条上，
+   *  改配置对象 position:'bottom'（interface.d.ts position?: 'top'|'bottom' 既有 API）
+   *  ——底部气泡与顶部 chrome（C1+C2）空间正交，任何视口不遮挡切换条（§4 判据）；
+   *  duration 以毫秒计（interface.d.ts @zh「单位为 ms」@defaultValue 3000 实读——
+   *  p10fix-spec §1.2 字面「4.5」按秒义勘误为 4500ms，登记偏差）。会话级瞬态不入盘
+   *  （wf-route §2.3 同口径），仅挂载时提示一次。 */
   useEffect(() => {
-    Message.info(t("atlas.migrate.notice"));
+    Message.info({ content: t("atlas.migrate.notice"), position: "bottom", duration: 4500 });
     // 仅首挂载提示一次（键随语言切换不入依赖——瞬态提示与既有语义一致）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -555,11 +615,6 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
           历史缺陷注记保留）；maxWidth 1112 保留（padding 同步 +32）。padding 8/16（<768）
           与 16/16（≥768）由样式层按 §1.0a 内容栈预算承载。 */}
       <Content role="main" id="wf-main" tabIndex={-1} className="wf-main">
-        {/* A1 显式回退横幅（红线 9：不静默裁切——覆盖层零布局高度，不进入页栈预算；
-            aria 默认 alert 语义随组件库 Alert 承载） */}
-        {zeroScrollFallback ? (
-          <Alert type="warning" className="wf-fallback-banner" content={t("atlas.scrollFallback")} />
-        ) : null}
         {wasmBootstrap?.phase === "failed" ? (
           <Alert
             type="error"
@@ -570,11 +625,26 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
         ) : null}
         {/* WF-03 Atlas 任务区（§2.2）+ P10 零滚动骨架：任务切换条 → 五个任务页容器。
             任务页 hidden 非卸载（§5.5 红线 7：已运行模拟结果 / 表单输入切换零丢失）；
-            页头 h2 退役（信息由 C2 活动标签承载——登记注记）。 */}
+            页头 h2 退役（信息由 C2 活动标签承载——登记注记）。
+            第 3 轮验收 ZS-04：渲染树外接 ErrorBoundary——面板渲染路径抛错时降级为
+            错误提示 + 重新加载（React 根整树卸载白屏的兜底，堆栈经 console.error 上报）。 */}
+        <ErrorBoundary>
         <div className="atlas-region" onKeyDown={handleAtlasKeyDown}>
           <div className="atlas-switch-anchor">
             <TaskSwitcher active={route.task} onSelect={selectTask} />
           </div>
+          {/* A1 显式回退横幅（红线 9：不静默裁切；P10fix E2 常规流化——渲染位置从
+              .wf-main 顶层移入 .atlas-region、置于切换条之后的 flex:none 行，文档流
+              天然保证不遮挡切换条；横幅只渲染于已回退页面（占其已放行的可滚高度），
+              零滚动页恒不渲染、§2 预算不受影响；aria 默认 alert 语义随组件库 Alert 承载） */}
+          {zeroScrollFallback ? (
+            <Alert
+              type="warning"
+              className="wf-fallback-banner"
+              style={{ marginBottom: 8 }}
+              content={t("atlas.scrollFallback")}
+            />
+          ) : null}
           {/* —— 自由刻度（默认落点）：P10 §1.1 切换树整壳（BasicCalculator 自持 F0–F9，
               反向卡随叶B F8 槽 / 桌面右列——原 wf-workbench-secondary 承载退役） —— */}
           <div
@@ -642,6 +712,7 @@ export default function App({ wasmBootstrap }: AppProps = {}) {
             {visitedTasks.has("pro") ? <AdvancedPanel initialPanelKey={route.panel} /> : null}
           </div>
         </div>
+        </ErrorBoundary>
       </Content>
     </Layout>
   );

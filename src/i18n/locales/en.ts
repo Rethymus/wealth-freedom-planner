@@ -17,6 +17,8 @@ const en = {
     languageLabel: "Language",
     wasmFailed:
       "Failed to load the calculation core: {{message}}. The page remains browsable, but all computed results are unavailable for now; please refresh the page and try again, or make sure the wasm static assets were deployed intact.",
+    renderError: "Something went wrong while rendering this area; click reload to recover. Inputs are kept on this page and reset to defaults after a reload.",
+    reload: "Reload",
     currencyNotice:
       "Amounts are now shown converted at 1 CNY = {{rate}} {{code}} (rate as of: {{time}}); enter inputs in the display currency and they are written back to CNY automatically; all formulas are currency-agnostic.",
     currencyFallback:
@@ -28,7 +30,7 @@ const en = {
   },
   units: {
     yuan: "yuan",
-    yuanPerMonth: "yuan/month",
+    yuanPerMonth: "/mo",
     yuanPerChild: "yuan/child",
     yuanPerYear: "yuan/year",
     yearUnit: "years",
@@ -40,12 +42,13 @@ const en = {
     errorRange: "Please enter a value between {{min}} and {{max}}",
   },
   basic: {
-    outputTitle: "Financial Freedom Reference Line (480 Rule Baseline)",
+    // P10fix E6：en 单行关键文案缩短（§11.1 键值变更②：F0 叶切换条段标签槽 ≤16 字符）
+    outputTitle: "Results",
     liveUpdate: "Updates in real time as inputs change",
     invalidRealReturn:
       "The real return rate is {{pct}} (≤ 0): the nominal return rate must be higher than the inflation rate to form the positive loop of “returns beating inflation”, so the critical value cannot be computed. Please expand “Core Parameters” to adjust.",
-    summaryPrefix:
-      "Based on the current inputs, your financial-freedom reference line is about ",
+    // P10fix E6 键值变更⑦：F2 摘要行 en ≤34（= ⌊(264−21)/7⌋，插值数字占位 W=21px）
+    summaryPrefix: "Freedom line at current inputs ≈",
     summaryPartChild: "incl. child-raising reserve",
     summaryPartHealth: "incl. health reserve",
     summaryPartMajor: "incl. major-investment reserve",
@@ -97,12 +100,13 @@ const en = {
     realReturn: "Real return rate (nominal − inflation): ",
     multiplierLine: "480 multiplier = 12 ÷ real return rate: ",
     ruleOrigin:
-      "Save up “monthly expense × multiplier” and returns net of inflation alone cover monthly spending. Defaults (nominal {{nominal}}, inflation {{inflation}}) give a real return of {{real}}, multiplier {{multiplier}} — hence “480 Rule”.",
+      "Defaults (nominal {{nominal}}, inflation {{inflation}}) give real return {{real}}, multiplier {{multiplier}} — hence “480 Rule”. Readings are net of inflation.",
     multiplierExactLabel: "Exact (Fisher)",
     criticalExactLabel: "Exact line",
     // P10 §7 新键（F7 叶B 步骤条两步标签；docs/p10-spec.md §1.1）
     stepDesire: "Desires",
-    stepAssumption: "Assumptions & assets",
+    // P10fix E6 键值变更⑥：F3/F7/K1/L4/R4 槽条段 en ≤16（§11.1 行 4）
+    stepAssumption: "Assumptions",
     fisherNote:
       "The real return rate uses the exact Fisher relation (1+r_nom)/(1+π)−1; the approximation r≈r_nom−π is for teaching comparison only, and the gap between the two is ≈ π × the real return rate.",
     formulaRow: "480 formula anatomy",
@@ -157,7 +161,8 @@ const en = {
     loanDesc: "Monthly payment, total interest and amortization schedule",
     rentalTitle: "Buy and rent out",
     rentalDesc: "Annual net cash flow and payback period",
-    mcTitle: "Monte Carlo simulation",
+    // P10fix E6 键值变更④：槽条段/叶条段 en ≤16（§11.1 行 4；K1/R4 段标签承载）
+    mcTitle: "Monte Carlo",
     mcDesc: "Depletion probability and wealth distribution",
     taxTitle: "Tax estimation",
     taxDesc: "Multi-currency basis check",
@@ -165,7 +170,8 @@ const en = {
     accumulationDesc: "How many years to reach your goal on a salary",
     pensionTitle: "Public pension",
     pensionDesc: "How much you can draw monthly after retirement",
-    scenarioTitle: "Multi-scenario comparison",
+    // P10fix E6 键值变更⑤：同上（K1 情景叶标签承载）
+    scenarioTitle: "Scenarios",
     scenarioDesc: "Save named parameters and compare side by side",
     insightsTitle: "Formula rationale",
     insightsDesc: "Where 480 comes from: derivation, assumptions and sources",
@@ -182,10 +188,13 @@ const en = {
       riskDesc: "Can my plan survive change?",
       principles: "Rationale archive",
       principlesDesc: "Why is it calculated this way?",
+      // P10fix §11.2 downgrade note (order ④): the five <480 short-form labels are
+      // deferred whole to the render-wiring round (TaskSwitcher.tsx stays zero-diff — §8 rule 5).
     },
     pro: {
       label: "Pro mode",
-      desc: "Direct access to the original nine panels",
+      // P10fix E6 键值变更①：C2 desc 副行 en ≤35（§11.1 行 2，槽内宽 ≈248px @1366）
+      desc: "Direct access to all nine panels",
       backLabel: "Back to task navigation",
     },
     migrate: {
@@ -210,31 +219,44 @@ const en = {
     formulaBody3:
       "The total critical value then stacks three one-off reserves on top: number of children × cost per child + health reserve + major investment.",
     chainTitle: "The assumption chain: from deposit rates to the 480 multiplier",
+    // 第 1 轮验收 F-03：en 概览句缩短——375 档 8 行×25.6px=205px 把页根顶出 docΔ=50/98；
+    // <768 已回落 caption 12/18 档（global.css T-2 媒体收窄），缩短后 4 行承载。语义三
+    // 要素保留：推导路径 / 行级出处与核证 / 「视频口径」不参与计算。zh/zh-Hant 沿用
+    // 原句（375 档实测达标；p10fix-spec §11.1 先例：长度预算键值变更仅动 en）。
+    // 第 3 轮验收 ZS-01：en 概览句与行标签再缩短——375×667 pro 公式原理 pane 可用高
+    // 367px，chain p0 实测内容 410（dy=43）/p1 508（dy=141）。intro 压至 2 行（375 档
+    // 12/18 caption ≈ 200 字符内 → 单行短句 + 行尾 tip 全文），行标签压至单行（en
+    // 14px ≈ 34–40 字符/行 @375 列宽）。语义保留：推导路径 / 出处与核证 / 「视频口径」
+    // 不参与计算；zh/zh-Hant 行标签 8–14 字符单行达标不动（p10fix-spec §11.1 仅动 en 先例）。
     chainIntro:
-      "The derivation path of the return assumptions is as follows (values build up step by step from top to bottom); each entry carries its source, year, terms and verification level — entries tagged “video claim” do not feed this tool's calculations and serve only to explain where the assumptions come from.",
-    chainDeposit1y: "1-year fixed-deposit posted rate",
-    chainDeposit5y: "5-year fixed-deposit posted rate",
-    chainCoreInflation: "Core inflation (as of end-2025)",
-    chainSsf: "National Social Security Fund average annual investment return",
-    chainAnnuity: "Enterprise annuity average annual investment return",
-    chainFeeDrag: "Combined drag from funds to retail investors",
-    chainNominal: "Ordinary investors' nominal return (planning assumption)",
-    chainInflation: "Long-run inflation (planning assumption)",
-    chainReal: "Long-run real return (nominal − inflation)",
-    chainMultiplier: "Corresponding multiplier (12 ÷ real return rate)",
+      "Assumptions build up top to bottom; each step lists source, year, terms and verification — “video claim” rows do not feed the tool.",
+    chainDeposit1y: "1-year deposit rate",
+    chainDeposit5y: "5-year deposit rate",
+    chainCoreInflation: "Core inflation (end-2025)",
+    chainSsf: "Social Security Fund avg. return",
+    chainAnnuity: "Enterprise annuity avg. return",
+    chainFeeDrag: "Fund-to-retail fee drag",
+    chainNominal: "Nominal return (planning)",
+    chainInflation: "Long-run inflation (planning)",
+    chainReal: "Real return (nominal − inflation)",
+    chainMultiplier: "Multiplier (12 ÷ real return)",
     tagOfficial: "Officially verified",
     tagMedia: "Media-verified",
     tagVideo: "Video claim",
     anchorTitle: "Intuitive conversion anchors",
+    // 第 3 轮验收 ZS-01：chain 锚点页 375×667 实测 dy=73（note 3 行 + 4 行锚点各 2 行）——
+    // note 压至 2 行、锚点行压至单行（「→」结构保留，语义零丢失）。zh/zh-Hant 单行达标不动。
     anchorNote:
-      "The anchors below are arithmetic demonstrations based on a multiplier of 480 (2.5% real return), in CNY terms; the actual parameters are yours to adjust, and the multiplier changes with the real return rate.",
-    anchorExpense1: "Monthly spending 10,000 → principal needed 4.8 million",
-    anchorExpense2: "Monthly spending 5,000 → principal needed 2.4 million",
-    anchorAsset1: "Principal on hand 48,000 → 100 yuan more to spend each month",
-    anchorAsset2: "Every extra 480 saved → 1 yuan more to spend each month",
+      "Arithmetic demos at a 480 multiplier (2.5% real return, CNY); your parameters apply, and the multiplier moves with the real return rate.",
+    anchorExpense1: "Spending 10,000/mo → principal 4.8 million",
+    anchorExpense2: "Spending 5,000/mo → principal 2.4 million",
+    anchorAsset1: "48,000 on hand → +100 yuan per month",
+    anchorAsset2: "+480 saved → +1 yuan per month",
     marketTitle: "Average market consumption reference (2025)",
+    // 第 3 轮验收 ZS-01：data 条目 p0 实测 dy=19——marketNote 压至 2 行（口径三要素保留：
+    // 人均消费口径 / 三大类目 / 2,990 默认值取自城镇数字）。
     marketNote:
-      "The basis is per-capita resident consumer spending, covering the three major categories of housing, health care, and education, culture and recreation; this tool's default monthly expense of 2,990 yuan/month is rounded from the urban figure.",
+      "Based on per-capita resident consumer spending (housing; health care; education, culture and recreation); the 2,990 yuan/month default is rounded from the urban figure.",
     childTitle: "Child-raising cost reference by city",
     childShort: "The national average is 538,000 yuan for ages 0–17 and about 680,000 through undergraduate graduation (report's original figures; see the tip for sources and corrections).",
     childNote1:
@@ -262,7 +284,8 @@ const en = {
     entryFormula: "Formula & terms",
     entryChain: "Assumption chain",
     entryData: "Data & sources",
-    entryEvidence: "Health & evidence",
+    // P10fix E6 键值变更⑧：P1 条目标签 en ≤16（§11.1 行 8）
+    entryEvidence: "Evidence",
     entryNotice: "Statements",
     evidenceNote1:
       "Tag legend: “officially verified” = read directly from the official source page; “media-verified” = an officially published figure confirmed consistent by two or more independent media outlets; “video claim” = seen only in the original video or an analytical assumption, with no independent authoritative source found.",
@@ -281,7 +304,7 @@ const en = {
   },
   pension: {
     formulaNote:
-      "Simplified two-tier formula: basic pension ≈ (average wage + average wage × contribution base index) ÷ 2 × contribution years × 1%; individual account pension = estimated individual account balance ÷ months divisor. No year-by-year growth is assumed for the average wage or the contribution base index (a deliberate simplification; see the disclaimer below).",
+      "Simplified two-tier formula: basic pension ≈ (average wage × contribution base index) ÷ 2 × years × 1%; individual account = balance ÷ months divisor. No year-by-year wage growth assumed (see the disclaimer below).",
     currentAge: "Current age",
     currentAgeTooltip:
       "Used to estimate the years until retirement; a years-to-retirement estimate only, and not a commitment of any social-insurance benefits.",
@@ -297,7 +320,7 @@ const en = {
     bridgeYearsLabel: "Bridge period (years)",
     bridgeFundingLabel: "Bridge period funding needed",
     bridgeNote:
-      "The bridge period runs from the age you stop working to the age the pension starts (no salary, no pension); fund it at 480-multiplier × full monthly expense. One-off reserves (health / children / major outlays) are already counted once in the “after claiming” reference line below and are not double-counted here — the two segments together are the true total need. The multiplier basis is conservative for a finite withdrawal horizon (it overspares).",
+      "Bridge period = from when you stop working to when the pension starts (no salary, no pension); fund it at 480-multiplier × full monthly expense. One-off reserves are counted once in the “after claiming” line below — the two segments together are the true total need (multiplier basis is conservative, it overspares).",
     contribYears: "Contribution years (through retirement)",
     contribYearsTooltip:
       "Your estimated cumulative contribution years by retirement (years already paid included); convert deemed contribution years yourself before entering them.",
@@ -314,11 +337,11 @@ const en = {
     monthsDivisorTooltip:
       "The divisor of the individual account pension (lookup-table basis: age 60 = 139, age 55 = 170, age 50 = 195 months); linked to the retirement age by default, and editing it by hand breaks the link.",
     monthsSyncedHint:
-      "The months divisor is currently linked to the retirement age through the data-layer lookup table; editing it by hand breaks the link.",
+      "Months divisor is linked to retirement age via the data-layer lookup table; hand editing breaks the link.",
     monthsResync: "Re-link to retirement age",
     monthlyPension: "Estimated monthly pension",
     basicPart: "of which: basic pension",
-    accountPart: "of which: individual account pension",
+    accountPart: "of which: individual account",
     yearsToRetire: "Years to retirement",
     monthsUsed: "Months divisor",
     monthsUnit: "months",
@@ -326,9 +349,9 @@ const en = {
       "Adjusted reference line (after pension payments start)",
     adjustedExpense: "Adjusted monthly expense",
     adjustedCritical: "Adjusted financial-freedom reference line",
-    coverage: "Pension coverage ratio (monthly pension ÷ monthly expense)",
+    coverage: "Pension coverage (monthly pension ÷ expense)",
     coverageNote:
-      "This is a retirement-point estimate: no growth of the average wage or account appreciation is included; a coverage ratio above 100% means the pension covers all of your monthly expense.",
+      "Point estimate: wage growth / account appreciation not included. Coverage above 100% = pension covers the full monthly expense.",
     coverageFull:
       "The projected pension already covers all of your current monthly expense",
     disclaimer:
@@ -349,6 +372,9 @@ const en = {
       "One-time spending such as a home down payment or large education costs.",
     regionUrbanCn: "Urban China",
     swipeHint: "Swipe left / right to see all columns",
+    // P10fix §11.2 deviation note (size-gate downgrade ①): the shared param-sync lock
+    // triple reuses the existing mc.meanSync* keys verbatim (same wording; key-domain
+    // unification under common.* registered for a later round). New-key count = 5.
   },
   reverse: {
     totalAssets: "Total existing assets",
@@ -413,7 +439,7 @@ const en = {
     colRemaining: "Remaining principal",
     period: "Period {{n}}",
     rowsNote:
-      "{{total}} periods in total; the first 12 are shown here in detail. With equal principal, payments keep decreasing period by period afterwards; with equal payment (annuity), every payment is fixed.",
+      "{{total}} periods in total; first 12 shown in detail. With equal principal payments keep decreasing; with annuity every payment is fixed.",
   },
   rental: {
     cityParams: "City parameters",
@@ -811,7 +837,8 @@ const en = {
     noTimestamp: "Data unavailable",
   },
   sensitivity: {
-    title: "Monthly-expense sensitivity",
+    // P10fix E6 键值变更③：F3/F7/K1/L4/R4 槽条段 en ≤16（§11.1 行 4）
+    title: "Sensitivity",
     plusRow: "+{{pct}}%",
     minusRow: "−{{pct}}%",
     note: "At a given multiplier, the reference line moves linearly and proportionally with the monthly expense: for every {{pct}}% change in monthly expense the reference line moves by about {{delta}}; the children, health and major-investment reserves are unaffected by the monthly expense — the “appetite that can never be filled” shows up here exactly as how far the reference line rises.",

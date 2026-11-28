@@ -1,11 +1,15 @@
 /**
  * 基础模式（480 法则基线）＝ freedom 任务页零滚动切换树（docs/p10-spec.md §1.1 F0–F9）：
- * - <1200 双叶形态：F0 叶切换条（计算结果 ⇄ 输入参数，复用 basic.outputTitle/inputTitle）→
- *   叶A（输出卡：F1 hero / F2 关键读数两行 / F3 槽条 明细⇄敏感性 / F4 等高槽 284）或
+ * - <1200 双叶形态：F0 叶切换条复合行（计算结果 ⇄ 输入参数，复用 basic.outputTitle/
+ *   inputTitle；P10fix §2.5-5 右端 share 图标位——C3 dock 退役一档，中栏叶B share 缺宿主
+ *   同步补齐）→
+ *   叶A（输出卡：F1 hero / F2 关键读数两行 / F3 槽条 明细⇄敏感性 / F4 等高槽 284——
+ *   P10fix §2.5-4 进度说明行并入槽首行 caption）或
  *   叶B（输入卡：F6 预设画像行 / F7 槽条 欲望⇄假设⇄反向估算 / F8 等高槽 280 /
- *   F9 核心参数折叠头 + 公式解构行）+ C3 页内底部分享 dock（flex 静态行，T5 迁移）；
- * - ≥1200 双栏同屏（F0/F7 退役）：左列输入卡全量字段（两列紧凑栅格），右列输出卡 + 反向卡
- *   （ReverseCard 双态恒高 228，修订对照轮二⑧）；
+ *   F9 核心参数折叠头 + 公式解构行）；
+ * - ≥1200 且 H≥880 双栏同屏（F0/F7 退役；P10fix E1 高度驱动降级——H<880 落叶树，
+ *   hooks.ts WORKBENCH_MEDIA_QUERY 增高度维）：左列输入卡全量字段（两列紧凑栅格），
+ *   右列输出卡 + 反向卡（ReverseCard 双态恒高 228，修订对照轮二⑧）；
  * - 槽等高互换契约（§2.3）：敏感性从加性折叠改 F3/F4 槽互换（展开不再产生滚动）；
  *   明细拆解 <768 加性 toggle 退役（信息并入 F4 槽「明细」态）；核心参数加性 Collapse
  *   退役（闭合态按 F9 行计预算，展开内容占 F8 槽——§2.3 机制前提）。
@@ -587,9 +591,15 @@ export default function BasicCalculator() {
 
   /** 响应式档位（docs/p3-spec.md §6.8 D9）：紧凑档 <640 进度环 56px（保留） */
   const isCompact = useIsCompactViewport();
-  /** 矮视口档（高度 <850，hooks useShortViewport）：双栏 1200×800 档环 56（72→56
-   *  档位压缩登记——hero 行 72→56，双栏右列页栈回 756 预算内，F2 修复轮回填） */
+  /** 矮视口档（高度 <850，hooks useShortViewport）。P10fix 勘误（§1.1 连带登记）：
+   *  注释原文「双栏 1200×800 档环 56」随「双栏 ∧ 矮档」空集化（WORKBENCH_MEDIA_QUERY
+   *  增高度维）退役——本判定现服务于叶树/单列形态：S1 环档阶梯 72/56/48（§7-S1
+   *  档位扩展登记；56=紧凑档、48=深矮档新档，D9 家族档位压缩延续），龙卷风图 180 档
+   *  与反向卡矮档 170 继续生效。hero 行单列 52 / 中栏 60 由环 48 与既有 display/num
+   *  字号档自然给出（p10fix-spec §2.3/§2.4 预算）。 */
   const isShort = useShortViewport();
+  /** P10fix §2.5-3：S1 环档阶梯（72 默认 / 56 紧凑 / 48 深矮档）；图形宿主（空态刻度尺）同档 */
+  const gaugeSize = isShort ? 48 : isCompact ? 56 : 72;
 
   /** ⑤ 金额展示绑定（p4-spec §3.4）：展示币种符号 + 换算率；rate null = 换算不可用，
    *  全部金额按 CNY 值直出（符号-only 模式），图表数据经 convert 同源换算 */
@@ -892,7 +902,10 @@ export default function BasicCalculator() {
           {t("basic.multiplierLine")}
           <Text bold className="wf-num">{realReturnPct > 0 ? formatMultiplier(multiplierPreview) : "—"}</Text>
         </Text>
-        <Text type="secondary">
+        {/* 第 2 轮验收 F-03（freedom F9 展开态 375×667 dy=33）：口径来源注紧档转 sr-only
+            （读屏可达、零布局高度——ReverseCard 口径注同款先例；L3 前置行已有同源简化
+            公式行，视觉路径零丢失。桌面 ≥768 原样） */}
+        <Text type="secondary" className={isCompact ? "wf-panel-note wf-sr-only" : undefined}>
           {t("basic.ruleOrigin", {
             nominal: formatPercent(BASELINE_DEFAULTS.nominalReturnPct, 1),
             inflation: formatPercent(BASELINE_DEFAULTS.inflationPct, 1),
@@ -1105,29 +1118,22 @@ export default function BasicCalculator() {
                     pct={gaugePct}
                     tokens={themeTokens}
                     ariaLabel={t("progress.ariaLabel", { pct: gaugePctText })}
-                    size={isCompact || isShort ? 56 : 72}
+                    size={gaugeSize}
                     resetEpoch={resetEpoch}
                     reducedMotion={reducedMotion}
                   />
                 ) : progressInputs.currentAssets === 0 && data !== null ? (
                   /* T6 = S6 进度环缺席位（修订 #5 扩围）：资产未填时渲染「未上弦的刻度尺」
-                      占位图形（装饰性 aria-hidden，信息由下方引导句承载） */
+                      占位图形（装饰性 aria-hidden，信息由引导句承载——引导句经 P10fix
+                      §2.5-4 并入 F4 槽首行 caption） */
                   <span className="wf-progress-ring" aria-hidden="true">
-                    <EmptyRulerArt size={isCompact || isShort ? 56 : 72} />
+                    <EmptyRulerArt size={gaugeSize} />
                   </span>
                 ) : null}
               </div>
-              {/* 骨架修复轮（紧档页栈回预算）：进度说明行去重——环可见时环心已实时显示
-                  百分比（progress.caption 信息不丢），说明行仅承载资产未填引导与实时更新
-                  注（A1 紧档登记；basic.liveUpdate ≥1200 仍由卡头 extra 承载） */}
-              {gaugeVisible ? null : (
-                <div className="wf-progress-caption">
-                  <Text type="secondary">
-                    {progressInputs.currentAssets === 0 && data !== null ? t("progress.emptyHint") : ""}
-                    {!isWorkbench ? ` · ${t("basic.liveUpdate")}` : ""}
-                  </Text>
-                </div>
-              )}
+              {/* P10fix §2.5-4：进度说明行/空态引导行并入 F4 槽内容（槽内首行 caption，
+                  省 22px 常驻行——渲染点移至下方 SlotBox 首子；内容与条件零变化，
+                  basic.liveUpdate ≥1200 双栏仍由卡头 extra 承载） */}
               {/* F2 关键读数两行：S16 ① 重挂承载（key={flashEpoch}；hero 与槽条严禁进入
                   重挂范围——S1/S2 闩锁与键盘焦点不受扰）。段位 Tag 涨色经 multFlashOn 类闸 */}
               <div key={flashEpoch} className={flashEpoch > 0 ? "wf-flash" : undefined}>
@@ -1188,8 +1194,17 @@ export default function BasicCalculator() {
                   { value: "sens", label: t("sensitivity.title") },
                 ]}
               />
-              {/* F4 等高槽（284）：明细 ⇄ 敏感性 等高互换；敏感性态内两页（图 / S25 兜底行） */}
+              {/* F4 等高槽（284）：明细 ⇄ 敏感性 等高互换；敏感性态内两页（图 / S25 兜底行）。
+                  P10fix §2.5-4：进度说明行并入槽内首行 caption（原独立行退役，省 22px） */}
               <SlotBox height={F4_SLOT_HEIGHT}>
+                {gaugeVisible ? null : (
+                  <div className="wf-progress-caption">
+                    <Text type="secondary">
+                      {progressInputs.currentAssets === 0 && data !== null ? t("progress.emptyHint") : ""}
+                      {!isWorkbench ? ` · ${t("basic.liveUpdate")}` : ""}
+                    </Text>
+                  </div>
+                )}
                 {outSlot === "breakdown" ? (
                   <div className={breakdownFlashOn ? "wf-output-breakdown wf-flash-single" : "wf-output-breakdown"}>
                     {breakdownTable}
@@ -1322,30 +1337,36 @@ export default function BasicCalculator() {
     </Card>
   );
 
-  /** —— 树形态渲染（<1200）：F0 叶切换条 + 单叶 + C3 dock（单实例，随叶尾恒在） —— */
+  /** —— 树形态渲染（<1200）：F0 叶切换条复合行（P10fix §2.5-5：叶条＋右端 share 图标位）
+   *  + 单叶。原 C3 dock 行退役一档：<768 分享入口上收 F0 复合行（44 命中不变、更靠上）；
+   *  ≥768 中栏叶B 原 share 缺宿主（dock 仅 <768 放行、wf-share-row 仅双栏左列渲染）由
+   *  本复合行补齐（§2.3 叶B 预算行）；copyLabel 已复制轻确认（T5）保留于图标 aria。 —— */
   if (!isWorkbench) {
     return (
       <div className="wf-freedom-tree">
         {/* F0 叶切换条（页级 2 段；复用 basic.outputTitle / basic.inputTitle，卡头 <1200
-            退役后两卡标题信息路径由本条承载——§1.1 卡壳规则） */}
-        <SegBar
-          name="wf-f0-leaf"
-          ariaLabel={t("atlas.nav.freedom")}
-          value={leaf}
-          onChange={(v: string) => setLeaf(v as "output" | "input")}
-          options={[
-            { value: "output", label: t("basic.outputTitle") },
-            { value: "input", label: t("basic.inputTitle") },
-          ]}
-        />
-        {leaf === "output" ? outputCard : inputCardTree}
-        {/* C3 页内底部 dock 行（T5 迁移：flex 静态底行，safe-area-inset-bottom 内边距
-            保留；primary 全宽例外登记延续） */}
-        <div className="wf-action-dock">
-          <Button size="small" type="primary" className="wf-pressable" title={t("share.copyTooltip")} onClick={handleCopyShare}>
+            退役后两卡标题信息路径由本条承载——§1.1 卡壳规则）＋ share 钮位（P10fix
+            §2.5-5 复合行：栅格两列「叶条 minmax(0,1fr)｜钮 auto」，叶条吃满余宽、
+            行高/页距复用叶条自身 margin 档 8/深矮档 2——零新 CSS 档）。
+            P10fix 尺寸门禁降档登记（§9.2 降档序③同类）：图标位降为紧凑文本钮——
+            复用 T5 copyLabel（已复制 ✓ 轻确认随钮承载，aria 由可见文本自带），
+            新图标组件不进包；44 命中随触屏档全局 min-height 规则不变 */}
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", gap: 8 }}>
+          <SegBar
+            name="wf-f0-leaf"
+            ariaLabel={t("atlas.nav.freedom")}
+            value={leaf}
+            onChange={(v: string) => setLeaf(v as "output" | "input")}
+            options={[
+              { value: "output", label: t("basic.outputTitle") },
+              { value: "input", label: t("basic.inputTitle") },
+            ]}
+          />
+          <Button size="mini" className="wf-pressable" onClick={handleCopyShare}>
             {copyLabel}
           </Button>
         </div>
+        {leaf === "output" ? outputCard : inputCardTree}
       </div>
     );
   }
