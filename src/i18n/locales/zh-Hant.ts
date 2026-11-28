@@ -178,7 +178,7 @@ const zhHant = {
     "slotChart": "圖表",
     "slotParams": "參數",
     // 骨架修復輪新鍵（A1 顯式回退橫幅，紅線 9——不支持零捲動的高度回退捲動並明示）
-    "scrollFallback": "視窗高度不足，本頁已回退為可捲動檢視。"
+    "scrollFallback": "視窗高度有限，已切換緊湊檢視。"
   },
   "insights": {
     "formulaTitle": "公式推導",

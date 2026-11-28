@@ -189,7 +189,7 @@ const zhCN = {
     slotChart: "图表",
     slotParams: "参数",
     // 骨架修复轮新键（A1 显式回退横幅，红线 9——不支持零滚动的高度回退滚动并明示）
-    scrollFallback: "视口高度不足，本页已回退为可滚动视图。",
+    scrollFallback: "视口高度有限，已切换紧凑视图。",
   },
   insights: {
     formulaTitle: "公式推导",

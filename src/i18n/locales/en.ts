@@ -207,7 +207,7 @@ const en = {
     slotChart: "Charts",
     slotParams: "Parameters",
     // 骨架修复轮新键（A1 显式回退横幅，红线 9——不支持零滚动的高度回退滚动并明示）
-    scrollFallback: "Viewport too short — switched to a scrollable view.",
+    scrollFallback: "Viewport height is limited — compact layout engaged.",
   },
   insights: {
     formulaTitle: "Formula derivation",
